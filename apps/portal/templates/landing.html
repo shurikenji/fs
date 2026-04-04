@@ -1,0 +1,115 @@
+{% extends "portal_base.html" %}
+{% block title %}Shupremium — AI Pricing & Tools{% endblock %}
+
+{% block content %}
+<div class="page-stack">
+    <section class="hero-section fade-up">
+        <h1 class="page-title">Find the right AI model<br>at the right price.</h1>
+        <p class="page-subtitle">
+            Compare pricing across providers, check your balance, and manage API keys — all in one place.
+        </p>
+        <div class="hero-actions">
+            <a href="/pricing" class="button button--lg">Explore pricing</a>
+            <a href="/check" class="button-secondary button--lg">Check balance</a>
+        </div>
+    </section>
+
+    <section class="feature-grid fade-up">
+        <article class="feature-card">
+            <div class="feature-card__icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round">
+                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+                </svg>
+            </div>
+            <h2 class="feature-card__title">Compare model pricing</h2>
+            <p class="feature-card__desc">Browse current rates for AI models across all available sources. Filter by
+                provider, type, or pricing mode.</p>
+            <a href="/pricing" class="feature-card__link">
+                View pricing
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+            </a>
+        </article>
+
+        <article class="feature-card">
+            <div class="feature-card__icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round">
+                    <rect x="2" y="5" width="20" height="14" rx="2" />
+                    <path d="M2 10h20" />
+                </svg>
+            </div>
+            <h2 class="feature-card__title">Check your balance</h2>
+            <p class="feature-card__desc">See how much credit you have left on any API key. Just pick a source and paste
+                your key.</p>
+            <a href="/check" class="feature-card__link">
+                Check now
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+            </a>
+        </article>
+
+        <article class="feature-card">
+            <div class="feature-card__icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round">
+                    <path
+                        d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
+                </svg>
+            </div>
+            <h2 class="feature-card__title">Manage API keys</h2>
+            <p class="feature-card__desc">Check which group your key belongs to and switch it when you need a different
+                pricing tier.</p>
+            <a href="/keys" class="feature-card__link">
+                Open key tools
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+            </a>
+        </article>
+    </section>
+
+    {% if featured_servers %}
+    <section class="shell-panel fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Available sources</h2>
+                <p class="panel-copy">These are the pricing sources you can browse right now.</p>
+            </div>
+            <a href="/pricing" class="button-secondary">View all pricing</a>
+        </div>
+        <div class="chip-cloud">
+            {% for item in featured_servers %}
+            <span class="tag is-accent">{{ item.name }}</span>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <section class="fade-up">
+        <h2 class="section-title" style="text-align:center; margin-bottom: var(--space-6);">How it works</h2>
+        <div class="steps">
+            <div class="step">
+                <h3 class="step__title">Browse pricing</h3>
+                <p class="step__desc">Pick a source and compare model rates side by side. Filter by type, provider, or
+                    price range.</p>
+            </div>
+            <div class="step">
+                <h3 class="step__title">Check your balance</h3>
+                <p class="step__desc">Paste an API key to see your remaining credit before making any changes.</p>
+            </div>
+            <div class="step">
+                <h3 class="step__title">Manage your keys</h3>
+                <p class="step__desc">Inspect your current group assignment and switch to a different tier when needed.
+                </p>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

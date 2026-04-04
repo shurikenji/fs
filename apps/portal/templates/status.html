@@ -1,0 +1,59 @@
+{% extends "portal_base.html" %}
+{% block title %}Service Status — Shupremium{% endblock %}
+
+{% block content %}
+<div class="page-stack">
+    <section class="page-head fade-up">
+        <div>
+            <h1 class="page-title">Service Status</h1>
+            <p class="page-subtitle">Current availability of our proxy endpoints.</p>
+        </div>
+        <div class="page-actions">
+            <span class="tag is-accent">{{ healthy_count }}/{{ statuses|length }} healthy</span>
+        </div>
+    </section>
+
+    {% if statuses %}
+    <section class="shell-table fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Endpoints</h2>
+                <p class="panel-copy">Live status from the latest health check.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Domain</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in statuses %}
+                    <tr>
+                        <td class="code-text">{{ item.id }}</td>
+                        <td>{{ item.name }}</td>
+                        <td class="code-text">{{ item.domain or "-" }}</td>
+                        <td><span class="tag {% if item.status == 'active' %}is-accent{% else %}is-warm{% endif %}">{{
+                                item.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% else %}
+    <div class="status-banner is-info fade-up">
+        <span class="status-banner__dot"></span>
+        <div>
+            <strong>No status data available yet.</strong>
+            <div class="panel-copy mt-1">Status information will appear here once the first health check completes.
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

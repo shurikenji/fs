@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+{% block title %}Tổng quan{% endblock %}
+{% block content %}
+
+{# ── Page Header ── #}
+<div class="page-header">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+            </span>
+            Bảng điều khiển
+        </h1>
+        <p class="page-subtitle">Xin chào, Admin! Đây là tổng quan hệ thống hôm nay.</p>
+    </div>
+    <div class="page-actions">
+        <a href="/orders" class="btn btn-primary" style="gap:0.4rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            Đơn hàng
+        </a>
+    </div>
+</div>
+
+{# ── Stat Cards ── #}
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card">
+            <div class="stat-icon emerald">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ format_vnd(stats.total_revenue) }}</div>
+                <div class="stat-label">Tổng doanh thu</div>
+            </div>
+            <div class="stat-trend up">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card">
+            <div class="stat-icon sky">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats.today_orders }}</div>
+                <div class="stat-label">Đơn hàng hôm nay</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card">
+            <div class="stat-icon amber">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                    <line x1="1" y1="10" x2="23" y2="10"></line>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ format_vnd(stats.today_revenue) }}</div>
+                <div class="stat-label">Doanh thu hôm nay</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3">
+        <div class="stat-card">
+            <div class="stat-icon rose">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-value">{{ stats.total_users }}</div>
+                <div class="stat-label">Tổng người dùng</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Main Grid ── #}
+<div class="row g-3 mb-3">
+    {# Order Status Breakdown #}
+    <div class="col-12 col-lg-7">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    Đơn hàng theo trạng thái
+                </h3>
+                <a href="/orders" class="btn btn-sm btn-outline-secondary">Xem tất cả</a>
+            </div>
+            <div class="card-body">
+                {% set total_orders = stats.status_counts.values() | sum %}
+                {% for status, count in stats.status_counts.items() %}
+                {% set pct = ((count / total_orders * 100) | round(1)) if total_orders > 0 else 0 %}
+                <div class="order-status-row mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="status-badge {{ status }}">
+                            {{ status_emoji(status) }} {{ status_text_vi(status) }}
+                        </span>
+                        <span class="order-status-count">{{ count }}</span>
+                    </div>
+                    <div class="progress-bar-track">
+                        <div class="progress-bar-fill status-{{ status }}" style="width: {{ pct }}%"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {# API Servers Status #}
+    <div class="col-12 col-lg-5">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;">
+                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                    </svg>
+                    Máy chủ API
+                </h3>
+                <a href="/servers" class="btn btn-sm btn-outline-secondary">Quản lý</a>
+            </div>
+            <div class="card-body" style="padding:0;">
+                {% for srv in stats.servers %}
+                <div class="server-row">
+                    <div class="server-dot {{ 'server-dot--online' if srv.is_active else 'server-dot--offline' }}"></div>
+                    <div class="server-info">
+                        <div class="server-info-name">{{ srv.name }}</div>
+                        <div class="server-info-type">{{ srv.api_type | upper if srv.api_type else 'NewAPI' }}</div>
+                    </div>
+                    <span class="badge {{ 'badge-success' if srv.is_active else 'badge-secondary' }}">
+                        {{ 'Online' if srv.is_active else 'Offline' }}
+                    </span>
+                </div>
+                {% endfor %}
+                {% if not stats.servers %}
+                <div class="empty-state" style="padding:2rem 1.25rem;">
+                    Chưa có máy chủ nào. <a href="/servers">Thêm ngay</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Quick Actions ── #}
+<div class="card">
+    <div class="card-header">
+        <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+            </svg>
+            Thao tác nhanh
+        </h3>
+    </div>
+    <div class="card-body">
+        <div class="quick-actions-grid">
+            <a href="/products" class="quick-action-card">
+                <div class="quick-action-icon" style="background:linear-gradient(135deg,var(--primary-50),rgba(16,185,129,0.12)); color:var(--primary);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    </svg>
+                </div>
+                <div class="quick-action-label">Quản lý sản phẩm</div>
+                <div class="quick-action-desc">Thêm, sửa, xóa sản phẩm</div>
+            </a>
+            <a href="/orders" class="quick-action-card">
+                <div class="quick-action-icon" style="background:linear-gradient(135deg,var(--info-bg),rgba(14,165,233,0.12)); color:var(--info);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                </div>
+                <div class="quick-action-label">Đơn hàng</div>
+                <div class="quick-action-desc">Theo dõi trạng thái đơn</div>
+            </a>
+            <a href="/users" class="quick-action-card">
+                <div class="quick-action-icon" style="background:linear-gradient(135deg,var(--warning-bg),rgba(245,158,11,0.12)); color:var(--warning);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="9" cy="7" r="4"></circle>
+                    </svg>
+                </div>
+                <div class="quick-action-label">Người dùng</div>
+                <div class="quick-action-desc">Xem và quản lý tài khoản</div>
+            </a>
+            <a href="/broadcast" class="quick-action-card">
+                <div class="quick-action-icon" style="background:linear-gradient(135deg,var(--danger-bg),rgba(239,68,68,0.12)); color:var(--danger);">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4.93 4.93a10 10 0 0 1 14.14 0"></path>
+                        <path d="M7.76 7.76a6 6 0 0 1 8.48 0"></path>
+                        <path d="M10.59 10.59a2 2 0 0 1 2.82 0"></path>
+                        <line x1="12" y1="12" x2="12" y2="21"></line>
+                    </svg>
+                </div>
+                <div class="quick-action-label">Phát tin</div>
+                <div class="quick-action-desc">Gửi thông báo hàng loạt</div>
+            </a>
+            <a href="/servers" class="quick-action-card">
+                <div class="quick-action-icon" style="background:linear-gradient(135deg,rgba(139,92,246,0.08),rgba(139,92,246,0.14)); color:#7c3aed;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                        <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                        <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                    </svg>
+                </div>
+                <div class="quick-action-label">Máy chủ API</div>
+                <div class="quick-action-desc">Cấu hình API servers</div>
+            </a>
+            <a href="/settings" class="quick-action-card">
+                <div class="quick-action-icon" style="background:linear-gradient(135deg,rgba(107,114,128,0.08),rgba(107,114,128,0.14)); color:#4b5563;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </div>
+                <div class="quick-action-label">Cài đặt</div>
+                <div class="quick-action-desc">Cấu hình hệ thống</div>
+            </a>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}

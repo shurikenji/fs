@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proxy Status — Shupremium Platform</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body class="app-body" style="display:flex; flex-direction:column; min-height:100vh;">
+    <div class="app-glow app-glow--one"></div>
+    <div class="app-glow app-glow--two"></div>
+
+    <header style="position:relative; z-index:1; display:flex; align-items:center; justify-content:space-between; padding:var(--space-4) var(--space-8); border-bottom:1px solid var(--border); background:var(--surface-overlay); backdrop-filter:blur(16px);">
+        <a style="font-weight:700; font-size:15px; letter-spacing:-0.02em; color:var(--text-primary);" href="/">Shupremium Platform</a>
+        <div style="display:flex; gap:var(--space-2);">
+            <a class="topbar-link topbar-link--accent" href="/status">Status</a>
+            <a class="topbar-link" href="/control">Admin</a>
+        </div>
+    </header>
+
+    <main style="position:relative; z-index:1; flex:1; padding:var(--space-8); max-width:1100px; margin:0 auto; width:100%;">
+        <div class="page-stack">
+            <section class="page-head">
+                <div>
+                    <h1 class="page-title">Proxy Status</h1>
+                    <p class="page-subtitle">Snapshot registry của các data-plane endpoints. Runtime chi tiết và health probe nội bộ được theo dõi bởi proxy-operator.</p>
+                </div>
+                <div class="page-actions">
+                    {% set active_count = statuses|selectattr('status', 'equalto', 'active')|list|length %}
+                    <span class="top-badge">{{ active_count }}/{{ statuses|length }} active</span>
+                </div>
+            </section>
+
+            <section class="shell-table">
+                <div class="table-wrap">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Domain</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in statuses %}
+                            <tr>
+                                <td class="code-text">{{ item.id }}</td>
+                                <td><strong>{{ item.name }}</strong></td>
+                                <td class="code-text">
+                                    <a href="https://{{ item.domain }}" target="_blank" style="color:var(--text-accent);">{{ item.domain }}</a>
+                                </td>
+                                <td>
+                                    {% if item.status == "active" %}
+                                    <span class="tag is-accent">active</span>
+                                    {% else %}
+                                    <span class="tag is-warm">{{ item.status }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer class="site-footer" style="position:relative; z-index:1;">
+        <span>© Shupremium Platform</span>
+        <span>·</span>
+        <a href="/" style="color:var(--text-accent);">shupremium.com</a>
+    </footer>
+</body>
+</html>

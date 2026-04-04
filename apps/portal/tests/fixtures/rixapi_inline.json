@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "data": {
+    "group_info": {
+      "default": {
+        "DisplayName": "Default",
+        "GroupRatio": 1.0,
+        "Description": "Default"
+      }
+    },
+    "model_info": [
+      {
+        "model_name": "claude-sonnet-4",
+        "description": "Reasoning model.",
+        "tags": "reasoning",
+        "supplier": "anthropic",
+        "price_info": {
+          "default": {
+            "default": {
+              "model_ratio": 1.5,
+              "model_completion_ratio": 5.0,
+              "quota_type": 1
+            }
+          }
+        },
+        "enable_groups": [
+          "default"
+        ],
+        "supported_endpoint_types": [
+          "anthropic"
+        ]
+      }
+    ]
+  }
+}

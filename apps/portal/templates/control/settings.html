@@ -1,0 +1,165 @@
+{% extends "control/base.html" %}
+{% block title %}Runtime Settings{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+    <section class="page-header">
+        <div>
+            <p class="page-eyebrow">Runtime controls</p>
+            <h1 class="page-title">Translation & Auto Sync</h1>
+            <p class="page-subtitle">Configure AI translation and the automatic refresh cadence for cached pricing/model data. These controls are only available in admin.</p>
+        </div>
+    </section>
+
+    <section class="split-grid">
+        <article class="admin-card">
+            <h2 class="section-title">Provider settings</h2>
+            <p class="section-copy">Stored in SQLite so changes take effect immediately without editing environment files.</p>
+
+            <form method="POST" action="/control/settings/save" class="mt-4">
+                <div class="field-grid">
+                    <div>
+                        <label class="form-label">Provider</label>
+                        <select name="ai_provider" id="ai_provider" class="form-select">
+                            {% for provider in ai_providers %}
+                            <option value="{{ provider.value }}" {% if all_settings.get('ai_provider') == provider.value %}selected{% endif %}>{{ provider.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Model</label>
+                        <input name="ai_model" id="ai_model" class="form-control" list="ai_model_suggestions" value="{{ all_settings.get('ai_model', '') }}" placeholder="gpt-4o-mini">
+                        <datalist id="ai_model_suggestions"></datalist>
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label class="form-label">API key</label>
+                        <input name="ai_api_key" type="password" class="form-control" value="{{ all_settings.get('ai_api_key', '') }}" placeholder="sk-...">
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label class="form-label">Base URL</label>
+                        <input name="ai_base_url" id="ai_base_url" class="form-control" value="{{ all_settings.get('ai_base_url', '') }}" placeholder="Optional custom endpoint">
+                    </div>
+                </div>
+
+                <div class="check-grid mt-4">
+                    <label class="badge-soft">
+                        <input type="checkbox" name="ai_enabled" value="true" {% if all_settings.get('ai_enabled', 'false') == 'true' %}checked{% endif %} style="margin-right: 8px;">
+                        Enable AI translation
+                    </label>
+                </div>
+
+                <div class="divider my-5"></div>
+
+                <h2 class="section-title">Automatic sync</h2>
+                <p class="section-copy">Keep cached pricing, models, groups, and translation caches fresh on one shared schedule for all enabled servers.</p>
+
+                <div class="field-grid mt-4">
+                    <div>
+                        <label class="form-label">Interval (minutes)</label>
+                        <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            name="auto_sync_interval_minutes"
+                            class="form-control"
+                            value="{{ all_settings.get('auto_sync_interval_minutes', '15') }}">
+                        <div class="field-help">Applies globally to every enabled server. Changes take effect without restarting the app.</div>
+                    </div>
+                </div>
+
+                <div class="check-grid mt-4">
+                    <label class="badge-soft">
+                        <input type="checkbox" name="auto_sync_enabled" value="true" {% if all_settings.get('auto_sync_enabled', 'false') == 'true' %}checked{% endif %} style="margin-right: 8px;">
+                        Enable automatic sync
+                    </label>
+                </div>
+
+                <div class="actions-row mt-4">
+                    <button type="submit" class="btn-admin">Save settings</button>
+                    <button type="button" class="btn-admin secondary" onclick="testAiConnection()">Test connection</button>
+                </div>
+
+                <div id="aiTestResult" class="field-help mt-3">Test the provider before refreshing translations when you change key, model, or base URL.</div>
+            </form>
+        </article>
+
+        <article class="table-card">
+            <h2 class="section-title">Workflow</h2>
+            <p class="section-copy">Fallback English is still available. AI is only used to improve labels and descriptions when this setting is enabled.</p>
+
+            <div class="meta-list mt-4">
+                <div class="meta-row">
+                    <span>Input</span>
+                    <strong>Server group names and descriptions</strong>
+                </div>
+                <div class="meta-row">
+                    <span>Output</span>
+                    <strong>English labels for public pricing pages</strong>
+                </div>
+                <div class="meta-row">
+                    <span>Trigger</span>
+                    <strong>Manual refresh or automatic background sync</strong>
+                </div>
+                <div class="meta-row">
+                    <span>Storage</span>
+                    <strong>app_settings + translation caches + pricing cache</strong>
+                </div>
+            </div>
+        </article>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const aiModelMap = {{ ai_models | tojson }};
+
+function refreshAiModelSuggestions() {
+    const provider = document.getElementById('ai_provider');
+    const suggestions = document.getElementById('ai_model_suggestions');
+    const input = document.getElementById('ai_model');
+    if (!provider || !suggestions || !input) return;
+
+    const models = aiModelMap[provider.value] || [];
+    suggestions.innerHTML = '';
+    models.forEach((model) => {
+        const option = document.createElement('option');
+        option.value = model;
+        suggestions.appendChild(option);
+    });
+    if (!input.value.trim() && models.length) {
+        input.value = models[0];
+    }
+}
+
+async function testAiConnection() {
+    const result = document.getElementById('aiTestResult');
+    const formData = new FormData();
+    formData.append('provider', document.getElementById('ai_provider').value);
+    formData.append('api_key', document.querySelector('input[name="ai_api_key"]').value);
+    formData.append('model', document.getElementById('ai_model').value);
+    formData.append('base_url', document.getElementById('ai_base_url').value);
+
+    result.textContent = 'Testing connection...';
+    result.style.color = '';
+
+    try {
+        const response = await fetch('/control/settings/ai/test', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await response.json();
+        result.textContent = data.message || (data.success ? 'Connection succeeded.' : 'Connection failed.');
+        result.style.color = data.success ? 'var(--admin-success)' : 'var(--admin-danger)';
+    } catch (error) {
+        result.textContent = 'Connection failed: ' + error.message;
+        result.style.color = 'var(--admin-danger)';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    refreshAiModelSuggestions();
+    document.getElementById('ai_provider')?.addEventListener('change', refreshAiModelSuggestions);
+});
+</script>
+{% endblock %}

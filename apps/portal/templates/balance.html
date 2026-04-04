@@ -1,0 +1,128 @@
+{% extends "portal_base.html" %}
+{% block title %}Check Balance — Shupremium{% endblock %}
+
+{% block content %}
+<div x-data="balanceApp()" class="page-stack" x-cloak>
+    <section class="fade-up" style="text-align: center;">
+        <h1 class="page-title">Check your balance</h1>
+        <p class="page-subtitle" style="max-width: 44ch; margin: var(--space-3) auto 0;">
+            See how much credit is left on your API key. Just pick a source and paste it below.
+        </p>
+    </section>
+
+    <section class="shell-panel centered-form fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Enter your details</h2>
+                <p class="panel-copy">We'll check the remaining balance from the selected source.</p>
+            </div>
+        </div>
+
+        <div style="display: grid; gap: var(--space-4);">
+            <div>
+                <label class="field-label">Source</label>
+                <select class="select-control" x-model="serverId">
+                    <option value="">Choose a source</option>
+                    <template x-for="server in servers" :key="server.id">
+                        <option :value="server.id" x-text="server.name"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="field-label">API key</label>
+                <input type="text" class="control code-text" placeholder="Paste your API key here (e.g. sk-...)"
+                    x-model="apiKey">
+            </div>
+            <button class="button button--lg" style="width: 100%; margin-top: var(--space-2);" @click="checkBalance()"
+                :disabled="loading || !serverId || !apiKey">
+                <span x-text="loading ? 'Checking…' : 'Check balance'"></span>
+            </button>
+        </div>
+    </section>
+
+    <div x-show="error" class="status-banner is-error centered-form fade-up">
+        <span class="status-banner__dot"></span>
+        <div>
+            <strong>Something went wrong.</strong>
+            <div class="panel-copy mt-1" x-text="error"></div>
+        </div>
+    </div>
+
+    <section x-show="result && result.data" class="centered-form fade-up">
+        <div class="status-banner is-success" style="margin-bottom: var(--space-5);">
+            <span class="status-banner__dot"></span>
+            <div>
+                <strong x-text="'Source: ' + result.server"></strong>
+                <div class="panel-copy mt-1">Balance retrieved successfully.</div>
+            </div>
+        </div>
+
+        <div class="metric-grid">
+            <article class="metric-card" style="text-align: center;">
+                <div class="metric-label">Balance</div>
+                <div class="metric-value" style="color: var(--success);" x-text="'$' + result.data.balance_usd"></div>
+                <p class="metric-copy">Remaining credit</p>
+            </article>
+            <article class="metric-card" style="text-align: center;">
+                <div class="metric-label">Limit</div>
+                <div class="metric-value" x-text="'$' + result.data.limit_usd"></div>
+                <p class="metric-copy">Credit limit</p>
+            </article>
+            <article class="metric-card" style="text-align: center;">
+                <div class="metric-label">Used</div>
+                <div class="metric-value" style="color: var(--warning);" x-text="'$' + result.data.usage_usd"></div>
+                <p class="metric-copy">Total spent</p>
+            </article>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function balanceApp() {
+        return {
+            servers: {{ servers | tojson }},
+            serverId: '',
+            apiKey: '',
+            loading: false,
+            error: '',
+            result: null,
+
+            activeServer() {
+        return this.servers.find((server) => String(server.id) === String(this.serverId)) || null;
+    },
+
+            activeServerName() {
+        return this.activeServer()?.name || 'No source selected';
+    },
+
+        async checkBalance() {
+        this.loading = true;
+        this.error = '';
+        this.result = null;
+        try {
+            const response = await fetch('/api/check-balance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_key: this.apiKey,
+                    server: this.serverId,
+                }),
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                this.error = payload.detail || payload.error || 'Failed to check balance';
+                return;
+            }
+            this.result = payload;
+        } catch (error) {
+            this.error = 'Request failed: ' + error.message;
+        } finally {
+            this.loading = false;
+        }
+    },
+    };
+}
+</script>
+{% endblock %}

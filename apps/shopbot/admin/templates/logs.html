@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Nhật ký hệ thống{% endblock %}
+{% block content %}
+
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+            </span>
+            Nhật ký hệ thống
+        </h1>
+        <p class="page-subtitle">Theo dõi hoạt động và lỗi trong hệ thống bot.</p>
+    </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="card animate-fade-up mb-3">
+    <form class="filter-bar" method="GET">
+        <select name="level" class="form-select" style="max-width:180px;">
+            <option value="">Tất cả mức độ</option>
+            {% for l in ['info','warning','error'] %}
+            <option value="{{ l }}" {{ 'selected' if filter_level==l }}>
+                {{ '📋 Info' if l == 'info' else ('⚠️ Warning' if l == 'warning' else '❌ Error') }}
+            </option>
+            {% endfor %}
+        </select>
+        <input name="module" class="form-control" style="max-width:180px;" placeholder="🔍 Tên module..." value="{{ filter_module|default('') }}">
+        <input name="search" class="form-control" placeholder="🔍 Tìm trong nội dung..." value="{{ filter_search|default('') }}">
+        <button type="submit" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            Lọc
+        </button>
+        {% if filter_level or filter_module or filter_search %}
+        <a href="/logs" class="btn btn-secondary">Xóa lọc</a>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Logs Table -->
+<div class="table-card animate-fade-up">
+    {% if logs %}
+    <table class="table table-responsive-cards">
+        <thead>
+            <tr>
+                <th style="width: 190px;">Thời gian</th>
+                <th style="width: 110px;">Mức độ</th>
+                <th style="width: 160px;">Module</th>
+                <th>Nội dung</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr class="{% if log.level == 'error' %}log-row--error{% elif log.level == 'warning' %}log-row--warning{% endif %}">
+                <td data-label="Thời gian">
+                    <span class="cell-date" style="font-family:'IBM Plex Mono',monospace;">{{ log.created_at | time_vn }}</span>
+                </td>
+                <td data-label="Mức độ">
+                    {% if log.level == 'error' %}
+                    <span class="badge badge-danger">ERROR</span>
+                    {% elif log.level == 'warning' %}
+                    <span class="badge badge-warning">WARN</span>
+                    {% else %}
+                    <span class="badge badge-info">INFO</span>
+                    {% endif %}
+                </td>
+                <td data-label="Module">
+                    <code class="cell-code--subtle">{{ log.module|default('-') }}</code>
+                </td>
+                <td data-label="Nội dung">
+                    <div class="{% if log.level == 'error' %}log-message--error{% endif %}">{{ log.message }}</div>
+                    {% if log.detail %}
+                    <div class="log-detail">{{ log.detail[:200] }}{% if log.detail|length > 200 %}…{% endif %}</div>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">📋</div>
+        <h4>Không có log nào</h4>
+        <p>
+            {% if filter_level or filter_module or filter_search %}
+            Không tìm thấy log phù hợp với bộ lọc hiện tại.
+            {% else %}
+            Hệ thống chưa ghi nhận nhật ký nào.
+            {% endif %}
+        </p>
+        {% if filter_level or filter_module or filter_search %}
+        <a href="/logs" class="btn btn-secondary">Xóa bộ lọc</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination">
+        {% for p in range(total_pages) %}
+        <li class="page-item {{ 'active' if p==page }}">
+            <a class="page-link" href="?page={{ p }}&level={{ filter_level|default('') }}&module={{ filter_module|default('') }}&search={{ filter_search|default('') }}">
+                {{ p+1 }}
+            </a>
+        </li>
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

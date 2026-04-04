@@ -1,0 +1,182 @@
+<%- include('../partials/header') %>
+<%- include('../partials/sidebar') %>
+
+<div class="main-content">
+    <div class="page-header">
+        <h1><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
+    </div>
+    
+    <!-- Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="stat-card primary">
+                <h3><%= stats.total %></h3>
+                <p>Tổng số Proxy</p>
+                <i class="bi bi-server"></i>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="stat-card success">
+                <h3><%= stats.active %></h3>
+                <p>Đang hoạt động</p>
+                <i class="bi bi-check-circle"></i>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="stat-card warning">
+                <h3><%= stats.inactive %></h3>
+                <p>Đã tắt</p>
+                <i class="bi bi-pause-circle"></i>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 mb-3">
+            <div class="stat-card info">
+                <h3><%= pm2Status.filter(p => p.pm2_env && p.pm2_env.status === 'online').length %></h3>
+                <p>PM2 Online</p>
+                <i class="bi bi-cpu"></i>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- System Info -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-pc-display me-2"></i>Thông tin hệ thống
+                </div>
+                <div class="card-body">
+                    <table class="table table-borderless mb-0">
+                        <tr>
+                            <td class="text-muted" style="width: 140px;">Hostname</td>
+                            <td><strong><%= system.hostname %></strong></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Hệ điều hành</td>
+                            <td><%= system.platform %></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">CPU</td>
+                            <td><%= system.cpu %></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">RAM</td>
+                            <td>
+                                <%= system.memory %>
+                                <div class="progress mt-1" style="height: 6px;">
+                                    <div class="progress-bar bg-primary" style="width: <%= system.memoryPercent %>%"></div>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Uptime</td>
+                            <td><%= system.uptime %></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">SSL</td>
+                            <td>
+                                <% if (sslConfigured) { %>
+                                    <span class="badge bg-success"><i class="bi bi-check"></i> Cloudflare đã cấu hình</span>
+                                <% } else { %>
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-exclamation"></i> Chưa cấu hình</span>
+                                    <a href="/ssl" class="small ms-2">Cấu hình ngay</a>
+                                <% } %>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Activity -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-clock-history me-2"></i>Hoạt động gần đây</span>
+                    <a href="/dashboard/logs" class="btn btn-sm btn-outline-primary">Xem tất cả</a>
+                </div>
+                <div class="card-body p-0">
+                    <% if (logs.length === 0) { %>
+                        <p class="text-muted text-center py-4 mb-0">Chưa có hoạt động nào</p>
+                    <% } else { %>
+                        <ul class="list-group list-group-flush">
+                            <% logs.slice(0, 5).forEach(log => { %>
+                                <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                                    <div>
+                                        <span class="badge bg-secondary me-2"><%= log.action %></span>
+                                        <small class="text-muted"><%= log.details %></small>
+                                    </div>
+                                    <small class="text-muted">
+                                        <%= new Date(log.created_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) %>
+                                    </small>
+                                </li>
+                            <% }) %>
+                        </ul>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Proxy List -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-server me-2"></i>Danh sách Proxy</span>
+            <a href="/proxy/add" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg me-1"></i>Thêm mới
+            </a>
+        </div>
+        <div class="card-body p-0">
+            <% if (proxies.length === 0) { %>
+                <div class="text-center py-5">
+                    <i class="bi bi-server text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3 mb-0">Chưa có proxy nào</p>
+                    <a href="/proxy/add" class="btn btn-primary mt-3">
+                        <i class="bi bi-plus-lg me-1"></i>Tạo proxy đầu tiên
+                    </a>
+                </div>
+            <% } else { %>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Tên</th>
+                                <th>Domain</th>
+                                <th>Target</th>
+                                <th>Port</th>
+                                <th>Trạng thái</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% proxies.forEach(proxy => { %>
+                                <tr>
+                                    <td><strong><%= proxy.name %></strong></td>
+                                    <td>
+                                        <a href="https://<%= proxy.domain %>/health" target="_blank" class="text-decoration-none">
+                                            <%= proxy.domain %> <i class="bi bi-box-arrow-up-right small"></i>
+                                        </a>
+                                    </td>
+                                    <td><code><%= proxy.target_host %></code></td>
+                                    <td><%= proxy.port %></td>
+                                    <td>
+                                        <span class="badge badge-<%= proxy.status %>">
+                                            <%= proxy.status === 'active' ? 'Hoạt động' : 'Đã tắt' %>
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="/proxy/edit/<%= proxy.id %>" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Đơn hàng{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line>
+                </svg>
+            </span>
+            Đơn hàng
+        </h1>
+        <p class="page-subtitle">Quản lý và theo dõi trạng thái đơn hàng</p>
+    </div>
+</div>
+
+{# Filter Bar #}
+<div class="card mb-3">
+    <form class="filter-bar" method="GET">
+        <select name="status" class="form-select" style="max-width:200px;">
+            <option value="" {{ 'selected' if not filter_status }}>Tất cả trạng thái</option>
+            {% for s in ['pending','paid','completed','cancelled','refunded','processing'] %}
+            <option value="{{ s }}" {{ 'selected' if filter_status == s }}>
+                {{ status_emoji(s) }} {{ status_text_vi(s) }}
+            </option>
+            {% endfor %}
+        </select>
+        <input name="search" class="form-control" style="max-width:240px;" placeholder="Tìm mã đơn..." value="{{ filter_search|default('') }}">
+        <button type="submit" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            Lọc
+        </button>
+        {% if filter_status or filter_search %}
+        <a href="/orders" class="btn btn-outline-secondary">Xóa lọc</a>
+        {% endif %}
+    </form>
+</div>
+
+{# Orders Table #}
+<div class="table-card">
+    <table class="table table-responsive-cards">
+        <thead>
+            <tr>
+                <th>Mã đơn</th>
+                <th>Người dùng</th>
+                <th>Sản phẩm</th>
+                <th class="text-end">Số tiền</th>
+                <th>Thanh toán</th>
+                <th>Trạng thái</th>
+                <th>Ngày tạo</th>
+                <th style="width:80px;"></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for o in orders %}
+            <tr>
+                <td data-label="Mã đơn">
+                    <code class="cell-code">{{ o.order_code }}</code>
+                </td>
+                <td data-label="Người dùng">
+                    <a href="/users/{{ o.user_id }}" class="cell-name--link">#{{ o.user_id }}</a>
+                </td>
+                <td data-label="Sản phẩm">
+                    <div class="cell-name cell-truncate" style="max-width:180px;">{{ o.product_name or '—' }}</div>
+                    <div class="cell-meta">{{ o.product_type }}</div>
+                </td>
+                <td data-label="Số tiền" class="text-end">
+                    <span class="cell-price">{{ format_vnd(o.amount) }}</span>
+                    {% if o.discount_amount %}
+                    <div class="cell-price-discount">-{{ format_vnd(o.discount_amount) }}</div>
+                    {% endif %}
+                </td>
+                <td data-label="Thanh toán">
+                    {% if o.payment_method == 'wallet' %}
+                    <span class="badge badge-secondary">👛 Ví</span>
+                    {% else %}
+                    <span class="badge badge-info">📲 QR</span>
+                    {% endif %}
+                </td>
+                <td data-label="Trạng thái">
+                    <span class="status-badge {{ o.status }}">
+                        {{ status_emoji(o.status) }} {{ status_text_vi(o.status) }}
+                    </span>
+                </td>
+                <td data-label="Ngày tạo">
+                    <span class="cell-date">{{ o.created_at | time_vn }}</span>
+                </td>
+                <td data-label="">
+                    <a href="/orders/{{ o.id }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8">
+                    <div class="empty-state">
+                        <div class="icon">📄</div>
+                        <h4>Không có đơn hàng nào</h4>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<nav class="mt-3">
+    <ul class="pagination">
+        {% if page > 0 %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page-1 }}&status={{ filter_status|default('') }}&search={{ filter_search|default('') }}">‹</a>
+        </li>
+        {% endif %}
+        {% for p in range(total_pages) %}
+        <li class="page-item {{ 'active' if p==page }}">
+            <a class="page-link" href="?page={{ p }}&status={{ filter_status|default('') }}&search={{ filter_search|default('') }}">{{ p+1 }}</a>
+        </li>
+        {% endfor %}
+        {% if page < total_pages - 1 %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ page+1 }}&status={{ filter_status|default('') }}&search={{ filter_search|default('') }}">›</a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %}

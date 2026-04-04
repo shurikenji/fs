@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Pricing Hub{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="app-body" x-data="{ mobileNav: false }">
+    <div class="app-glow app-glow--one"></div>
+    <div class="app-glow app-glow--two"></div>
+
+    <div class="app-layout">
+        <div class="app-sidebar__backdrop" x-show="mobileNav" x-transition.opacity.duration.180ms @click="mobileNav = false" x-cloak></div>
+
+        <aside class="app-sidebar" :class="{ 'is-open': mobileNav }">
+            <div class="app-sidebar__brand">
+                <a href="/pricing" class="site-brand">
+                    <span class="site-brand__mark">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 3L4 14h6l-1 7 11-13h-7l0-5z"/>
+                        </svg>
+                    </span>
+                    <span>
+                        <span class="site-brand__title">Pricing Hub</span>
+                    </span>
+                </a>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="sidebar-nav__section">Tools</div>
+                <a href="/pricing" class="sidebar-link {% if request.url.path in ['/', '/pricing'] %}is-active{% endif %}">
+                    <span class="sidebar-link__icon">M</span>
+                    <span>Model Pricing</span>
+                </a>
+                <a href="/keys" class="sidebar-link {% if request.url.path == '/keys' %}is-active{% endif %}">
+                    <span class="sidebar-link__icon">K</span>
+                    <span>API Key Center</span>
+                </a>
+                <a href="/logs" class="sidebar-link {% if request.url.path == '/logs' %}is-active{% endif %}">
+                    <span class="sidebar-link__icon">L</span>
+                    <span>Usage Logs</span>
+                </a>
+            </nav>
+        </aside>
+
+        <div class="app-frame">
+            <header class="topbar">
+                <div class="topbar__left">
+                    <button type="button" class="nav-toggle lg:hidden" @click="mobileNav = !mobileNav" :aria-expanded="mobileNav.toString()" aria-label="Toggle sidebar">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 7h16M4 12h16M4 17h16"/>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <main class="site-main">
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,129 @@
+<%- include('../partials/header') %>
+<%- include('../partials/sidebar') %>
+
+<div class="main-content">
+    <div class="page-header d-flex justify-content-between align-items-center">
+        <h1><i class="bi bi-shield-lock me-2"></i>Wildcard SSL</h1>
+        <form action="/ssl/ensure" method="POST" class="d-inline">
+            <button type="submit" class="btn btn-outline-success">
+                <i class="bi bi-shield-check me-1"></i>Ensure Wildcard Cert
+            </button>
+        </form>
+    </div>
+
+    <% if (success) { %>
+        <div class="alert alert-success alert-dismissible fade show">
+            <i class="bi bi-check-circle me-2"></i><%= success %>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <% } %>
+
+    <% if (error) { %>
+        <div class="alert alert-danger alert-dismissible fade show">
+            <i class="bi bi-exclamation-circle me-2"></i><%= error %>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <% } %>
+
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-cpu me-2"></i>Proxy Operator
+                </div>
+                <div class="card-body">
+                    <p class="text-muted">
+                        Tu gio SSL duoc quan ly o proxy-operator. Admin panel chi gui lenh ensure wildcard thay vi cap cert tung domain.
+                    </p>
+                    <table class="table table-borderless table-sm mb-0">
+                        <tr>
+                            <td class="text-muted">Status</td>
+                            <td>
+                                <% if (operatorHealth.status === 'ok') { %>
+                                    <span class="badge bg-success">healthy</span>
+                                <% } else { %>
+                                    <span class="badge bg-danger"><%= operatorHealth.status %></span>
+                                <% } %>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Wildcard cert</td>
+                            <td>
+                                <% if (operatorHealth.wildcard_cert && operatorHealth.wildcard_cert.available) { %>
+                                    <span class="badge bg-success">available</span>
+                                <% } else { %>
+                                    <span class="badge bg-warning text-dark">missing</span>
+                                <% } %>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Cert name</td>
+                            <td><code><%= operatorHealth.wildcard_cert ? operatorHealth.wildcard_cert.cert_name : '-' %></code></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Cert path</td>
+                            <td><code><%= operatorHealth.wildcard_cert ? operatorHealth.wildcard_cert.cert_dir : '-' %></code></td>
+                        </tr>
+                        <% if (operatorHealth.error) { %>
+                        <tr>
+                            <td class="text-muted">Error</td>
+                            <td class="text-danger"><%= operatorHealth.error %></td>
+                        </tr>
+                        <% } %>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-diagram-3 me-2"></i>Runtime policy
+                </div>
+                <div class="card-body">
+                    <ul class="text-muted mb-0">
+                        <li>Domain moi su dung wildcard DNS cho <code>*.shupremium.com</code>.</li>
+                        <li>Proxy moi khong can expand certificate tung subdomain nua.</li>
+                        <li>Operator la thanh phan duy nhat duoc cham vao <code>nginx</code>, <code>pm2</code>, <code>certbot</code>.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <i class="bi bi-server me-2"></i>Proxy domains covered by wildcard
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Proxy</th>
+                            <th>Domain</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% proxies.forEach(proxy => { %>
+                        <tr>
+                            <td><strong><%= proxy.name %></strong></td>
+                            <td><code><%= proxy.domain %></code></td>
+                            <td>
+                                <% if (proxy.status === 'active') { %>
+                                <span class="badge bg-success">active</span>
+                                <% } else { %>
+                                <span class="badge bg-secondary"><%= proxy.status %></span>
+                                <% } %>
+                            </td>
+                        </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

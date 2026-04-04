@@ -1,0 +1,16 @@
+{
+  "name": "proxy-operator",
+  "version": "1.0.0",
+  "description": "Internal operator for proxy runtime, nginx, pm2, and wildcard SSL",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.1",
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

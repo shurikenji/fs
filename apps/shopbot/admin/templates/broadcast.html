@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Phát tin{% endblock %}
+{% block content %}
+
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4.93 4.93a10 10 0 0 1 14.14 0"></path>
+                    <path d="M7.76 7.76a6 6 0 0 1 8.48 0"></path>
+                    <path d="M10.59 10.59a2 2 0 0 1 2.82 0"></path>
+                    <line x1="12" y1="12" x2="12" y2="21"></line>
+                </svg>
+            </span>
+            Phát tin toàn hệ thống
+        </h1>
+        <p style="margin: 0.3rem 0 0; color: var(--text-secondary); font-size: 0.9rem;">Soạn và gửi thông báo hàng loạt đến tất cả người dùng của bot.</p>
+    </div>
+</div>
+
+<!-- Audience Banner -->
+<div class="animate-fade-up" style="margin-bottom: 1.5rem; background: linear-gradient(135deg, var(--primary-50), var(--info-bg)); border: 1px solid var(--primary-100); border-radius: var(--radius-lg); padding: 1rem 1.25rem; display: flex; align-items: center; gap: 1rem;">
+    <div style="width: 44px; height: 44px; background: var(--primary); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: var(--shadow-emerald);">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+    </div>
+    <div>
+        <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-primary);">{{ total_users }} người dùng sẽ nhận tin</div>
+        <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.1rem;">Chỉ những người dùng chưa bị khóa mới nhận được thông báo.</div>
+    </div>
+</div>
+
+<div class="row g-4 animate-fade-up">
+    <!-- Compose Area -->
+    <div class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                    Soạn tin nhắn
+                </h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/broadcast/send" id="broadcastForm">
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label class="form-label">Nội dung tin nhắn
+                            <span style="font-weight: 400; color: var(--text-tertiary); font-size: 0.8rem; margin-left: 0.5rem;">(Hỗ trợ HTML Telegram)</span>
+                        </label>
+                        <textarea
+                            name="message"
+                            id="messageInput"
+                            class="form-control"
+                            rows="10"
+                            required
+                            placeholder="Nhập nội dung tin nhắn...&#10;&#10;Ví dụ:&#10;&lt;b&gt;📢 Thông báo quan trọng&lt;/b&gt;&#10;Cảm ơn bạn đã đồng hành cùng chúng tôi!"
+                            oninput="updatePreview()"
+                            style="font-family: 'IBM Plex Mono', monospace; font-size: 0.875rem; resize: vertical; min-height: 200px;"
+                        ></textarea>
+                        <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+                            <div class="form-text">Biến: <code>{username}</code>, <code>{user_id}</code></div>
+                            <div style="font-size: 0.8rem; color: var(--text-tertiary);" id="charCount">0 ký tự</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
+                        <button
+                            type="submit"
+                            class="btn btn-primary btn-lg"
+                            onclick="return confirm('Bạn có chắc muốn gửi thông báo này đến ' + {{ total_users }} + ' người dùng không?')"
+                            style="flex-shrink: 0;"
+                        >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            Gửi đến {{ total_users }} người dùng
+                        </button>
+                        <button type="button" class="btn btn-secondary" onclick="clearMessage()">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
+                            Xóa nội dung
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar: Reference & Preview -->
+    <div class="col-12 col-lg-4" style="display: flex; flex-direction: column; gap: 1rem;">
+        <!-- Live Preview -->
+        <div class="card">
+            <div class="card-header">
+                <h3 style="font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--info)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    Xem trước
+                </h3>
+            </div>
+            <div class="card-body">
+                <div id="messagePreview" style="
+                    min-height: 80px;
+                    background: var(--background-subtle);
+                    border-radius: var(--radius);
+                    padding: 0.75rem 1rem;
+                    font-size: 0.9rem;
+                    color: var(--text-secondary);
+                    border: 1px dashed var(--border);
+                    font-style: italic;
+                ">Soạn nội dung để xem trước...</div>
+            </div>
+        </div>
+
+        <!-- Tag Reference -->
+        <div class="card">
+            <div class="card-header">
+                <h3 style="font-size: 0.95rem;">Thẻ HTML hỗ trợ</h3>
+            </div>
+            <div class="card-body" style="display: grid; gap: 0.5rem;">
+                {% set tags = [
+                    ('<b>In đậm</b>', 'In đậm'),
+                    ('<i>In nghiêng</i>', 'In nghiêng'),
+                    ('<code>Mã lệnh</code>', 'Mã code'),
+                    ('<a href="url">Link</a>', 'Liên kết'),
+                    ('<br>', 'Xuống dòng'),
+                ] %}
+                {% for tag, label in tags %}
+                <button type="button" onclick="insertTag('{{ tag | replace("'", "\\'") }}')"
+                    style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: var(--background-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; text-align: left; font-size: 0.82rem; color: var(--text-primary); transition: all var(--transition-fast);"
+                    onmouseover="this.style.background='var(--primary-50)'; this.style.borderColor='var(--primary-100)';"
+                    onmouseout="this.style.background='var(--background-subtle)'; this.style.borderColor='var(--border)';"
+                >
+                    <code style="background: none; padding: 0; color: var(--primary); font-size: 0.8rem;">{{ tag }}</code>
+                    <span style="color: var(--text-tertiary); font-size: 0.78rem;">{{ label }}</span>
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Variables -->
+        <div class="card">
+            <div class="card-header">
+                <h3 style="font-size: 0.95rem;">Biến có thể dùng</h3>
+            </div>
+            <div class="card-body" style="display: grid; gap: 0.5rem;">
+                {% for var, desc in [('{username}', 'Tên người dùng'), ('{user_id}', 'ID Telegram')] %}
+                <button type="button" onclick="insertTag('{{ var }}')"
+                    style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: var(--background-subtle); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; font-size: 0.82rem; transition: all var(--transition-fast);"
+                    onmouseover="this.style.background='var(--primary-50)'; this.style.borderColor='var(--primary-100)';"
+                    onmouseout="this.style.background='var(--background-subtle)'; this.style.borderColor='var(--border)';"
+                >
+                    <code style="background: none; padding: 0; color: var(--info); font-size: 0.85rem; font-weight: 600;">{{ var }}</code>
+                    <span style="color: var(--text-secondary); font-size: 0.78rem;">{{ desc }}</span>
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updatePreview() {
+    const textarea = document.getElementById('messageInput');
+    const preview = document.getElementById('messagePreview');
+    const charCount = document.getElementById('charCount');
+    const text = textarea.value;
+    charCount.textContent = text.length + ' ký tự';
+    if (text.trim()) {
+        preview.innerHTML = text.replace(/\n/g, '<br>');
+        preview.style.fontStyle = 'normal';
+        preview.style.color = 'var(--text-primary)';
+    } else {
+        preview.innerHTML = 'Soạn nội dung để xem trước...';
+        preview.style.fontStyle = 'italic';
+        preview.style.color = 'var(--text-secondary)';
+    }
+}
+
+function insertTag(tag) {
+    const textarea = document.getElementById('messageInput');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    textarea.value = text.substring(0, start) + tag + text.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + tag.length;
+    textarea.focus();
+    updatePreview();
+}
+
+function clearMessage() {
+    if (confirm('Bạn có muốn xóa toàn bộ nội dung đã soạn?')) {
+        document.getElementById('messageInput').value = '';
+        updatePreview();
+    }
+}
+</script>
+{% endblock %}

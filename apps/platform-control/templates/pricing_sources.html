@@ -1,0 +1,237 @@
+{% extends "admin_base.html" %}
+{% set active_page = "pricing-sources" %}
+{% block title %}Pricing Sources{% endblock %}
+{% block page_title %}Pricing Sources{% endblock %}
+
+{% block content %}
+{% set form = source_form or {} %}
+<div class="page-stack">
+    <section class="page-head">
+        <div>
+            <h1 class="page-title">Pricing Sources</h1>
+            <p class="page-subtitle">Control-plane source of truth for pricing connectors, advanced metadata, and runtime sync actions.</p>
+        </div>
+        <div class="page-actions">
+            <a class="button-secondary" href="/control/pricing/sources">New source</a>
+            <form method="POST" action="/control/pricing/sources/import-runtime">
+                <button type="submit" class="button-secondary">Import Runtime</button>
+            </form>
+            <form method="POST" action="/control/pricing/sources/sync-all">
+                <button type="submit" class="button">Sync All Enabled</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="shell-card">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Registered sources</h2>
+                <p class="panel-copy">{{ sources|length }} control-plane sources available for pricing runtime import.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Upstream</th>
+                        <th>Flags</th>
+                        <th>Latest sync</th>
+                        <th style="width: 330px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for source in sources %}
+                    {% set latest_sync = latest_sync_map.get(source.id) %}
+                    <tr>
+                        <td class="code-text">{{ source.id }}</td>
+                        <td>
+                            <strong>{{ source.name }}</strong>
+                            <div style="color:var(--text-tertiary); font-size:12px;">sort={{ source.sort_order or 0 }}</div>
+                        </td>
+                        <td>{{ source.source_type }}</td>
+                        <td class="code-text">{{ source.upstream_base_url }}</td>
+                        <td style="font-size:12px; color:var(--text-secondary);">
+                            enabled={{ source.enabled }}
+                            <br>balance={{ source.public_balance_enabled }}
+                            <br>pricing={{ source.public_pricing_enabled }}
+                            <br>keys={{ source.public_keys_enabled }}
+                            <br>logs={{ source.public_logs_enabled }}
+                            <br>groups={{ 1 if source.supports_group_chain else 0 }}
+                        </td>
+                        <td style="font-size:12px;">
+                            {% if latest_sync %}
+                            <div><strong>{{ latest_sync.status }}</strong></div>
+                            <div>{{ latest_sync.model_count }} models / {{ latest_sync.group_count }} groups</div>
+                            <div>{{ latest_sync.duration_ms }} ms</div>
+                            {% else %}
+                            <span style="color:var(--text-tertiary);">No sync yet</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                <a class="button-secondary" href="/control/pricing/sources?edit={{ source.id }}">Edit</a>
+                                <a class="button-secondary" href="/control/pricing/sources/{{ source.id }}/groups">Groups</a>
+                                <a class="button-secondary" href="/control/pricing/sources/{{ source.id }}/models">Models</a>
+                                <form method="POST" action="/control/pricing/sources/{{ source.id }}/sync">
+                                    <button type="submit" class="button-secondary">Sync</button>
+                                </form>
+                                <form method="POST" action="/control/pricing/sources/delete" onsubmit="return confirm('Delete this pricing source?');">
+                                    <input type="hidden" name="source_id" value="{{ source.id }}">
+                                    <button type="submit" class="button-ghost" style="color:var(--danger);">Delete</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="shell-card">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">{% if form %}Edit pricing source{% else %}Create pricing source{% endif %}</h2>
+                <p class="panel-copy">All fields here are pushed into pricing runtime through the internal admin bridge.</p>
+            </div>
+        </div>
+        <form method="POST" action="/control/pricing/sources/save" style="display:grid; gap:24px;">
+            <div style="display:grid; gap:16px; grid-template-columns: repeat(3, minmax(0, 1fr));">
+                <div>
+                    <label class="field-label">Source ID</label>
+                    <input class="control" type="text" name="source_id" value="{{ form.id or '' }}" {% if form %}readonly{% endif %} required>
+                </div>
+                <div>
+                    <label class="field-label">Display name</label>
+                    <input class="control" type="text" name="name" value="{{ form.name or '' }}" required>
+                </div>
+                <div>
+                    <label class="field-label">Source type</label>
+                    <select class="control select-control" name="source_type">
+                        {% for option in server_types %}
+                        <option value="{{ option.value }}" {% if (form.source_type or 'newapi') == option.value %}selected{% endif %}>{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:grid; gap:16px; grid-template-columns: repeat(3, minmax(0, 1fr));">
+                <div style="grid-column: span 2;">
+                    <label class="field-label">Upstream base URL</label>
+                    <input class="control code-text" type="url" name="upstream_base_url" value="{{ form.upstream_base_url or '' }}" required>
+                </div>
+                <div>
+                    <label class="field-label">Public base URL</label>
+                    <input class="control code-text" type="url" name="public_base_url" value="{{ form.public_base_url or '' }}">
+                </div>
+            </div>
+
+            <div style="display:grid; gap:16px; grid-template-columns: repeat(4, minmax(0, 1fr));">
+                <div>
+                    <label class="field-label">Sort order</label>
+                    <input class="control" type="number" name="sort_order" value="{{ form.sort_order or 0 }}">
+                </div>
+                <div>
+                    <label class="field-label">Quota multiple</label>
+                    <input class="control" type="number" step="0.01" min="0.01" name="quota_multiple" value="{{ form.quota_multiple or 1.0 }}">
+                </div>
+                <div>
+                    <label class="field-label">Balance rate</label>
+                    <input class="control" type="number" step="0.01" min="0.01" name="balance_rate" value="{{ form.balance_rate or 1.0 }}">
+                </div>
+                <div>
+                    <label class="field-label">Auth mode</label>
+                    <select class="control select-control" name="auth_mode">
+                        {% for option in auth_modes %}
+                        <option value="{{ option.value }}" {% if (form.auth_mode or 'header') == option.value %}selected{% endif %}>{{ option.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div style="display:grid; gap:16px; grid-template-columns: repeat(4, minmax(0, 1fr));">
+                <div>
+                    <label class="field-label">Auth user header</label>
+                    <input class="control code-text" type="text" name="auth_user_header" value="{{ form.auth_user_header or '' }}">
+                </div>
+                <div>
+                    <label class="field-label">Auth user value</label>
+                    <input class="control" type="text" name="auth_user_value" value="{{ form.auth_user_value or '' }}">
+                </div>
+                <div>
+                    <label class="field-label">Auth token</label>
+                    <input class="control code-text" type="text" name="auth_token" value="{{ form.auth_token or '' }}">
+                </div>
+                <div>
+                    <label class="field-label">Auth cookie</label>
+                    <input class="control code-text" type="text" name="auth_cookie" value="{{ form.auth_cookie or '' }}">
+                </div>
+            </div>
+
+            <div style="display:grid; gap:16px; grid-template-columns: repeat(4, minmax(0, 1fr));">
+                <div>
+                    <label class="field-label">Pricing path</label>
+                    <input class="control code-text" type="text" name="pricing_path" value="{{ form.pricing_path or '/api/pricing' }}">
+                </div>
+                <div>
+                    <label class="field-label">Ratio config path</label>
+                    <input class="control code-text" type="text" name="ratio_config_path" value="{{ form.ratio_config_path or '/api/ratio_config' }}">
+                </div>
+                <div>
+                    <label class="field-label">Log path</label>
+                    <input class="control code-text" type="text" name="log_path" value="{{ form.log_path or '/api/log/self' }}">
+                </div>
+                <div>
+                    <label class="field-label">Token search path</label>
+                    <input class="control code-text" type="text" name="token_search_path" value="{{ form.token_search_path or '/api/token/search' }}">
+                </div>
+            </div>
+
+            <div style="display:grid; gap:16px; grid-template-columns: repeat(2, minmax(0, 1fr));">
+                <div>
+                    <label class="field-label">Groups path</label>
+                    <input class="control code-text" type="text" name="groups_path" value="{{ form.groups_path or '' }}" placeholder="/api/user/self/groups">
+                </div>
+                <div>
+                    <label class="field-label">Manual groups</label>
+                    <input class="control code-text" type="text" name="manual_groups" value="{{ form.manual_groups or '' }}" placeholder='["default","premium"] or comma list'>
+                </div>
+            </div>
+
+            <div style="display:grid; gap:16px; grid-template-columns: repeat(2, minmax(0, 1fr));">
+                <div>
+                    <label class="field-label">Hidden groups JSON</label>
+                    <textarea class="control textarea-control code-text" name="hidden_groups" rows="4">{{ form.hidden_groups or '[]' }}</textarea>
+                </div>
+                <div>
+                    <label class="field-label">Excluded models JSON</label>
+                    <textarea class="control textarea-control code-text" name="excluded_models" rows="4">{{ form.excluded_models or '[]' }}</textarea>
+                </div>
+            </div>
+
+            <div>
+                <label class="field-label">Notes</label>
+                <textarea class="control textarea-control" name="notes" rows="4">{{ form.notes or '' }}</textarea>
+            </div>
+
+            <div style="display:flex; gap:18px; flex-wrap:wrap;">
+                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="enabled" {% if (form.enabled or not form) %}checked{% endif %}> Enabled</label>
+                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="supports_group_chain" {% if form.supports_group_chain %}checked{% endif %}> Supports group chain</label>
+                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="ratio_config_enabled" {% if form.ratio_config_enabled %}checked{% endif %}> Ratio config enabled</label>
+                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="public_pricing_enabled" {% if form.public_pricing_enabled %}checked{% endif %}> Public pricing enabled</label>
+                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="public_balance_enabled" {% if form.public_balance_enabled %}checked{% endif %}> Public balance enabled</label>
+                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="public_keys_enabled" {% if form.public_keys_enabled %}checked{% endif %}> Public keys enabled</label>
+                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="public_logs_enabled" {% if form.public_logs_enabled %}checked{% endif %}> Public logs enabled</label>
+            </div>
+
+            <div style="display:flex; gap:12px; justify-content:flex-end;">
+                <a class="button-secondary" href="/control/pricing/sources">Reset</a>
+                <button type="submit" class="button">{% if form %}Save changes{% else %}Create source{% endif %}</button>
+            </div>
+        </form>
+    </section>
+</div>
+{% endblock %}

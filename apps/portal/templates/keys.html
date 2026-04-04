@@ -1,0 +1,262 @@
+{% extends "portal_base.html" %}
+{% block title %}API Keys — Shupremium{% endblock %}
+
+{% block content %}
+<div x-data="keysApp()" x-cloak class="page-stack">
+    <section class="fade-up" style="text-align: center;">
+        <h1 class="page-title">API Key Management</h1>
+        <p class="page-subtitle" style="max-width: 46ch; margin: var(--space-3) auto 0;">
+            Check your current group and switch to a different pricing tier when you need to.
+        </p>
+    </section>
+
+    <section class="shell-panel centered-form fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Look up your key</h2>
+                <p class="panel-copy">Select a source, paste your key, and we'll show which group it's assigned to.</p>
+            </div>
+        </div>
+
+        <div style="display: grid; gap: var(--space-4);">
+            <div>
+                <label class="field-label">Source</label>
+                <select class="select-control" x-model="serverId" @change="resetState()">
+                    <option value="">Choose a source</option>
+                    {% for s in servers %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="field-label">API key</label>
+                <input type="text" placeholder="Paste your key (e.g. sk-...)" class="control code-text"
+                    x-model="apiKey">
+            </div>
+            <button class="button button--lg" style="width: 100%; margin-top: var(--space-2);" @click="resolveKey()"
+                :disabled="loading || !serverId || !apiKey">
+                <span x-text="loading ? 'Looking up…' : 'Look up key'"></span>
+            </button>
+        </div>
+    </section>
+
+    <div x-show="error" class="status-banner is-error centered-form fade-up">
+        <span class="status-banner__dot"></span>
+        <div>
+            <strong>Something went wrong.</strong>
+            <div class="panel-copy mt-1" x-text="error"></div>
+        </div>
+    </div>
+
+    <div x-show="message" class="status-banner is-success centered-form fade-up">
+        <span class="status-banner__dot"></span>
+        <div>
+            <strong>Changes saved.</strong>
+            <div class="panel-copy mt-1" x-text="message"></div>
+        </div>
+    </div>
+
+    <template x-if="keyInfo">
+        <div class="page-stack fade-up">
+            <section class="shell-card centered-form">
+                <div class="panel-heading">
+                    <div>
+                        <h2 class="panel-title">Current group</h2>
+                        <p class="panel-copy" x-text="keyInfo.selection_mode === 'multiple'
+                            ? 'Your key uses these groups in order, from left to right.'
+                            : 'This is the group your key is currently using.'"></p>
+                    </div>
+                </div>
+
+                <div class="controls-row mt-3"
+                    x-show="keyInfo.selection_mode === 'multiple' && keyInfo.token.display_groups.length"
+                    style="align-items: center; row-gap: 12px;">
+                    <template x-for="(group, index) in keyInfo.token.display_groups" :key="group + '-current-chain'">
+                        <div class="controls-row" style="align-items: center; gap: 10px;">
+                            <span class="chip is-selected">
+                                <span class="opacity-70" x-text="'#' + (index + 1)"></span>
+                                <span x-text="group"></span>
+                            </span>
+                            <span class="panel-copy" x-show="index < keyInfo.token.display_groups.length - 1"
+                                aria-hidden="true">→</span>
+                        </div>
+                    </template>
+                </div>
+                <div class="chip-cloud" x-show="keyInfo.selection_mode !== 'multiple'">
+                    <template x-for="(group, index) in keyInfo.token.display_groups" :key="index">
+                        <span class="chip is-selected" x-text="group"></span>
+                    </template>
+                </div>
+            </section>
+
+            <section class="shell-card centered-form">
+                <div class="panel-heading">
+                    <div>
+                        <h2 class="panel-title">Switch group</h2>
+                        <p class="panel-copy" x-text="keyInfo.selection_mode === 'multiple'
+                            ? 'Choose groups in the order you want. The chain is applied left to right.'
+                            : 'Pick a different group to change your pricing tier.'"></p>
+                    </div>
+                    <button class="button" @click="saveGroups()" :disabled="saving || selectedGroups.length === 0">
+                        <span x-text="saving ? 'Saving…' : 'Save changes'"></span>
+                    </button>
+                </div>
+
+                <div class="shell-panel !p-4 mb-4" style="background: var(--bg-inset); border: none;">
+                    <div class="panel-copy"
+                        x-text="keyInfo.selection_mode === 'multiple' ? 'Selected chain' : 'Selected group'"></div>
+                    <div class="controls-row mt-3"
+                        x-show="keyInfo.selection_mode === 'multiple' && selectedGroups.length"
+                        style="align-items: center; row-gap: 12px;">
+                        <template x-for="(groupName, index) in selectedGroups" :key="groupName + '-selected-chain'">
+                            <div class="controls-row" style="align-items: center; gap: 10px;">
+                                <span class="chip is-selected">
+                                    <span class="opacity-70" x-text="'#' + (index + 1)"></span>
+                                    <span x-text="displayGroupName(groupName)"></span>
+                                </span>
+                                <span class="panel-copy" x-show="index < selectedGroups.length - 1"
+                                    aria-hidden="true">→</span>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="chip-cloud mt-3"
+                        x-show="keyInfo.selection_mode !== 'multiple' && selectedGroups.length">
+                        <template x-for="groupName in selectedGroups" :key="groupName + '-selected'">
+                            <span class="chip is-selected" x-text="displayGroupName(groupName)"></span>
+                        </template>
+                    </div>
+                    <div class="panel-copy mt-3" x-show="!selectedGroups.length" x-text="keyInfo.selection_mode === 'multiple'
+                        ? 'No groups selected yet.'
+                        : 'No group selected yet.'"></div>
+                </div>
+
+                <div class="chip-cloud">
+                    <template x-for="group in keyInfo.available_groups" :key="group.name">
+                        <button type="button" class="chip" :class="isSelected(group.name) ? 'is-selected' : ''"
+                            @click="toggleGroup(group.name)">
+                            <span class="opacity-70" x-show="selectionIndex(group.name) >= 0"
+                                x-text="'#' + (selectionIndex(group.name) + 1)"></span>
+                            <span x-text="group.display_name"></span>
+                            <span class="opacity-70" x-text="'(' + formatRatio(group.ratio) + 'x)'"></span>
+                        </button>
+                    </template>
+                </div>
+            </section>
+        </div>
+    </template>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function keysApp() {
+        return {
+            serverId: '',
+            apiKey: '',
+            loading: false,
+            saving: false,
+            error: '',
+            message: '',
+            keyInfo: null,
+            selectedGroups: [],
+
+            resetState() {
+                this.error = '';
+                this.message = '';
+                this.keyInfo = null;
+                this.selectedGroups = [];
+            },
+
+            isSelected(groupName) {
+                return this.selectedGroups.includes(groupName);
+            },
+
+            selectionIndex(groupName) {
+                return this.selectedGroups.indexOf(groupName);
+            },
+
+            displayGroupName(groupName) {
+                const match = (this.keyInfo?.available_groups || []).find((group) => group.name === groupName);
+                return match?.display_name || groupName;
+            },
+
+            formatRatio(value) {
+                const number = Number(value);
+                if (!Number.isFinite(number)) return '0.00';
+                return number.toFixed(2);
+            },
+
+            toggleGroup(groupName) {
+                if (!this.keyInfo) return;
+                if (this.keyInfo.selection_mode !== 'multiple') {
+                    this.selectedGroups = [groupName];
+                    return;
+                }
+                if (this.isSelected(groupName)) {
+                    this.selectedGroups = this.selectedGroups.filter((value) => value !== groupName);
+                } else {
+                    this.selectedGroups = [...this.selectedGroups, groupName];
+                }
+            },
+
+            async resolveKey() {
+                this.loading = true;
+                this.error = '';
+                this.message = '';
+                this.keyInfo = null;
+                this.selectedGroups = [];
+                try {
+                    const resp = await fetch('/api/keys/resolve', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ server_id: this.serverId, api_key: this.apiKey }),
+                    });
+                    const data = await resp.json();
+                    if (data.error) {
+                        this.error = data.error;
+                    } else {
+                        this.keyInfo = data;
+                        this.selectedGroups = [...(data.token.groups || [])];
+                    }
+                } catch (e) {
+                    this.error = 'Request failed: ' + e.message;
+                }
+                this.loading = false;
+            },
+
+            async saveGroups() {
+                if (!this.selectedGroups.length) {
+                    this.error = 'Select at least one group before saving.';
+                    return;
+                }
+
+                this.saving = true;
+                this.error = '';
+                this.message = '';
+                try {
+                    const resp = await fetch('/api/keys', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            server_id: this.serverId,
+                            api_key: this.apiKey,
+                            groups: this.selectedGroups,
+                        }),
+                    });
+                    const data = await resp.json();
+                    if (data.error) {
+                        this.error = data.error;
+                    } else if (this.keyInfo) {
+                        this.keyInfo.token.groups = [...data.groups];
+                        this.keyInfo.token.display_groups = [...data.display_groups];
+                        this.message = 'Groups updated successfully.';
+                    }
+                } catch (e) {
+                    this.error = 'Request failed: ' + e.message;
+                }
+                this.saving = false;
+            }
+        };
+    }
+</script>
+{% endblock %}

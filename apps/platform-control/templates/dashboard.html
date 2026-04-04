@@ -1,0 +1,504 @@
+{% extends "admin_base.html" %}
+{% set active_page = "dashboard" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Tổng quan{% endblock %}
+
+{% block content %}
+<div class="page-stack" x-data="adminDashboard()">
+
+    <!-- ══════════ MODAL OVERLAY ══════════ -->
+    <template x-teleport="body">
+        <div x-show="modalOpen" x-transition.opacity class="modal-backdrop" @click.self="modalOpen = false" style="display:none;">
+            <div class="modal-dialog" x-show="modalOpen" x-transition @click.stop>
+                <div class="modal-header">
+                    <h2 class="panel-title" x-text="modalTitle"></h2>
+                    <button class="button-ghost" @click="modalOpen = false" style="height:28px; padding:0 8px; font-size:18px; line-height:1;">&times;</button>
+                </div>
+
+                <!-- ── Proxy Form ── -->
+                <form x-show="modalType === 'proxy'" method="POST" action="/control/proxy-endpoints/save" class="modal-body">
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">ID (không đổi sau khi tạo)</label>
+                            <input class="control" name="endpoint_id" x-model="pf.endpoint_id" required :readonly="pf.isEdit" :style="pf.isEdit && 'opacity:0.6'">
+                        </div>
+                        <div>
+                            <label class="field-label">Tên hiển thị</label>
+                            <input class="control" name="name" x-model="pf.name" placeholder="GPT1" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Liên kết nguồn (Source ID)</label>
+                            <input class="control" name="source_id" x-model="pf.source_id" placeholder="gpt1">
+                        </div>
+                    </div>
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">Domain</label>
+                            <input class="control" name="domain" x-model="pf.domain" placeholder="gpt1.shupremium.com" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Target API (upstream)</label>
+                            <input class="control" name="target_host" x-model="pf.target_host" placeholder="api.example.com" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Protocol</label>
+                            <select class="control select-control" name="target_protocol" x-model="pf.target_protocol">
+                                <option value="https">https</option><option value="http">http</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">Port nội bộ</label>
+                            <input class="control" name="port" type="number" x-model="pf.port" placeholder="3001" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Trạng thái</label>
+                            <select class="control select-control" name="status" x-model="pf.status">
+                                <option value="active">Hoạt động</option><option value="inactive">Đã tắt</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; align-items:end; padding-bottom:10px;">
+                            <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-secondary);">
+                                <input type="checkbox" name="tls_skip_verify" :checked="pf.tls_skip_verify"> Bỏ qua TLS verify
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="button-secondary" @click="modalOpen = false">Huỷ</button>
+                        <button type="submit" class="button" x-text="pf.isEdit ? 'Cập nhật proxy' : 'Tạo proxy mới'"></button>
+                    </div>
+                </form>
+
+                <!-- ── Source Form ── -->
+                <form x-show="modalType === 'source'" method="POST" action="/control/service-sources/save" class="modal-body">
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">ID</label>
+                            <input class="control" name="source_id" x-model="sf.source_id" required :readonly="sf.isEdit" :style="sf.isEdit && 'opacity:0.6'">
+                        </div>
+                        <div>
+                            <label class="field-label">Tên hiển thị</label>
+                            <input class="control" name="name" x-model="sf.name" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Loại nguồn</label>
+                            <input class="control" name="source_type" x-model="sf.source_type">
+                        </div>
+                    </div>
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">Upstream URL (API gốc)</label>
+                            <input class="control" name="upstream_base_url" x-model="sf.upstream_base_url" placeholder="https://api.example.com" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Domain công khai (qua proxy)</label>
+                            <input class="control" name="public_base_url" x-model="sf.public_base_url" placeholder="https://gpt1.shupremium.com">
+                        </div>
+                        <div>
+                            <label class="field-label">Tỷ giá balance (hệ số USD)</label>
+                            <input class="control" name="balance_rate" type="number" step="0.01" x-model="sf.balance_rate">
+                        </div>
+                    </div>
+                    <div style="border-top:1px solid var(--border); padding-top:var(--space-4); margin-top:var(--space-2);">
+                        <p class="panel-copy" style="margin:0 0 var(--space-3);">🔑 Xác thực (để lấy bảng giá và balance từ API gốc)</p>
+                        <div class="modal-grid-4">
+                            <div>
+                                <label class="field-label">Chế độ</label>
+                                <select class="control select-control" name="auth_mode" x-model="sf.auth_mode">
+                                    <option value="header">Header</option><option value="token">Token</option><option value="cookie">Cookie</option><option value="none">Không cần</option>
+                                </select>
+                            </div>
+                            <div><label class="field-label">Header name</label><input class="control" name="auth_user_header" x-model="sf.auth_user_header"></div>
+                            <div><label class="field-label">Header value</label><input class="control" name="auth_user_value" x-model="sf.auth_user_value"></div>
+                            <div><label class="field-label">Token / Cookie</label><input class="control" name="auth_token" x-model="sf.auth_token"></div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="auth_cookie" x-model="sf.auth_cookie">
+                    <input type="hidden" name="pricing_path" x-model="sf.pricing_path">
+                    <input type="hidden" name="ratio_config_path" x-model="sf.ratio_config_path">
+                    <input type="hidden" name="log_path" x-model="sf.log_path">
+                    <input type="hidden" name="token_search_path" x-model="sf.token_search_path">
+                    <input type="hidden" name="notes" x-model="sf.notes">
+                    <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="enabled" :checked="sf.enabled"> Bật nguồn</label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Hiện bảng giá</label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="public_balance_enabled" :checked="sf.public_balance_enabled"> Hiện balance</label>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="button-secondary" @click="modalOpen = false">Huỷ</button>
+                        <button type="submit" class="button" x-text="sf.isEdit ? 'Cập nhật nguồn' : 'Tạo nguồn mới'"></button>
+                    </div>
+                </form>
+
+                <!-- ── Module Form ── -->
+                <form x-show="modalType === 'module'" method="POST" action="/control/portal-modules/save" class="modal-body">
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">ID</label>
+                            <input class="control" name="module_id" x-model="mf.module_id" required :readonly="mf.isEdit" :style="mf.isEdit && 'opacity:0.6'">
+                        </div>
+                        <div>
+                            <label class="field-label">Tên hiển thị (trên menu)</label>
+                            <input class="control" name="name" x-model="mf.name" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Đường dẫn (path)</label>
+                            <input class="control" name="path" x-model="mf.path" placeholder="/pricing" required>
+                        </div>
+                    </div>
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">URL công khai</label>
+                            <input class="control" name="public_url" x-model="mf.public_url">
+                        </div>
+                        <div>
+                            <label class="field-label">Icon</label>
+                            <input class="control" name="icon" x-model="mf.icon" placeholder="table">
+                        </div>
+                        <div>
+                            <label class="field-label">Thứ tự sắp xếp</label>
+                            <input class="control" name="sort_order" type="number" x-model="mf.sort_order">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="field-label">Mô tả</label>
+                        <textarea class="control textarea-control" name="description" x-model="mf.description" placeholder="Mô tả ngắn"></textarea>
+                    </div>
+                    <div style="display:flex; gap:16px; align-items:center;">
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="enabled" :checked="mf.enabled"> Bật trang</label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="is_public" :checked="mf.is_public"> Hiển thị công khai</label>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="button-secondary" @click="modalOpen = false">Huỷ</button>
+                        <button type="submit" class="button" x-text="mf.isEdit ? 'Cập nhật' : 'Tạo trang mới'"></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </template>
+
+    <!-- ══════════ STAT CARDS ══════════ -->
+    <section class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
+        <article class="metric-card">
+            <div class="metric-label">Proxies</div>
+            <div class="metric-value">{{ proxy_stats.active }}/{{ proxy_stats.total }}</div>
+            <p class="metric-copy">{{ proxy_stats.active }} hoạt động, {{ proxy_stats.inactive }} tắt</p>
+        </article>
+        <article class="metric-card">
+            <div class="metric-label">Nguồn API</div>
+            <div class="metric-value">{{ source_stats.enabled }}/{{ source_stats.total }}</div>
+            <p class="metric-copy">{{ source_stats.enabled }} đang bật</p>
+        </article>
+        <article class="metric-card">
+            <div class="metric-label">Modules</div>
+            <div class="metric-value">{{ module_stats.public }}/{{ module_stats.total }}</div>
+            <p class="metric-copy">{{ module_stats.public }} hiển thị công khai</p>
+        </article>
+        <article class="metric-card">
+            <div class="metric-label">Operator</div>
+            <div class="metric-value" style="font-size:16px;">
+                {% if operator_status.status == "ok" %}
+                <span class="tag is-accent">Healthy</span>
+                {% else %}
+                <span class="tag is-warm">{{ operator_status.status }}</span>
+                {% endif %}
+            </div>
+            <p class="metric-copy">Agent quản lý proxy runtime</p>
+        </article>
+    </section>
+
+    <!-- ══════════ SYSTEM + ACTIVITY ══════════ -->
+    <section class="content-grid" style="grid-template-columns: 1fr 1fr;">
+        <article class="shell-card">
+            <div class="panel-heading">
+                <div><h2 class="panel-title">Thông tin hệ thống</h2><p class="panel-copy">VPS đang chạy platform</p></div>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <tbody>
+                        <tr><td style="color:var(--text-tertiary); width:120px;">Hostname</td><td><strong>{{ system_info.hostname }}</strong></td></tr>
+                        <tr><td style="color:var(--text-tertiary);">OS</td><td>{{ system_info.platform }}</td></tr>
+                        <tr><td style="color:var(--text-tertiary);">CPU</td><td>{{ system_info.cpu }}</td></tr>
+                        <tr><td style="color:var(--text-tertiary);">RAM</td><td>{{ system_info.memory }}<div style="margin-top:4px; height:6px; background:var(--bg-inset); border-radius:3px; overflow:hidden;"><div style="height:100%; width:{{ system_info.memory_percent }}%; background:var(--accent); border-radius:3px;"></div></div></td></tr>
+                        <tr><td style="color:var(--text-tertiary);">Uptime</td><td>{{ system_info.uptime }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+        <article class="shell-card">
+            <div class="panel-heading">
+                <div><h2 class="panel-title">Hoạt động gần đây</h2><p class="panel-copy">Nhật ký hành động quản trị</p></div>
+                <a class="button-secondary" href="/control/logs" style="font-size:12px; height:32px; padding:0 12px;">Xem tất cả</a>
+            </div>
+            {% if activity_logs %}
+            <div style="display:grid; gap:2px; max-height:220px; overflow-y:auto;">
+                {% for log in activity_logs[:8] %}
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="tag" style="font-size:10px; height:24px; padding:0 8px;">{{ log.action }}</span>
+                        <span style="color:var(--text-secondary); font-size:13px;">{{ log.details }}</span>
+                    </div>
+                    <span style="color:var(--text-tertiary); font-size:12px; white-space:nowrap;">{{ log.created_at }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="panel-copy">Chưa có hoạt động nào.</p>
+            {% endif %}
+        </article>
+    </section>
+
+    <!-- ══════════ QUICK ACTIONS ══════════ -->
+    <section class="shell-card" style="padding:var(--space-4) var(--space-6);">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-3);">
+            <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap;">
+                <form method="POST" action="/control/deploy/proxies/sync" style="display:inline;">
+                    <button type="submit" class="button" style="height:36px; padding:0 16px; font-size:13px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+                        Đồng bộ Proxy
+                    </button>
+                </form>
+                <form method="POST" action="/control/deploy/wildcard-cert" style="display:inline;">
+                    <button type="submit" class="button-secondary" style="height:36px; padding:0 16px; font-size:13px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        Cấp Wildcard SSL
+                    </button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- ══════════ PROXY SERVERS ══════════ -->
+    <section id="proxy-endpoints">
+        <article class="shell-table">
+            <div class="panel-heading">
+                <div>
+                    <h2 class="panel-title">Proxy Servers</h2>
+                    <p class="panel-copy">Mỗi proxy là 1 domain chuyển tiếp tới 1 API upstream. Thay đổi cần bấm "Đồng bộ Proxy" để áp dụng.</p>
+                </div>
+                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddProxy()">+ Thêm Proxy</button>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Tên</th><th>Domain</th><th>Target API</th><th>Port</th><th>Trạng thái</th><th style="text-align:right;">Thao tác</th></tr></thead>
+                    <tbody>
+                        {% for item in proxy_endpoints %}
+                        <tr>
+                            <td><strong>{{ item.name }}</strong> <span style="color:var(--text-tertiary); font-size:11px;">({{ item.id }})</span></td>
+                            <td><a href="https://{{ item.domain }}" target="_blank" class="code-text" style="color:var(--text-accent);">{{ item.domain }}</a></td>
+                            <td class="code-text">{{ item.target_protocol }}://{{ item.target_host }}{% if item.tls_skip_verify %} <span class="tag is-warm" style="font-size:9px; height:20px;">skip-tls</span>{% endif %}</td>
+                            <td>{{ item.port }}</td>
+                            <td>{% if item.status == 'active' %}<span class="tag is-accent">Hoạt động</span>{% else %}<span class="tag is-warm">Đã tắt</span>{% endif %}</td>
+                            <td style="text-align:right;">
+                                <div style="display:inline-flex; gap:4px;">
+                                    <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
+                                        @click="openEditProxy('{{ item.id }}', '{{ item.source_id or '' }}', '{{ item.name }}', '{{ item.domain }}', '{{ item.target_host }}', '{{ item.target_protocol }}', {{ item.tls_skip_verify or 0 }}, {{ item.port }}, '{{ item.status }}')">Sửa</button>
+                                    <form method="POST" action="/control/proxy-endpoints/toggle" style="display:inline;">
+                                        <input type="hidden" name="endpoint_id" value="{{ item.id }}">
+                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px;">{% if item.status == 'active' %}Tắt{% else %}Bật{% endif %}</button>
+                                    </form>
+                                    <form method="POST" action="/control/proxy-endpoints/delete" style="display:inline;" onsubmit="return confirm('Xóa proxy {{ item.name }}?')">
+                                        <input type="hidden" name="endpoint_id" value="{{ item.id }}">
+                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Xóa</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+
+    <!-- ══════════ NGUỒN API ══════════ -->
+    <section id="service-sources">
+        <article class="shell-table">
+            <div class="panel-heading">
+                <div>
+                    <h2 class="panel-title">Nguồn API</h2>
+                    <p class="panel-copy">Danh sách nguồn API tổng quan. Màn này vẫn dùng được, nhưng pricing visibility chi tiết nên chỉnh ở <strong>Pricing Sources</strong> trong menu bên trái.</p>
+                </div>
+                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddSource()">+ Thêm nguồn</button>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Tên</th><th>Upstream URL</th><th>Domain công khai</th><th>Tỷ giá</th><th>Tính năng</th><th style="text-align:right;">Thao tác</th></tr></thead>
+                    <tbody>
+                        {% for item in service_sources %}
+                        <tr>
+                            <td><strong>{{ item.name }}</strong> <span style="color:var(--text-tertiary); font-size:11px;">({{ item.id }})</span></td>
+                            <td class="code-text" style="max-width:200px; overflow:hidden; text-overflow:ellipsis;">{{ item.upstream_base_url }}</td>
+                            <td class="code-text">{{ item.public_base_url or "—" }}</td>
+                            <td>{{ item.balance_rate }}</td>
+                            <td>
+                                {% if item.enabled %}<span class="tag is-accent" style="font-size:10px; height:22px; padding:0 6px;">Bật</span>{% else %}<span class="tag is-warm" style="font-size:10px; height:22px; padding:0 6px;">Tắt</span>{% endif %}
+                                {% if item.public_pricing_enabled %}<span class="tag" style="font-size:10px; height:22px; padding:0 6px;">Bảng giá</span>{% endif %}
+                                {% if item.public_balance_enabled %}<span class="tag" style="font-size:10px; height:22px; padding:0 6px;">Balance</span>{% endif %}
+                            </td>
+                            <td style="text-align:right;">
+                                <div style="display:inline-flex; gap:4px;">
+                                    <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
+                                        @click="openEditSource('{{ item.id }}', '{{ item.name }}', '{{ item.source_type or 'newapi' }}', '{{ item.upstream_base_url }}', '{{ item.public_base_url or '' }}', {{ item.balance_rate or 1.0 }}, '{{ item.auth_mode or 'header' }}', '{{ item.auth_user_header or '' }}', '{{ item.auth_user_value or '' }}', '{{ item.auth_token or '' }}', '{{ item.auth_cookie or '' }}', '{{ item.pricing_path or '/api/pricing' }}', '{{ item.ratio_config_path or '/api/ratio_config' }}', '{{ item.log_path or '/api/log/self' }}', '{{ item.token_search_path or '/api/token/search' }}', '{{ item.notes or '' }}', {{ item.enabled or 0 }}, {{ item.public_pricing_enabled or 0 }}, {{ item.public_balance_enabled or 0 }})">Sửa</button>
+                                    <form method="POST" action="/control/service-sources/delete" style="display:inline;" onsubmit="return confirm('Xóa nguồn {{ item.name }}?')">
+                                        <input type="hidden" name="source_id" value="{{ item.id }}">
+                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Xóa</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+
+    <!-- ══════════ MENU PORTAL ══════════ -->
+    <section id="portal-modules">
+        <article class="shell-table">
+            <div class="panel-heading">
+                <div>
+                    <h2 class="panel-title">Menu Portal</h2>
+                    <p class="panel-copy">Quản lý các trang hiển thị trên <a href="/" target="_blank" style="color:var(--text-accent);">shupremium.com</a>.</p>
+                </div>
+                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddModule()">+ Thêm trang</button>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>Tên</th><th>Đường dẫn</th><th>Mô tả</th><th>Công khai</th><th>Bật</th><th style="text-align:right;">Thao tác</th></tr></thead>
+                    <tbody>
+                        {% for item in portal_modules %}
+                        <tr>
+                            <td><strong>{{ item.name }}</strong></td>
+                            <td class="code-text">{{ item.path }}</td>
+                            <td style="color:var(--text-secondary); font-size:13px; max-width:200px;">{{ item.description or "—" }}</td>
+                            <td>{% if item.is_public %}<span class="tag is-accent" style="font-size:10px; height:22px;">Có</span>{% else %}<span class="tag" style="font-size:10px; height:22px;">Ẩn</span>{% endif %}</td>
+                            <td>{% if item.enabled %}<span class="tag is-accent" style="font-size:10px; height:22px;">Bật</span>{% else %}<span class="tag is-warm" style="font-size:10px; height:22px;">Tắt</span>{% endif %}</td>
+                            <td style="text-align:right;">
+                                <div style="display:inline-flex; gap:4px;">
+                                    <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
+                                        @click="openEditModule('{{ item.id }}', '{{ item.name }}', '{{ item.path }}', '{{ item.public_url or '' }}', '{{ item.icon or '' }}', '{{ item.description or '' }}', {{ item.enabled or 0 }}, {{ item.is_public or 0 }}, {{ item.sort_order or 0 }})">Sửa</button>
+                                    <form method="POST" action="/control/portal-modules/delete" style="display:inline;" onsubmit="return confirm('Xóa module {{ item.name }}?')">
+                                        <input type="hidden" name="module_id" value="{{ item.id }}">
+                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Xóa</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+
+    <!-- ══════════ DEPLOY HISTORY ══════════ -->
+    {% if deploy_jobs %}
+    <section>
+        <article class="shell-table">
+            <div class="panel-heading">
+                <div><h2 class="panel-title">Lịch sử thao tác</h2><p class="panel-copy">Log mỗi lần bấm "Đồng bộ Proxy" hoặc "Cấp Wildcard SSL".</p></div>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead><tr><th>#</th><th>Loại</th><th>Kết quả</th><th>Thời gian</th></tr></thead>
+                    <tbody>
+                        {% for item in deploy_jobs %}
+                        <tr>
+                            <td>{{ item.id }}</td>
+                            <td class="code-text">{% if item.job_type == 'proxy_sync' %}Đồng bộ Proxy{% elif item.job_type == 'wildcard_cert' %}Wildcard SSL{% else %}{{ item.job_type }}{% endif %}</td>
+                            <td>{% if item.status == "success" %}<span class="tag is-accent">Thành công</span>{% elif item.status == "failed" %}<span class="tag is-warm">Thất bại</span>{% else %}<span class="tag">{{ item.status }}</span>{% endif %}{% if item.error_message %}<span style="color:var(--danger); font-size:12px; margin-left:8px;">{{ item.error_message }}</span>{% endif %}</td>
+                            <td style="color:var(--text-tertiary); font-size:13px;">{{ item.updated_at }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </article>
+    </section>
+    {% endif %}
+</div>
+
+<style>
+.modal-backdrop {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(34, 40, 49, 0.45);
+    backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--space-5);
+}
+.modal-dialog {
+    width: min(96vw, 740px);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    animation: modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-5) var(--space-6) var(--space-4);
+    border-bottom: 1px solid var(--border);
+}
+.modal-body {
+    display: grid; gap: var(--space-4);
+    padding: var(--space-5) var(--space-6) var(--space-6);
+}
+.modal-actions {
+    display: flex; justify-content: flex-end; gap: var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+.modal-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+.modal-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); }
+@media (max-width: 700px) {
+    .modal-grid-3, .modal-grid-4 { grid-template-columns: 1fr; }
+}
+</style>
+
+<script>
+function adminDashboard() {
+    const emptyProxy = () => ({ isEdit:false, endpoint_id:'', source_id:'', name:'', domain:'', target_host:'', target_protocol:'https', tls_skip_verify:false, port:'', status:'active' });
+    const emptySource = () => ({ isEdit:false, source_id:'', name:'', source_type:'newapi', upstream_base_url:'', public_base_url:'', balance_rate:1.0, auth_mode:'header', auth_user_header:'', auth_user_value:'', auth_token:'', auth_cookie:'', pricing_path:'/api/pricing', ratio_config_path:'/api/ratio_config', log_path:'/api/log/self', token_search_path:'/api/token/search', notes:'', enabled:true, public_pricing_enabled:true, public_balance_enabled:false });
+    const emptyModule = () => ({ isEdit:false, module_id:'', name:'', path:'', public_url:'', icon:'', description:'', enabled:true, is_public:true, sort_order:0 });
+
+    return {
+        modalOpen: false,
+        modalType: '',
+        modalTitle: '',
+        pf: emptyProxy(),
+        sf: emptySource(),
+        mf: emptyModule(),
+
+        // ── Proxy ──
+        openAddProxy() { this.pf = emptyProxy(); this.modalType = 'proxy'; this.modalTitle = 'Thêm Proxy mới'; this.modalOpen = true; },
+        openEditProxy(id, sid, name, domain, host, proto, skipTls, port, status) {
+            this.pf = { isEdit:true, endpoint_id:id, source_id:sid, name:name, domain:domain, target_host:host, target_protocol:proto, tls_skip_verify:!!skipTls, port:port, status:status };
+            this.modalType = 'proxy'; this.modalTitle = 'Sửa proxy: ' + name; this.modalOpen = true;
+        },
+
+        // ── Source ──
+        openAddSource() { this.sf = emptySource(); this.modalType = 'source'; this.modalTitle = 'Thêm nguồn API mới'; this.modalOpen = true; },
+        openEditSource(id, name, type, upstream, pub, rate, authMode, authHeader, authValue, authToken, authCookie, pricingPath, ratioPath, logPath, tokenPath, notes, enabled, pricing, balance) {
+            this.sf = { isEdit:true, source_id:id, name:name, source_type:type, upstream_base_url:upstream, public_base_url:pub, balance_rate:rate, auth_mode:authMode, auth_user_header:authHeader, auth_user_value:authValue, auth_token:authToken, auth_cookie:authCookie, pricing_path:pricingPath, ratio_config_path:ratioPath, log_path:logPath, token_search_path:tokenPath, notes:notes, enabled:!!enabled, public_pricing_enabled:!!pricing, public_balance_enabled:!!balance };
+            this.modalType = 'source'; this.modalTitle = 'Sửa nguồn: ' + name; this.modalOpen = true;
+        },
+
+        // ── Module ──
+        openAddModule() { this.mf = emptyModule(); this.modalType = 'module'; this.modalTitle = 'Thêm trang mới vào Portal'; this.modalOpen = true; },
+        openEditModule(id, name, path, url, icon, desc, enabled, isPublic, order) {
+            this.mf = { isEdit:true, module_id:id, name:name, path:path, public_url:url, icon:icon, description:desc, enabled:!!enabled, is_public:!!isPublic, sort_order:order };
+            this.modalType = 'module'; this.modalTitle = 'Sửa: ' + name; this.modalOpen = true;
+        }
+    };
+}
+</script>
+{% endblock %}

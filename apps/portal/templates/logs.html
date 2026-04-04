@@ -1,0 +1,276 @@
+{% extends "portal_base.html" %}
+{% block title %}Usage Logs — Shupremium{% endblock %}
+
+{% block content %}
+<div x-data="logsApp()" x-cloak class="page-stack">
+    <section class="page-head fade-up">
+        <div>
+            <h1 class="page-title">Usage Logs</h1>
+            <p class="page-subtitle">Review your usage history and export cost estimates.</p>
+        </div>
+        <div class="page-actions">
+            <button class="button-secondary" @click="exportCsv()" :disabled="!logs.length">Export CSV</button>
+        </div>
+    </section>
+
+    <section class="shell-panel fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Search usage</h2>
+                <p class="panel-copy">Pick a source, paste your API key, then filter logs by model or group if needed.</p>
+            </div>
+            <div class="controls-row">
+                <button class="button-ghost" :disabled="page <= 1" @click="page--; fetchLogs()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round">
+                        <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                    Prev
+                </button>
+                <button class="button" @click="fetchLogs()" :disabled="loading || !serverId || !apiKey">
+                    <span x-text="loading ? 'Searching…' : 'Search'"></span>
+                </button>
+                <button class="button-ghost" @click="page++; fetchLogs()" :disabled="loading || !serverId">
+                    Next
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round">
+                        <path d="M9 18l6-6-6-6" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="toolbar-grid">
+            <div>
+                <label class="field-label">Source</label>
+                <select class="select-control" x-model="serverId" @change="onServerChanged()">
+                    <option value="">Choose a source</option>
+                    {% for s in servers %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="field-label">API key</label>
+                <input type="text" placeholder="Paste your API key (e.g. sk-...)" class="control code-text" x-model="apiKey">
+            </div>
+            <div>
+                <label class="field-label">Model (optional)</label>
+                <input type="text" placeholder="Filter by model name" class="control code-text" x-model="modelName">
+            </div>
+            <div>
+                <label class="field-label">Group</label>
+                <select class="select-control" x-model="group">
+                    <option value="">All groups</option>
+                    <template x-for="item in groups" :key="item.name">
+                        <option :value="item.name" x-text="item.display_name + ' (' + formatRatio(item.ratio) + 'x)'">
+                        </option>
+                    </template>
+                </select>
+            </div>
+        </div>
+    </section>
+
+    <div x-show="error" class="status-banner is-error fade-up">
+        <span class="status-banner__dot"></span>
+        <div>
+            <strong>Search failed.</strong>
+            <div class="panel-copy mt-1" x-text="error"></div>
+        </div>
+    </div>
+
+    <div x-show="resolvedToken" class="status-banner is-info fade-up">
+        <span class="status-banner__dot"></span>
+        <div>
+            <strong>Resolved token:</strong>
+            <div class="panel-copy mt-1" x-text="resolvedToken"></div>
+        </div>
+    </div>
+
+    <section x-show="logs.length > 0" class="shell-table fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Results</h2>
+                <p class="panel-copy">Cost estimates are calculated when pricing data is available.</p>
+            </div>
+            <div class="controls-row">
+                <span class="tag">Page <span x-text="page"></span></span>
+                <span class="tag is-accent"><span x-text="total"></span> records</span>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Model</th>
+                        <th>Group</th>
+                        <th>Token</th>
+                        <th>Prompt</th>
+                        <th>Completion</th>
+                        <th>Est. cost</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(log, index) in logs" :key="logRowKey(log, index)">
+                        <tr>
+                            <td class="whitespace-nowrap" x-text="formatTime(log.created_at)"></td>
+                            <td><span class="code-text text-sm" x-text="log.model_name || log.model"></span></td>
+                            <td x-text="displayGroupName(log)"></td>
+                            <td x-text="log.token_name || '-'"></td>
+                            <td x-text="(log.prompt_tokens || 0).toLocaleString()"></td>
+                            <td x-text="(log.completion_tokens || 0).toLocaleString()"></td>
+                            <td class="font-semibold" x-text="log.estimated_cost_display || '-'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div x-show="!loading && serverId && logs.length === 0 && !error" class="shell-panel fade-up">
+        <div class="empty-state">
+            <div>
+                <div class="empty-state__icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round">
+                        <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                </div>
+                <h3 class="panel-title">No logs found</h3>
+                <p class="panel-copy mt-2">Try adjusting your filters or selecting a different source.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function logsApp() {
+        return {
+            serverId: '',
+            apiKey: '',
+            modelName: '',
+            group: '',
+            groups: [],
+            page: 1,
+            pageSize: 50,
+            logs: [],
+            total: 0,
+            loading: false,
+            error: '',
+            resolvedToken: '',
+
+            async onServerChanged() {
+                this.group = '';
+                this.logs = [];
+                this.total = 0;
+                this.page = 1;
+                await this.loadGroups();
+            },
+
+            async loadGroups() {
+                this.groups = [];
+                if (!this.serverId) return;
+                try {
+                    const resp = await fetch(`/api/pricing/${this.serverId}`);
+                    const data = await resp.json();
+                    if (!data.error) this.groups = data.groups || [];
+                } catch (e) {
+                    console.error('Failed to load groups:', e);
+                }
+            },
+
+            async fetchLogs() {
+                this.loading = true;
+                this.error = '';
+                this.resolvedToken = '';
+                if (!this.serverId || !this.apiKey) {
+                    this.error = 'Choose a source and provide your API key before searching.';
+                    this.loading = false;
+                    return;
+                }
+                const body = {
+                    server_id: this.serverId,
+                    page: this.page,
+                    pageSize: this.pageSize,
+                };
+                if (this.apiKey) body.api_key = this.apiKey;
+                if (this.modelName) body.model_name = this.modelName;
+                if (this.group) body.group = this.group;
+
+                try {
+                    const resp = await fetch('/api/logs', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
+                    const data = await resp.json();
+                    if (data.error) {
+                        this.error = data.error;
+                        this.logs = [];
+                    } else {
+                        const raw = data.data || data.items || data;
+                        this.logs = Array.isArray(raw) ? raw : (raw.items || raw.logs || []);
+                        this.total = data.total || raw.total || this.logs.length;
+                        this.groups = data.available_groups || this.groups;
+                        if (data.resolved_token) this.resolvedToken = data.resolved_token;
+                    }
+                } catch (e) {
+                    this.error = 'Request failed: ' + e.message;
+                }
+                this.loading = false;
+            },
+
+            formatTime(ts) {
+                if (!ts) return '-';
+                if (typeof ts === 'number') return new Date(ts * 1000).toLocaleString();
+                return new Date(ts).toLocaleString();
+            },
+
+            formatRatio(value) {
+                const number = Number(value);
+                if (!Number.isFinite(number)) return '0.00';
+                return number.toFixed(2);
+            },
+
+            logRowKey(log, index) {
+                return [
+                    log.id ?? 'no-id',
+                    log.token_id ?? 'no-token',
+                    log.created_at ?? 'no-time',
+                    index,
+                ].join(':');
+            },
+
+            displayGroupName(log) {
+                return log.group_display_name || log.matched_group_display_name || log.group || '-';
+            },
+
+            exportCsv() {
+                if (!this.logs.length) return;
+                const headers = ['Time', 'Model', 'Group', 'Token', 'Prompt', 'Completion', 'EstimatedCostUsd'];
+                const rows = this.logs.map((log) => [
+                    this.formatTime(log.created_at),
+                    log.model_name || log.model || '',
+                    this.displayGroupName(log),
+                    log.token_name || '',
+                    log.prompt_tokens || 0,
+                    log.completion_tokens || 0,
+                    log.estimated_cost_usd ?? '',
+                ]);
+                const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'usage-logs.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        };
+    }
+</script>
+{% endblock %}

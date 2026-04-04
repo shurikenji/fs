@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "group_ratio": {
+    "default": 1.0
+  },
+  "usable_group": {
+    "default": "Default"
+  },
+  "data": {
+    "model_info": [
+      {
+        "model_name": "gpt-4o-mini",
+        "description": "Fast general-purpose chat model.",
+        "tags": "chat",
+        "owner_by": "openai",
+        "quota_type": 1,
+        "model_ratio": 0.15,
+        "completion_ratio": 4.0,
+        "enable_groups": [
+          "default"
+        ],
+        "supported_endpoint_types": [
+          "openai"
+        ]
+      }
+    ]
+  }
+}

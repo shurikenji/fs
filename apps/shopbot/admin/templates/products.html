@@ -1,0 +1,784 @@
+{% extends "base.html" %}
+{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form, entity_state_checkbox %}
+{% block title %}Sản phẩm{% endblock %}
+{% block content %}
+
+<!-- Page Header -->
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                </svg>
+            </span>
+            Quản lý sản phẩm
+        </h1>
+        <p style="margin: 0.3rem 0 0; color: var(--text-secondary); font-size: 0.9rem;">API keys, tài khoản có sẵn và dịch vụ. Mỗi sản phẩm kết nối với server để lấy thông tin nhóm và quota.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Thêm sản phẩm
+        </button>
+    </div>
+</div>
+
+<!-- KPI Row -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;" class="animate-fade-up">
+    <div class="stat-card">
+        <div class="stat-icon emerald">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ products|length }}</div>
+            <div class="stat-label">Tổng sản phẩm</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon sky">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ servers|selectattr('is_active')|list|length }}</div>
+            <div class="stat-label">Máy chủ bật</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon amber">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ categories|length }}</div>
+            <div class="stat-label">Danh mục</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon rose">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ products | selectattr('is_active') | list | length }}</div>
+            <div class="stat-label">Đang bật</div>
+        </div>
+    </div>
+</div>
+
+<!-- Search/Filter Bar -->
+<div class="card animate-fade-up" style="margin-bottom: 1.25rem;">
+    <div class="card-body" style="padding: 0.875rem 1.25rem;">
+        <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <div style="position: relative; flex: 1; min-width: 200px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); pointer-events: none;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="productSearch" class="form-control" placeholder="Tìm sản phẩm theo tên..." style="padding-left: 2.25rem;" oninput="filterProducts()">
+            </div>
+            <select id="filterType" class="form-select" style="flex: 0 0 180px;" onchange="filterProducts()">
+                <option value="">Tất cả loại</option>
+                <option value="key_new">Key mới</option>
+                <option value="key_topup">Nạp key</option>
+                <option value="account_stocked">Tài khoản</option>
+                <option value="service_upgrade">Dịch vụ</option>
+            </select>
+            <select id="filterStatus" class="form-select" style="flex: 0 0 150px;" onchange="filterProducts()">
+                <option value="">Tất cả trạng thái</option>
+                <option value="active">Đang bật</option>
+                <option value="inactive">Đã tắt</option>
+            </select>
+            <span id="filterCount" style="font-size: 0.8rem; color: var(--text-tertiary); white-space: nowrap; flex-shrink: 0;"></span>
+        </div>
+    </div>
+</div>
+
+<!-- Products Table -->
+<div class="table-card animate-fade-up">
+    {% if products %}
+    <table class="table product-table" id="productsTable">
+        <thead>
+            <tr>
+                <th>Sản phẩm</th>
+                <th>Ngữ cảnh</th>
+                <th>Loại giao hàng</th>
+                <th>Giá</th>
+                <th>Trạng thái</th>
+                <th>Kho</th>
+                <th>Thao tác</th>
+            </tr>
+        </thead>
+        <tbody id="productsTableBody">
+            {% for p in products %}
+            <tr data-name="{{ p.name | lower }}" data-type="{{ p.product_type }}" data-active="{{ 'active' if p.is_active else 'inactive' }}">
+                {% set next_url = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
+                <td data-label="Sản phẩm">
+                    <div class="product-title" style="font-weight: 600;">{{ p.name }}</div>
+                    {% if p.description_short %}
+                    <div class="product-description" style="color: var(--text-secondary); font-size: 0.82rem;">{{ p.description_short }}</div>
+                    {% else %}
+                    <div class="product-empty" style="color: var(--text-tertiary); font-size: 0.8rem; font-style: italic;">Không có mô tả</div>
+                    {% endif %}
+                </td>
+                <td data-label="Ngữ cảnh">
+                    <div class="product-stack" style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
+                        <span class="product-chip">{{ p.cat_name|default('-') }}</span>
+                        {% if p.srv_name and p.srv_name != '-' %}
+                        <span class="product-chip server">{{ p.srv_name }}</span>
+                        {% endif %}
+                        {% if p.effective_group_name %}
+                        <span class="product-chip group {{ 'inherited' if p.uses_server_default_group else '' }}">
+                            {{ p.effective_group_name }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="product-meta" style="font-size: 0.78rem; color: var(--text-tertiary);">
+                        {% if p.server_id %}
+                        Máy chủ #{{ p.server_id }}
+                        {% if p.uses_server_default_group %}
+                        <br><span style="color: var(--primary); font-weight: 500;">Kế thừa từ server</span>
+                        {% elif p.group_name %}
+                        <br><span style="color: var(--warning); font-weight: 500;">Override nhóm</span>
+                        {% endif %}
+                        {% else %}
+                        Không có server
+                        {% endif %}
+                    </div>
+                </td>
+                <td data-label="Loại giao hàng">
+                    <div class="product-delivery">
+                        <span class="badge {{ p.type_theme }}" style="background: var(--{{ p.type_theme }}-bg); color: var(--{{ p.type_theme }});">{{ p.type_label }}</span>
+                        {% if p.format_template %}
+                        <code style="display: block; margin-top: 0.25rem; font-size: 0.78rem;">{{ p.format_template }}</code>
+                        {% elif p.input_prompt %}
+                        <div class="product-description" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem;">{{ p.input_prompt[:60] }}{% if p.input_prompt|length > 60 %}...{% endif %}</div>
+                        {% endif %}
+                    </div>
+                </td>
+                <td data-label="Giá">
+                    <div class="product-price" style="font-weight: 700; font-size: 0.95rem;">{{ format_vnd(p.price_vnd) }}</div>
+                    <div class="product-price-meta" style="font-size: 0.78rem; color: var(--text-tertiary);">
+                        {% if p.server_id %}
+                        Q: {{ "{:,}".format(p.quota_amount or 0) }} | ${{ p.dollar_amount or 0 }}
+                        {% else %}
+                        Sản phẩm độc lập
+                        {% endif %}
+                    </div>
+                </td>
+                <td data-label="Trạng thái">
+                    {{ entity_state_badge(p.is_active) }}
+                </td>
+                <td data-label="Kho">
+                    {% if p.stock == -1 %}
+                    <span style="font-size: 0.85rem; color: var(--primary); font-weight: 500;">♾ Vô hạn</span>
+                    {% elif p.product_type == 'account_stocked' %}
+                    <span style="font-weight: 700; font-size: 0.95rem; {% if p.stock < 5 %}color: var(--danger);{% elif p.stock < 20 %}color: var(--warning);{% endif %}">{{ p.stock }}</span>
+                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Tài khoản</div>
+                    {% else %}
+                    <span style="font-weight: 700; font-size: 0.95rem;">{{ p.stock }}</span>
+                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Sẵn sàng</div>
+                    {% endif %}
+                </td>
+                <td data-label="Thao tác">
+                    <div class="actions">
+                        {{ entity_toggle_form('/products/' ~ p.id ~ '/toggle-active', p.is_active, next_url) }}
+                        <a
+                            href="/products/{{ p.id }}/edit"
+                            class="btn btn-sm btn-outline-primary"
+                            data-edit-modal-url="/products/{{ p.id }}/edit-modal"
+                            data-edit-modal-init="initializeProductEditModal"
+                        >Sửa</a>
+                        <a href="/products/{{ p.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Xóa</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div id="emptyFilter" style="display: none; padding: 3rem 2rem; text-align: center;">
+        <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🔍</div>
+        <h3 style="color: var(--text-secondary); font-weight: 500; margin-bottom: 0.5rem;">Không tìm thấy sản phẩm nào</h3>
+        <p style="color: var(--text-tertiary);">Thử thay đổi từ khóa hoặc bộ lọc.</p>
+    </div>
+    {% else %}
+    <div style="padding: 4rem 2rem; text-align: center;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
+        <h3 style="color: var(--text-secondary); font-weight: 500;">Chưa có sản phẩm nào</h3>
+        <p style="color: var(--text-tertiary); margin-bottom: 1.5rem;">Tạo sản phẩm đầu tiên để bắt đầu bán hàng.</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">Thêm sản phẩm đầu tiên</button>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function filterProducts() {
+    const search = (document.getElementById('productSearch')?.value || '').toLowerCase();
+    const typeFilter = document.getElementById('filterType')?.value || '';
+    const statusFilter = document.getElementById('filterStatus')?.value || '';
+    const rows = document.querySelectorAll('#productsTableBody tr');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+        const name = (row.dataset.name || '');
+        const type = (row.dataset.type || '');
+        const active = (row.dataset.active || '');
+
+        const matchName = !search || name.includes(search);
+        const matchType = !typeFilter || type === typeFilter;
+        const matchStatus = !statusFilter || active === statusFilter;
+
+        if (matchName && matchType && matchStatus) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+
+    const countEl = document.getElementById('filterCount');
+    if (countEl) countEl.textContent = `Hiển thị ${visibleCount} / ${rows.length} sản phẩm`;
+
+    const emptyFilter = document.getElementById('emptyFilter');
+    const table = document.getElementById('productsTable');
+    if (emptyFilter && table) {
+        if (visibleCount === 0) {
+            table.style.display = 'none';
+            emptyFilter.style.display = 'block';
+        } else {
+            table.style.display = '';
+            emptyFilter.style.display = 'none';
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', filterProducts);
+</script>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="/products/add" id="addForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Thêm sản phẩm</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Tên</label>
+                                <input name="name" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Danh mục</label>
+                                <select name="category_id" class="form-select" id="addCategorySelect" onchange="syncProductTypeOptions('add')">
+                                    {% for c in categories %}
+                                    <option value="{{ c.id }}" data-cat-type="{{ c.cat_type }}">{{ c.icon }} {{ c.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="form-label">Loại</label>
+                                <select name="product_type" class="form-select" id="addProductType" onchange="toggleAddFields()">
+                                    <option value="key_new">Key mới</option>
+                                    <option value="key_topup">Nạp thêm key</option>
+                                    <option value="account_stocked">Tài khoản có sẵn</option>
+                                    <option value="service_upgrade">Dịch vụ / Nâng cấp</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="form-label">Giá (VND)</label>
+                                <input name="price_vnd" type="number" class="form-control" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="form-label">Tồn kho (-1 = vô hạn)</label>
+                                <input name="stock" type="number" class="form-control" value="-1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="addKeyFields">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Server</label>
+                                    <select name="server_id" id="addServerSelect" class="form-select">
+                                        <option value="">- Không có -</option>
+                                        {% for s in servers %}
+                                        <option value="{{ s.id }}">{{ s.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Quota</label>
+                                    <input name="quota_amount" type="number" class="form-control" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Số USD</label>
+                                    <input name="dollar_amount" type="number" step="0.1" class="form-control" value="0">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="addGroupWrap" style="display:none;">
+                            <div class="d-flex justify-content-between align-items-end mb-2">
+                                <label class="form-label mb-0">Ghi đè nhóm</label>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearGroupOverride('add')">Mặc định server</button>
+                                    <button type="button" class="btn btn-sm btn-outline-info" id="addFetchGroupBtn" onclick="fetchGroups('add')" style="display:none;">Tải lại</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="addToggleGroupModeBtn" onclick="toggleGroupInputMode('add')">Danh sách</button>
+                                </div>
+                            </div>
+                            <div id="addGroupInputContainer">
+                                <input name="group_name" id="addGroupInput" class="form-control" placeholder="Nhập tên group...">
+                            </div>
+                            <div class="product-group-helper" id="addGroupStrategy"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="addFormatWrap" style="display:none;">
+                        <label class="form-label">Mẫu định dạng</label>
+                        <input name="format_template" class="form-control" placeholder="Email|Password|Cookie">
+                        <div class="form-text">Cách nhau bằng dấu |</div>
+                    </div>
+
+                    <div class="form-group" id="addInputPromptWrap" style="display:none;">
+                        <label class="form-label">Hướng dẫn nhập liệu</label>
+                        <input name="input_prompt" class="form-control" placeholder="Nhập thông tin khách cần cung cấp...">
+                    </div>
+
+                    <div class="form-group" id="addPromotionWrap">
+                        <label class="form-label">Chương trình khuyến mãi</label>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <input name="promotion_name" class="form-control" placeholder="Tên chương trình">
+                            </div>
+                            <div class="col-md-4">
+                                <select name="promotion_type" class="form-select">
+                                    <option value="">- Không áp dụng -</option>
+                                    <option value="percent_off">Giảm theo phần trăm</option>
+                                    <option value="fixed_off">Giảm số tiền cố định</option>
+                                    <option value="override_price">Chốt giá bán</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <input name="promotion_value" type="number" step="0.01" class="form-control" placeholder="Giá trị">
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-4">
+                                <input name="promotion_priority" type="number" class="form-control" value="0" placeholder="Độ ưu tiên">
+                            </div>
+                            <div class="col-md-4">
+                                <input name="promotion_start_at" class="form-control" placeholder="2026-03-20T09:00:00">
+                            </div>
+                            <div class="col-md-4">
+                                <input name="promotion_end_at" class="form-control" placeholder="2026-03-31T23:59:59">
+                            </div>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" name="promotion_is_active" id="addPromotionActive" value="1" checked>
+                            <label class="form-check-label" for="addPromotionActive">Đang áp dụng khuyến mãi</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Mô tả</label>
+                        <textarea name="description" class="form-control" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Thêm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if editing %}
+{% include "_product_edit_modal.html" %}
+{% endif %}
+
+<script>
+    let groupsDataMap = {};
+    const groupInputMode = { add: 'manual', edit: 'manual' };
+    const productTypeOptions = {
+        key_api: [
+            { value: 'key_new', label: 'Key mới' },
+            { value: 'key_topup', label: 'Nạp thêm key' },
+        ],
+        general: [
+            { value: 'account_stocked', label: 'Tài khoản có sẵn' },
+            { value: 'service_upgrade', label: 'Dịch vụ / Nâng cấp' },
+        ],
+    };
+    const serverMetaMap = {
+        {% for s in servers %}
+        "{{ s.id }}": {
+            name: {{ (s.name or '')|tojson }},
+            defaultGroup: {{ (s.default_group or '')|tojson }},
+            supportsMultiGroup: {{ 1 if s.supports_multi_group else 0 }}
+        },
+        {% endfor %}
+    };
+
+    function splitGroups(rawValue) {
+        return (rawValue || '')
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean);
+    }
+
+    function getServerMeta(prefix) {
+        const serverSelect = document.getElementById(`${prefix}ServerSelect`);
+        return serverSelect ? serverMetaMap[serverSelect.value] || null : null;
+    }
+
+    function getCategoryType(prefix) {
+        const categorySelect = document.getElementById(`${prefix}CategorySelect`);
+        if (!categorySelect) return 'general';
+        const selectedOption = categorySelect.options[categorySelect.selectedIndex];
+        return selectedOption ? selectedOption.getAttribute('data-cat-type') || 'general' : 'general';
+    }
+
+    function syncProductTypeOptions(prefix) {
+        const typeSelect = document.getElementById(`${prefix}ProductType`);
+        if (!typeSelect) return;
+
+        const categoryType = getCategoryType(prefix);
+        const options = categoryType === 'key_api'
+            ? productTypeOptions.key_api
+            : productTypeOptions.general;
+        const currentValue = typeSelect.value;
+
+        typeSelect.innerHTML = options.map(option => {
+            const selected = option.value === currentValue ? 'selected' : '';
+            return `<option value="${option.value}" ${selected}>${option.label}</option>`;
+        }).join('');
+
+        if (!options.some(option => option.value === currentValue)) {
+            typeSelect.value = options[0].value;
+        }
+
+        if (prefix === 'add') {
+            toggleAddFields();
+            return;
+        }
+        toggleEditFields();
+    }
+
+    function attachGroupInputListeners(prefix) {
+        const input = document.getElementById(`${prefix}GroupInput`);
+        if (!input) return;
+        input.addEventListener('input', () => updateGroupStrategy(prefix));
+        input.addEventListener('change', () => updateGroupStrategy(prefix));
+    }
+
+    function updateGroupStrategy(prefix) {
+        const helper = document.getElementById(`${prefix}GroupStrategy`);
+        const typeSelect = document.getElementById(`${prefix}ProductType`);
+        if (!helper || !typeSelect) return;
+
+        if (typeSelect.value !== 'key_new') {
+            helper.innerHTML = '';
+            return;
+        }
+
+        const currentInput = document.getElementById(`${prefix}GroupInput`);
+        const currentValue = currentInput ? currentInput.value.trim() : '';
+        const serverMeta = getServerMeta(prefix);
+
+        if (!serverMeta) {
+            helper.innerHTML = 'Chọn server trước. Nếu để trống, sẽ không gửi group.';
+            return;
+        }
+
+        const defaultGroups = splitGroups(serverMeta.defaultGroup);
+        const defaultLabel = defaultGroups.length ? defaultGroups.join(', ') : 'không có';
+
+        if (currentValue) {
+            helper.innerHTML = `Chiến lược hiện tại: <strong>override sản phẩm</strong> với <code>${currentValue}</code>. Xóa để dùng mặc định server: <code>${defaultLabel}</code>.`;
+            return;
+        }
+
+        if (defaultGroups.length) {
+            const mode = defaultGroups.length > 1 || serverMeta.supportsMultiGroup
+                ? 'multi-group'
+                : 'single-group';
+            helper.innerHTML = `Chiến lược hiện tại: <strong>kế thừa mặc định server</strong> (${mode}) từ <strong>${serverMeta.name}</strong>: <code>${defaultLabel}</code>.`;
+            return;
+        }
+
+        helper.innerHTML = `Server <strong>${serverMeta.name}</strong> chưa có group mặc định.`;
+    }
+
+    function clearGroupOverride(prefix) {
+        const input = document.getElementById(`${prefix}GroupInput`);
+        if (input) {
+            input.value = '';
+        }
+        updateGroupStrategy(prefix);
+    }
+
+    function toggleAddFields() {
+        const type = document.getElementById('addProductType').value;
+        const isKey = type === 'key_new' || type === 'key_topup';
+        const isKeyNew = type === 'key_new';
+        const isAccount = type === 'account_stocked';
+        const isService = type === 'service_upgrade';
+
+        document.getElementById('addKeyFields').style.display = isKey ? '' : 'none';
+        document.getElementById('addGroupWrap').style.display = isKeyNew ? '' : 'none';
+        document.getElementById('addFormatWrap').style.display = isAccount ? '' : 'none';
+        document.getElementById('addInputPromptWrap').style.display = isService ? '' : 'none';
+        document.getElementById('addPromotionWrap').style.display = isKey ? 'none' : '';
+
+        const stockInput = document.querySelector("#addModal input[name='stock']");
+        if (stockInput) {
+            stockInput.readOnly = isAccount;
+            stockInput.value = isAccount ? '-1' : stockInput.value || '-1';
+        }
+
+        if (isKeyNew) {
+            checkAndFetchGroups('add');
+        }
+        updateGroupStrategy('add');
+    }
+
+    function toggleEditFields() {
+        const select = document.getElementById('editProductType');
+        if (!select) return;
+
+        const type = select.value;
+        const isKey = type === 'key_new' || type === 'key_topup';
+        const isKeyNew = type === 'key_new';
+        const isAccount = type === 'account_stocked';
+        const isService = type === 'service_upgrade';
+
+        document.getElementById('editKeyFields').style.display = isKey ? '' : 'none';
+        document.getElementById('editGroupWrap').style.display = isKeyNew ? '' : 'none';
+        document.getElementById('editFormatWrap').style.display = isAccount ? '' : 'none';
+        document.getElementById('editInputPromptWrap').style.display = isService ? '' : 'none';
+        document.getElementById('editPromotionWrap').style.display = isKey ? 'none' : '';
+
+        const stockInput = document.querySelector("#editForm input[name='stock']");
+        if (stockInput) {
+            stockInput.readOnly = isAccount;
+            stockInput.value = isAccount ? '-1' : stockInput.value;
+        }
+
+        if (isKeyNew) {
+            checkAndFetchGroups('edit');
+        }
+        updateGroupStrategy('edit');
+    }
+
+    function toggleGroupInputMode(prefix) {
+        const container = document.getElementById(`${prefix}GroupInputContainer`);
+        const toggleBtn = document.getElementById(`${prefix}ToggleGroupModeBtn`);
+        const fetchBtn = document.getElementById(`${prefix}FetchGroupBtn`);
+        const currentInput = document.getElementById(`${prefix}GroupInput`);
+        const currentValue = currentInput ? currentInput.value : '';
+
+        if (groupInputMode[prefix] === 'manual') {
+            groupInputMode[prefix] = 'select';
+            toggleBtn.textContent = 'Nhập tay';
+            toggleBtn.classList.replace('btn-outline-secondary', 'btn-outline-primary');
+            fetchBtn.style.display = 'inline-block';
+            container.innerHTML = `<select name="group_name" id="${prefix}GroupInput" class="form-select"><option value="${currentValue}" selected>${currentValue || 'Đang tải...'}</option></select>`;
+            attachGroupInputListeners(prefix);
+            checkAndFetchGroups(prefix);
+            return;
+        }
+
+        groupInputMode[prefix] = 'manual';
+        toggleBtn.textContent = 'Danh sách';
+        toggleBtn.classList.replace('btn-outline-primary', 'btn-outline-secondary');
+        fetchBtn.style.display = 'none';
+        container.innerHTML = `<input type="text" name="group_name" id="${prefix}GroupInput" class="form-control" value="${currentValue}" placeholder="Nhập tên group...">`;
+        attachGroupInputListeners(prefix);
+        updateGroupStrategy(prefix);
+    }
+
+    function checkAndFetchGroups(prefix) {
+        const serverSelect = document.getElementById(`${prefix}ServerSelect`);
+        if (serverSelect && serverSelect.value && groupInputMode[prefix] === 'select') {
+            fetchGroups(prefix);
+        }
+    }
+
+    function buildOption(groupName, info, currentValue) {
+        const label = info.label_en || info.name || groupName;
+        const desc = info.desc || '';
+        const ratio = info.ratio !== undefined ? info.ratio : 'N/A';
+        const selected = groupName === currentValue ? 'selected' : '';
+        return {
+            selected: Boolean(selected),
+            html: `<option value="${groupName}" ${selected}>${label} - ${desc} (Ratio: ${ratio})</option>`,
+        };
+    }
+
+    async function fetchGroups(prefix) {
+        const serverSelect = document.getElementById(`${prefix}ServerSelect`);
+        const serverId = serverSelect.value;
+        if (!serverId) {
+            alert('Chọn server trước.');
+            return;
+        }
+
+        const container = document.getElementById(`${prefix}GroupInputContainer`);
+        const currentInput = document.getElementById(`${prefix}GroupInput`);
+        const currentValue = currentInput ? currentInput.value : '';
+        container.innerHTML = `<select name="group_name" id="${prefix}GroupInput" class="form-select" disabled><option>Đang tải...</option></select>`;
+
+        try {
+            const response = await fetch(`/servers/${serverId}/api/groups`);
+            const result = await response.json();
+
+            if (!result.success || !result.data) {
+                throw new Error(result.message || 'Lỗi không xác định');
+            }
+
+            groupsDataMap = result.data;
+            let selectHtml = `<select name="group_name" id="${prefix}GroupInput" class="form-select" onchange="onGroupSelectChange('${prefix}')">`;
+            const serverMeta = getServerMeta(prefix);
+            const defaultGroups = splitGroups(serverMeta ? serverMeta.defaultGroup : '');
+            const blankLabel = defaultGroups.length
+                ? `- Dùng mặc định: ${defaultGroups.join(', ')} -`
+                : '- Chọn group -';
+            selectHtml += `<option value="">${blankLabel}</option>`;
+
+            let hasMatch = false;
+            for (const groupName in result.data) {
+                const option = buildOption(groupName, result.data[groupName], currentValue);
+                if (option.selected) {
+                    hasMatch = true;
+                }
+                selectHtml += option.html;
+            }
+
+            if (currentValue && !hasMatch) {
+                selectHtml += `<option value="${currentValue}" selected>${currentValue} (Tùy chỉnh)</option>`;
+            }
+
+            selectHtml += `</select>`;
+            container.innerHTML = selectHtml;
+            attachGroupInputListeners(prefix);
+            updateGroupStrategy(prefix);
+        } catch (error) {
+            console.error('Lỗi tải groups:', error);
+            alert(`Không thể tải groups: ${error.message}`);
+            container.innerHTML = `<input type="text" name="group_name" id="${prefix}GroupInput" class="form-control" value="${currentValue}" placeholder="Nhập tên group...">`;
+            attachGroupInputListeners(prefix);
+            updateGroupStrategy(prefix);
+        }
+    }
+
+    function onGroupSelectChange(prefix) {
+        const select = document.getElementById(`${prefix}GroupInput`);
+        if (!select) return;
+
+        const groupName = select.value;
+        const info = groupsDataMap[groupName];
+        if (!info || !info.desc) return;
+
+        const form = select.closest('form');
+        if (!form) return;
+        const descInput = form.querySelector('textarea[name="description"]');
+        if (descInput && !descInput.value.trim()) {
+            descInput.value = info.desc;
+        }
+        updateGroupStrategy(prefix);
+    }
+
+    function confirmDelete() {
+        return confirm('Bạn có chắc muốn xóa sản phẩm này?');
+    }
+
+    function bindProductServerSelect(prefix) {
+        const serverSelect = document.getElementById(`${prefix}ServerSelect`);
+        if (!serverSelect || serverSelect.dataset.bound === 'true') return;
+
+        serverSelect.dataset.bound = 'true';
+        serverSelect.addEventListener('change', () => {
+            checkAndFetchGroups(prefix);
+            updateGroupStrategy(prefix);
+        });
+    }
+
+    function initializeProductForm(prefix) {
+        if (prefix === 'edit') {
+            groupInputMode.edit = 'manual';
+            groupsDataMap = {};
+        }
+
+        bindProductServerSelect(prefix);
+        attachGroupInputListeners(prefix);
+        syncProductTypeOptions(prefix);
+
+        if (prefix === 'edit') {
+            const editType = document.getElementById('editProductType');
+            if (editType && editType.value === 'key_new') {
+                toggleGroupInputMode('edit');
+            }
+        }
+    }
+
+    function initializeProductEditModal() {
+        initializeProductForm('edit');
+    }
+
+    function showEditModalFallback(modalEl, redirectUrl, onReady) {
+        if (!modalEl) return;
+
+        if (window.AdminRemoteModal && typeof window.AdminRemoteModal.showExisting === 'function') {
+            AdminRemoteModal.showExisting(modalEl, {
+                onReady,
+                onHiddenNavigate: redirectUrl,
+            });
+            return;
+        }
+
+        if (typeof onReady === 'function') {
+            onReady(modalEl);
+        }
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const handleHidden = function () {
+            modalEl.removeEventListener('hidden.bs.modal', handleHidden);
+            window.location.href = redirectUrl;
+        };
+
+        modalEl.addEventListener('hidden.bs.modal', handleHidden);
+        modal.show();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        initializeProductForm('add');
+
+        {% if editing %}
+        const editModalEl = document.getElementById('editModal');
+        if (editModalEl) {
+            showEditModalFallback(editModalEl, '/products', initializeProductEditModal);
+        }
+        {% endif %}
+    });
+</script>
+{% endblock %}

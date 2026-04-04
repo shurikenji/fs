@@ -1,0 +1,123 @@
+{% extends "admin_base.html" %}
+{% set active_page = "pricing-models" %}
+{% block title %}Pricing Models{% endblock %}
+{% block page_title %}Pricing Models{% endblock %}
+
+{% block content %}
+<div class="page-stack" x-data="pricingModelsPage()">
+    <section class="page-head">
+        <div>
+            <h1 class="page-title">Pricing Models</h1>
+            <p class="page-subtitle">Model-level visibility for cached pricing snapshots in runtime.</p>
+        </div>
+        <div class="page-actions">
+            <a class="button-secondary" href="/control/pricing/sources">Back to sources</a>
+            <a class="button-secondary" href="/control/pricing/sources/{{ source.id }}/groups">Manage groups</a>
+        </div>
+    </section>
+
+    <section class="shell-card">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">{{ source.name }}</h2>
+                <p class="panel-copy">Excluded models in control plane: {{ excluded_model_count }}.</p>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <span class="tag">{{ models_data|length }} models</span>
+                <span class="tag is-accent"><span x-text="visibleModels.length"></span> visible</span>
+            </div>
+        </div>
+        <div style="display:grid; gap:16px; grid-template-columns: minmax(0, 1fr) 220px auto auto auto;">
+            <div>
+                <label class="field-label">Search models</label>
+                <input class="control" type="text" x-model="query" placeholder="Filter by model name or provider">
+            </div>
+            <div>
+                <label class="field-label">Pricing mode</label>
+                <select class="control select-control" x-model="mode">
+                    <option value="">All modes</option>
+                    <option value="token">token</option>
+                    <option value="fixed">fixed</option>
+                    <option value="request_scaled">request_scaled</option>
+                    <option value="unknown">unknown</option>
+                </select>
+            </div>
+            <div style="align-self:end;"><button type="button" class="button-secondary" @click="showAll()">Show all</button></div>
+            <div style="align-self:end;"><button type="button" class="button-secondary" @click="selectFiltered()">Select filtered</button></div>
+            <div style="align-self:end;"><button type="button" class="button-secondary" @click="excludeSelected()">Exclude selected</button></div>
+        </div>
+    </section>
+
+    <form method="POST" action="/control/pricing/sources/{{ source.id }}/models/save" class="shell-card">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Cached model catalog</h2>
+                <p class="panel-copy">Unchecked rows are excluded from public pricing-facing data. Runtime cache itself stays intact.</p>
+            </div>
+            <button type="submit" class="button">Save visibility</button>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width:54px;">Pick</th>
+                        <th style="width:70px;">Public</th>
+                        <th>Model</th>
+                        <th style="width:180px;">Provider</th>
+                        <th style="width:150px;">Mode</th>
+                        <th style="width:130px;">Visible groups</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="model in filteredModels()" :key="model.model_name">
+                        <tr>
+                            <td><input type="checkbox" :value="model.model_name" x-model="selectedRows"></td>
+                            <td><input type="checkbox" name="visible_models" :value="model.model_name" x-model="visibleModels"></td>
+                            <td class="code-text" x-text="model.model_name"></td>
+                            <td x-text="model.vendor_name || '-'"></td>
+                            <td x-text="model.pricing_mode"></td>
+                            <td><span x-text="model.visible_group_count"></span> / <span x-text="model.group_count"></span></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pricingModelsPage() {
+    return {
+        models: {{ models_data | tojson }},
+        visibleModels: {{ visible_models | tojson }},
+        selectedRows: [],
+        query: '',
+        mode: '',
+
+        filteredModels() {
+            const needle = this.query.toLowerCase().trim();
+            return this.models.filter((model) => {
+                if (this.mode && model.pricing_mode !== this.mode) return false;
+                if (!needle) return true;
+                return [model.model_name, model.vendor_name].join(' ').toLowerCase().includes(needle);
+            });
+        },
+
+        showAll() {
+            this.visibleModels = this.models.map((model) => model.model_name);
+        },
+
+        selectFiltered() {
+            this.selectedRows = this.filteredModels().map((model) => model.model_name);
+        },
+
+        excludeSelected() {
+            const selected = new Set(this.selectedRows);
+            this.visibleModels = this.visibleModels.filter((name) => !selected.has(name));
+        },
+    };
+}
+</script>
+{% endblock %}

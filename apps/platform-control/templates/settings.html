@@ -1,0 +1,67 @@
+{% extends "admin_base.html" %}
+{% set active_page = "settings" %}
+{% block title %}Cài đặt{% endblock %}
+{% block page_title %}Cài đặt{% endblock %}
+
+{% block content %}
+<div class="page-stack">
+    <section class="page-head">
+        <div>
+            <h1 class="page-title">Cài đặt hệ thống</h1>
+            <p class="page-subtitle">Quản lý mật khẩu admin, operator connection, và runtime configuration.</p>
+        </div>
+    </section>
+
+    <section class="content-grid" style="grid-template-columns: 1fr 1fr;">
+        <!-- Password change -->
+        <article class="shell-card">
+            <div class="panel-heading">
+                <div>
+                    <h2 class="panel-title">Đổi mật khẩu</h2>
+                    <p class="panel-copy">Sau khi đổi, cập nhật ADMIN_PASSWORD trong .env và restart service.</p>
+                </div>
+            </div>
+            <form method="POST" action="/control/settings/password" style="display:grid; gap:var(--space-4);">
+                <div>
+                    <label class="field-label">Mật khẩu hiện tại</label>
+                    <input class="control" type="password" name="current" required>
+                </div>
+                <div>
+                    <label class="field-label">Mật khẩu mới</label>
+                    <input class="control" type="password" name="newpass" required minlength="6">
+                </div>
+                <div>
+                    <label class="field-label">Xác nhận mật khẩu mới</label>
+                    <input class="control" type="password" name="confirm" required minlength="6">
+                </div>
+                <button type="submit" class="button" style="justify-self:start;">Đổi mật khẩu</button>
+            </form>
+        </article>
+
+        <!-- Operator info -->
+        <article class="shell-card">
+            <div class="panel-heading">
+                <div>
+                    <h2 class="panel-title">Proxy Operator</h2>
+                    <p class="panel-copy">Kết nối tới proxy-operator runtime agent.</p>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <tbody>
+                        <tr>
+                            <td style="color:var(--text-tertiary); width:140px;">Operator URL</td>
+                            <td class="code-text">{{ operator_url }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="margin-top:var(--space-5);">
+                <form method="POST" action="/control/deploy/proxies/sync" style="display:inline;">
+                    <button type="submit" class="button" style="height:36px; padding:0 16px; font-size:13px;">Sync Runtime</button>
+                </form>
+            </div>
+        </article>
+    </section>
+</div>
+{% endblock %}

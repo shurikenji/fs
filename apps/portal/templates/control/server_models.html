@@ -1,0 +1,151 @@
+{% extends "control/base.html" %}
+{% block title %}Manage Models{% endblock %}
+
+{% block content %}
+<div x-data="serverModelsPage()" x-cloak class="page-shell">
+    <section class="page-header">
+        <div>
+            <p class="page-eyebrow">Visibility controls</p>
+            <h1 class="page-title">Manage models</h1>
+            <p class="page-subtitle">Exclude specific models from <strong>{{ server.name }}</strong> so they disappear from public pricing and public usage logs.</p>
+        </div>
+        <div class="page-actions">
+            <a href="/control/servers" class="btn-admin secondary">Back to servers</a>
+            <a href="/control/servers/{{ server.id }}/groups" class="btn-admin ghost">Manage groups</a>
+        </div>
+    </section>
+
+    <section class="admin-card">
+        <div class="actions-row" style="justify-content: space-between;">
+            <div class="inline-list">
+                <span class="badge-soft">{{ server.name }}</span>
+                <span class="badge-soft success"><span x-text="visibleModels.length"></span> visible</span>
+                <span class="badge-soft warn"><span x-text="models.length - visibleModels.length"></span> excluded</span>
+            </div>
+            <div class="muted">Uses cached pricing snapshot only.</div>
+        </div>
+        <div class="field-grid mt-4" style="grid-template-columns: 1.2fr 220px auto auto auto auto;">
+            <div>
+                <label class="form-label">Search models</label>
+                <input type="text" class="form-control" placeholder="Filter by model name or provider" x-model="query">
+            </div>
+            <div>
+                <label class="form-label">Pricing mode</label>
+                <select class="form-select" x-model="mode">
+                    <option value="">All modes</option>
+                    <option value="token">Token</option>
+                    <option value="fixed">Fixed</option>
+                    <option value="request_scaled">Request scaled</option>
+                    <option value="unknown">Unknown</option>
+                </select>
+            </div>
+            <div class="actions-row" style="align-items: end;">
+                <button type="button" class="btn-admin secondary" @click="showAll()">Show all</button>
+            </div>
+            <div class="actions-row" style="align-items: end;">
+                <button type="button" class="btn-admin ghost" @click="selectFiltered()">Select filtered</button>
+            </div>
+            <div class="actions-row" style="align-items: end;">
+                <button type="button" class="btn-admin ghost" @click="clearSelection()">Clear selection</button>
+            </div>
+            <div class="actions-row" style="align-items: end;">
+                <button type="button" class="btn-admin ghost" @click="excludeSelected()">Exclude selected</button>
+            </div>
+        </div>
+    </section>
+
+    <template x-if="models.length">
+        <form method="POST" action="/control/servers/{{ server.id }}/models/save" class="table-card">
+            <div class="actions-row" style="justify-content: space-between;">
+                <div>
+                    <h2 class="section-title">Cached model catalog</h2>
+                    <p class="section-copy">Unchecked rows are excluded from public pricing and public usage logs. Admin still keeps the full cached catalog.</p>
+                </div>
+                <button type="submit" class="btn-admin">Save visibility</button>
+            </div>
+            <div class="table-responsive mt-4">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 56px;">Pick</th>
+                            <th style="width: 88px;">Public</th>
+                            <th>Model</th>
+                            <th style="width: 180px;">Provider</th>
+                            <th style="width: 150px;">Mode</th>
+                            <th style="width: 160px;">Groups</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="model in filteredModels()" :key="model.model_name">
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="form-check-input" :value="model.model_name" x-model="selectedRows">
+                                </td>
+                                <td>
+                                    <input type="checkbox" class="form-check-input" name="visible_models" :value="model.model_name" x-model="visibleModels">
+                                </td>
+                                <td>
+                                    <div class="fw-semibold code-block" x-text="model.model_name"></div>
+                                </td>
+                                <td x-text="model.vendor_name || '-'"></td>
+                                <td x-text="model.pricing_mode"></td>
+                                <td>
+                                    <span x-text="model.visible_group_count"></span>
+                                    <span class="muted"> / </span>
+                                    <span x-text="model.group_count"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    </template>
+
+    <template x-if="!models.length">
+        <section class="table-card">
+            <div class="empty-state">No pricing cache found for this server yet. Run a sync first, then come back to manage model visibility.</div>
+        </section>
+    </template>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function serverModelsPage() {
+    return {
+        models: {{ models_data | tojson }},
+        visibleModels: {{ visible_models | tojson }},
+        selectedRows: [],
+        query: '',
+        mode: '',
+
+        filteredModels() {
+            const needle = this.query.toLowerCase().trim();
+            return this.models.filter((model) => {
+                if (this.mode && model.pricing_mode !== this.mode) return false;
+                if (!needle) return true;
+                return [model.model_name, model.vendor_name].join(' ').toLowerCase().includes(needle);
+            });
+        },
+
+        showAll() {
+            this.visibleModels = this.models.map((model) => model.model_name);
+        },
+
+        selectFiltered() {
+            this.selectedRows = this.filteredModels().map((model) => model.model_name);
+        },
+
+        clearSelection() {
+            this.selectedRows = [];
+        },
+
+        excludeSelected() {
+            const selected = new Set(this.selectedRows);
+            this.visibleModels = this.visibleModels.filter((name) => !selected.has(name));
+        },
+    };
+}
+</script>
+{% endblock %}

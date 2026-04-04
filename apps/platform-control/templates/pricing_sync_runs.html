@@ -1,0 +1,105 @@
+{% extends "admin_base.html" %}
+{% set active_page = "pricing-sync-runs" %}
+{% block title %}Pricing Sync Runs{% endblock %}
+{% block page_title %}Pricing Sync Runs{% endblock %}
+
+{% block content %}
+<div class="page-stack">
+    <section class="page-head">
+        <div>
+            <h1 class="page-title">Pricing Sync Runs</h1>
+            <p class="page-subtitle">Local audit trail for runtime sync calls triggered by platform-control.</p>
+        </div>
+    </section>
+
+    <section class="shell-card">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Filter runs</h2>
+                <p class="panel-copy">Review the latest sync attempts by source, trigger, and status.</p>
+            </div>
+        </div>
+        <form method="GET" action="/control/pricing/sync-runs" style="display:grid; gap:16px; grid-template-columns: repeat(4, minmax(0, 1fr)) auto;">
+            <div>
+                <label class="field-label">Source</label>
+                <select class="control select-control" name="source_id">
+                    <option value="">All sources</option>
+                    {% for source in sources %}
+                    <option value="{{ source.id }}" {% if source_id == source.id %}selected{% endif %}>{{ source.name }} ({{ source.id }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="field-label">Status</label>
+                <select class="control select-control" name="status">
+                    <option value="">All statuses</option>
+                    <option value="success" {% if status == 'success' %}selected{% endif %}>success</option>
+                    <option value="failed" {% if status == 'failed' %}selected{% endif %}>failed</option>
+                </select>
+            </div>
+            <div>
+                <label class="field-label">Trigger</label>
+                <select class="control select-control" name="trigger">
+                    <option value="">All triggers</option>
+                    <option value="manual" {% if trigger == 'manual' %}selected{% endif %}>manual</option>
+                    <option value="auto" {% if trigger == 'auto' %}selected{% endif %}>auto</option>
+                </select>
+            </div>
+            <div></div>
+            <div style="align-self:end; display:flex; gap:10px;">
+                <a class="button-secondary" href="/control/pricing/sync-runs">Reset</a>
+                <button type="submit" class="button">Apply</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="shell-card">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Recent runs</h2>
+                <p class="panel-copy">{{ runs|length }} entries currently loaded.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Source</th>
+                        <th>Status</th>
+                        <th>Trigger</th>
+                        <th>Models</th>
+                        <th>Groups</th>
+                        <th>Translated</th>
+                        <th>Duration</th>
+                        <th>Error</th>
+                        <th>Created</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for run in runs %}
+                    <tr>
+                        <td>{{ run.id }}</td>
+                        <td class="code-text">{{ run.source_id }}</td>
+                        <td>
+                            {% if run.status == 'success' %}
+                            <span class="tag is-accent">success</span>
+                            {% else %}
+                            <span class="tag is-warm">{{ run.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ run.trigger }}</td>
+                        <td>{{ run.model_count }}</td>
+                        <td>{{ run.group_count }}</td>
+                        <td>{{ run.translated_count }}</td>
+                        <td>{{ run.duration_ms }} ms</td>
+                        <td style="max-width:280px; color:var(--text-secondary);">{{ run.error_message or '-' }}</td>
+                        <td>{{ run.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

@@ -1,0 +1,41 @@
+{
+  "success": true,
+  "group_ratio": {
+    "default": 1.0
+  },
+  "usable_group": {
+    "default": "Default"
+  },
+  "supported_endpoint": {
+    "aigc-image": {
+      "path": "/tencent-vod/v1/aigc-image",
+      "method": "POST"
+    }
+  },
+  "vendors": [
+    {
+      "id": 61,
+      "name": "AIGC"
+    }
+  ],
+  "data": [
+    {
+      "model_name": "aigc-image-gem",
+      "description": "AIGC image model with GEM 2.5 and 3.0 variants.",
+      "tags": "image",
+      "model_type": "image",
+      "vendor_id": 61,
+      "quota_type": 1,
+      "model_ratio": 0,
+      "model_price": 0.017,
+      "owner_by": "",
+      "completion_ratio": 0,
+      "enable_groups": [
+        "default"
+      ],
+      "supported_endpoint_types": [
+        "aigc-image"
+      ]
+    }
+  ]
+}

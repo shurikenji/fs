@@ -1,0 +1,487 @@
+{% extends "base.html" %}
+{% block title %}Cài đặt{% endblock %}
+{% block content %}
+
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </span>
+            Cài đặt hệ thống
+        </h1>
+        <p class="page-subtitle">Cấu hình bot, thanh toán, mẫu tin nhắn, và tích hợp AI.</p>
+    </div>
+</div>
+
+<!-- Tab Navigation -->
+<div class="settings-tab-nav animate-fade-up">
+    {% set tabs = [
+        ('banking', 'Kết nối ngân hàng', 'M1 4h22v4H1zM1 10h22v4H1zM1 16h22v4H1z'),
+        ('bot', 'Bot & Admin', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2 M12 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'),
+        ('scanner', 'Quét & QR', 'M22 12h-4l-3 9L9 3l-3 9H2'),
+        ('messages', 'Mẫu tin nhắn', 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'),
+        ('ai', 'Tích hợp AI', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zM2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z'),
+    ] %}
+    {% for tab_id, tab_label, tab_icon in tabs %}
+    <button type="button" class="settings-tab-btn" data-tab="{{ tab_id }}" onclick="switchTab('{{ tab_id }}')">
+        {{ tab_label }}
+    </button>
+    {% endfor %}
+</div>
+
+<form method="POST" action="/settings/save" id="settingsForm">
+    <div class="row g-4 animate-fade-up">
+
+        <!-- LEFT COLUMN -->
+        <div class="col-12 col-lg-7">
+
+            <!-- TAB: Banking -->
+            <div class="settings-tab" id="tab-banking">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+                            Kết nối MBBank
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.25rem;">Thông tin kết nối ngân hàng MB và tài khoản nhận tiền thanh toán.</p>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label class="form-label">Địa chỉ API MBBank</label>
+                                    <input name="mb_api_url" class="form-control" value="{{ all_settings.get('mb_api_url', '') }}" placeholder="https://api.mbbank.com.vn">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Khóa API MBBank</label>
+                                    <input name="mb_api_key" type="password" class="form-control" value="{{ all_settings.get('mb_api_key', '') }}" placeholder="••••••••">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Tên đăng nhập MBBank</label>
+                                    <input name="mb_username" class="form-control" value="{{ all_settings.get('mb_username', '') }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Mật khẩu MBBank</label>
+                                    <input name="mb_password" type="password" class="form-control" value="{{ all_settings.get('mb_password', '') }}" placeholder="••••••••">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Số tài khoản MB</label>
+                                    <input name="mb_account_no" class="form-control" value="{{ all_settings.get('mb_account_no', '') }}" placeholder="1234567890">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Tên chủ tài khoản MB</label>
+                                    <input name="mb_account_name" class="form-control" value="{{ all_settings.get('mb_account_name', '') }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Mã ngân hàng MB</label>
+                                    <input name="mb_bank_id" class="form-control" value="{{ all_settings.get('mb_bank_id', '') }}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: Messages -->
+            <div class="settings-tab" id="tab-messages" style="display: none;">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                            Tin nhắn tự động
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.25rem;">Tùy chỉnh nội dung bot gửi tự động sau khi hoàn tất đơn hàng hoặc cộng tiền vào ví. Hỗ trợ HTML Telegram.</p>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);">Giao hàng</h4>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--background-subtle); border: 1px solid var(--border-light); border-radius: 999px; padding: 0.2rem 0.6rem;">Sau khi đơn hoàn tất</span>
+                                </div>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.84rem;">Dùng cho key mới, nạp key cũ và các sản phẩm tài khoản giao tự động.</p>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Key API mới</label>
+                                    <textarea name="msg_key_new" class="form-control" rows="5" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">{{ all_settings.get('msg_key_new', '') }}</textarea>
+                                    <div class="form-text">Biến: {order_code}, {api_key}, {dollar}, {server}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Nạp key cũ</label>
+                                    <textarea name="msg_key_topup" class="form-control" rows="5" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">{{ all_settings.get('msg_key_topup', '') }}</textarea>
+                                    <div class="form-text">Biến: {order_code}, {api_key}, {dollar_before}, {dollar_added}, {dollar_after}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Tài khoản giao tự động</label>
+                                    <textarea name="msg_chatgpt" class="form-control" rows="5" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">{{ all_settings.get('msg_chatgpt', '') }}</textarea>
+                                    <div class="form-text">Biến: {order_code}, {account_data}</div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div style="height: 1px; background: var(--border-light); margin: 0.1rem 0;"></div>
+                            </div>
+                            <div class="col-12">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);">Ví & hệ thống</h4>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--background-subtle); border: 1px solid var(--border-light); border-radius: 999px; padding: 0.2rem 0.6rem;">Thông báo giao dịch</span>
+                                </div>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.84rem;">Dùng cho các tin nhắn xác nhận nạp ví và cập nhật số dư.</p>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label class="form-label">Nạp ví thành công</label>
+                                    <textarea name="msg_wallet_topup" class="form-control" rows="5" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">{{ all_settings.get('msg_wallet_topup', '') }}</textarea>
+                                    <div class="form-text">Biến: {order_code}, {amount}, {balance}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div class="col-12 col-lg-5">
+
+            <!-- TAB: Bot -->
+            <div class="settings-tab" id="tab-bot">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            Bot & Quản trị
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Tên bot</label>
+                                    <input name="bot_name" class="form-control" value="{{ all_settings.get('bot_name', '') }}">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Mô tả bot</label>
+                                    <input name="bot_description" class="form-control" value="{{ all_settings.get('bot_description', '') }}">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label class="form-label">Tin nhắn chào mừng</label>
+                                    <textarea name="welcome_message" class="form-control" rows="2">{{ all_settings.get('welcome_message', '') }}</textarea>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Liên kết hỗ trợ</label>
+                                    <input name="support_url" class="form-control" value="{{ all_settings.get('support_url', '') }}" placeholder="https://t.me/support">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Nội dung nút hỗ trợ</label>
+                                    <input name="support_text" class="form-control" value="{{ all_settings.get('support_text', '') }}" placeholder="💬 Hỗ trợ">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Số dòng mỗi trang</label>
+                                    <input name="pagination_size" type="number" class="form-control" value="{{ all_settings.get('pagination_size', '') }}" placeholder="10">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Mật khẩu quản trị</label>
+                                    <input name="admin_password" type="password" class="form-control" value="{{ all_settings.get('admin_password', '') }}" placeholder="••••••••">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label class="form-label">Telegram ID quản trị</label>
+                                    <input name="admin_telegram_ids" class="form-control" value="{{ all_settings.get('admin_telegram_ids', '') }}" placeholder="123456789, 987654321">
+                                    <div class="form-text">Nhiều ID cách nhau dấu phẩy.</div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label class="form-label" style="margin-bottom: 0.75rem;">Thông báo Telegram cho admin</label>
+                                    <div style="display: grid; gap: 0.5rem;">
+                                        {% set notify_opts = [
+                                            ('admin_notify_enabled', 'Bật thông báo đơn hàng cho admin'),
+                                            ('admin_notify_order_completed', 'Thông báo khi đơn hoàn thành'),
+                                            ('admin_notify_service_paid', 'Thông báo khi đơn dịch vụ đã thanh toán'),
+                                            ('admin_notify_service_completed', 'Thông báo khi đơn dịch vụ hoàn tất'),
+                                            ('admin_notify_order_refunded', 'Thông báo khi đơn được hoàn tiền'),
+                                        ] %}
+                                        {% for opt_name, opt_label in notify_opts %}
+                                        <div class="form-check" style="padding: 0.5rem 0.75rem; background: var(--background-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+                                            <input type="checkbox" class="form-check-input" id="{{ opt_name }}" name="{{ opt_name }}" value="true"
+                                                {% if all_settings.get(opt_name, 'true') == 'true' %}checked{% endif %}>
+                                            <label class="form-check-label" for="{{ opt_name }}" style="font-size: 0.875rem;">{{ opt_label }}</label>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: Scanner -->
+            <div class="settings-tab" id="tab-scanner" style="display: none;">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                            Bộ quét giao dịch & QR
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Chu kỳ quét (giây)</label>
+                                    <input name="poll_interval" class="form-control" value="{{ all_settings.get('poll_interval', '') }}" placeholder="30">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Hết hạn đơn (phút)</label>
+                                    <input name="order_expire_min" class="form-control" value="{{ all_settings.get('order_expire_min', '') }}" placeholder="15">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Mẫu VietQR</label>
+                                    <input name="vietqr_template" class="form-control" value="{{ all_settings.get('vietqr_template', '') }}" placeholder="compact">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div style="height: 1px; background: var(--border-light); margin: 0.25rem 0;"></div>
+                            </div>
+                            <div class="col-12">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);">Cảnh báo API key sắp hết tiền</h4>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--background-subtle); border: 1px solid var(--border-light); border-radius: 999px; padding: 0.2rem 0.6rem;">Telegram tự động</span>
+                                </div>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.84rem;">Quét các key đang active theo chu kỳ và gửi cảnh báo khi số dư còn thấp hơn các mốc đã cấu hình.</p>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check" style="padding: 0.6rem 0.75rem; background: var(--background-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+                                    <input type="checkbox" class="form-check-input" id="key_alert_enabled" name="key_alert_enabled" value="true"
+                                        {% if all_settings.get('key_alert_enabled', 'true') == 'true' %}checked{% endif %}>
+                                    <label class="form-check-label" for="key_alert_enabled" style="font-size: 0.875rem; font-weight: 500;">Bật cảnh báo số dư API key qua Telegram</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Chu kỳ quét key (phút)</label>
+                                    <input name="key_alert_poll_interval_min" type="number" min="1" class="form-control" value="{{ all_settings.get('key_alert_poll_interval_min', '15') }}" placeholder="15">
+                                    <div class="form-text">Khuyến nghị 10-15 phút cho VPS free tier.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Mốc cảnh báo ($)</label>
+                                    <input name="key_alert_thresholds" class="form-control" value="{{ all_settings.get('key_alert_thresholds', '5,3,1') }}" placeholder="5,3,1">
+                                    <div class="form-text">Nhập các mốc USD, ngăn cách bằng dấu phẩy.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: AI -->
+            <div class="settings-tab" id="tab-ai" style="display: none;">
+                <div class="card mb-4">
+                    <div class="card-header" style="justify-content: space-between;">
+                        <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                            Dịch tên nhóm bằng AI
+                        </h3>
+                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="testAI()">Kiểm tra kết nối</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label class="form-label">Nhà cung cấp</label>
+                                    <select name="ai_provider" class="form-select" id="ai_provider">
+                                        {% for p in ai_providers %}
+                                        <option value="{{ p.value }}" {% if all_settings.get('ai_provider') == p.value %}selected{% endif %}>{{ p.label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label class="form-label">Khóa API</label>
+                                    <input name="ai_api_key" type="password" class="form-control" value="{{ all_settings.get('ai_api_key', '') }}" placeholder="sk-...">
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-group">
+                                    <label class="form-label">Mô hình</label>
+                                    <input name="ai_model" class="form-control" id="ai_model" list="ai_model_suggestions" value="{{ all_settings.get('ai_model', '') }}" placeholder="gpt-4o-mini, llama3.1:8b">
+                                    <datalist id="ai_model_suggestions">
+                                        {% for m in ai_models.get(all_settings.get('ai_provider', 'openai'), []) %}
+                                        <option value="{{ m }}"></option>
+                                        {% endfor %}
+                                    </datalist>
+                                </div>
+                            </div>
+                            <div class="col-12" id="base_url_field" style="display: none;">
+                                <div class="form-group">
+                                    <label class="form-label">Địa chỉ gốc (Base URL)</label>
+                                    <input name="ai_base_url" type="text" class="form-control" value="{{ all_settings.get('ai_base_url', '') }}" placeholder="http://localhost:11434">
+                                    <div class="form-text">Dùng cho Ollama hoặc LM Studio tương thích OpenAI.</div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check" style="padding: 0.6rem 0.75rem; background: var(--background-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+                                    <input type="checkbox" class="form-check-input" id="ai_enabled" name="ai_enabled" value="true" {% if all_settings.get('ai_enabled') == 'true' %}checked{% endif %}>
+                                    <label class="form-check-label" for="ai_enabled" style="font-weight: 500;">Bật dịch tên nhóm bằng AI</label>
+                                </div>
+                                <div class="form-text mt-2" id="ai_test_result" style="font-size: 0.85rem;">Kiểm tra kết nối trước khi lưu nếu thay đổi provider hoặc model.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Sticky Save Footer -->
+    <div style="position: sticky; bottom: 0; background: rgba(248,250,252, 0.95); backdrop-filter: blur(8px); border-top: 1px solid var(--border); padding: 1rem 0; margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem; z-index: 10;">
+        <button type="submit" class="btn btn-primary btn-lg">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            Lưu tất cả cài đặt
+        </button>
+    </div>
+</form>
+
+<script>
+// Tab system
+const tabIds = ['banking', 'bot', 'scanner', 'messages', 'ai'];
+
+function switchTab(activeTab) {
+    activeTab = tabIds.includes(activeTab) ? activeTab : 'banking';
+    const visibleTabs = new Set([activeTab]);
+    if (activeTab === 'banking') {
+        visibleTabs.add('bot');
+    }
+
+    // Show/hide tab content
+    tabIds.forEach(id => {
+        const el = document.getElementById('tab-' + id);
+        if (el) el.style.display = visibleTabs.has(id) ? '' : 'none';
+    });
+
+    // Update tab buttons
+    document.querySelectorAll('.settings-tab-btn').forEach(btn => {
+        const isActive = btn.dataset.tab === activeTab;
+        btn.style.background = isActive ? 'var(--surface)' : 'transparent';
+        btn.style.color = isActive ? 'var(--text-primary)' : 'var(--text-secondary)';
+        btn.style.fontWeight = isActive ? '600' : '500';
+        btn.style.boxShadow = isActive ? 'var(--shadow-sm)' : 'none';
+    });
+
+    // Save active tab
+    localStorage.setItem('settingsActiveTab', activeTab);
+}
+
+// Restore tab from localStorage
+document.addEventListener('DOMContentLoaded', function() {
+    const savedTab = localStorage.getItem('settingsActiveTab') || 'banking';
+    switchTab(savedTab);
+
+    const provider = document.getElementById('ai_provider').value;
+    const baseUrlField = document.getElementById('base_url_field');
+    if (baseUrlField) baseUrlField.style.display = provider === 'openai_compatible' ? 'block' : 'none';
+});
+
+// AI provider change
+document.getElementById('ai_provider').addEventListener('change', function() {
+    const provider = this.value;
+    const modelInput = document.getElementById('ai_model');
+    const modelSuggestions = document.getElementById('ai_model_suggestions');
+    const baseUrlField = document.getElementById('base_url_field');
+    const models = {{ ai_models | tojson }};
+
+    modelSuggestions.innerHTML = '';
+    (models[provider] || []).forEach(function(m) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        modelSuggestions.appendChild(opt);
+    });
+
+    if (!modelInput.value.trim() && (models[provider] || []).length > 0) {
+        modelInput.value = models[provider][0];
+    }
+
+    baseUrlField.style.display = provider === 'openai_compatible' ? 'block' : 'none';
+});
+
+async function testAI() {
+    const provider = document.getElementById('ai_provider').value;
+    const apiKey = document.querySelector('input[name="ai_api_key"]').value;
+    const model = document.getElementById('ai_model').value;
+    const baseUrl = document.querySelector('input[name="ai_base_url"]').value;
+    const resultSpan = document.getElementById('ai_test_result');
+
+    resultSpan.textContent = '⏳ Đang test kết nối...';
+    resultSpan.className = 'form-text text-muted mt-2';
+
+    const formData = new FormData();
+    formData.append('provider', provider);
+    formData.append('api_key', apiKey);
+    formData.append('model', model);
+    formData.append('base_url', baseUrl);
+
+    try {
+        const resp = await fetch('/settings/ai/test', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (data.success) {
+            resultSpan.textContent = '✅ Kết nối thành công!';
+            resultSpan.className = 'form-text text-success mt-2';
+        } else {
+            resultSpan.textContent = '❌ ' + (data.message || 'Không thể kết nối.');
+            resultSpan.className = 'form-text text-danger mt-2';
+        }
+    } catch (e) {
+        resultSpan.textContent = '❌ Lỗi: ' + e.message;
+        resultSpan.className = 'form-text text-danger mt-2';
+    }
+}
+</script>
+{% endblock %}

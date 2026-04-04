@@ -1,0 +1,152 @@
+{% extends "control/base.html" %}
+{% block title %}Manage Groups{% endblock %}
+
+{% block content %}
+<div x-data="serverGroupsPage()" x-cloak class="page-shell">
+    <section class="page-header">
+        <div>
+            <p class="page-eyebrow">Visibility controls</p>
+            <h1 class="page-title">Manage groups</h1>
+            <p class="page-subtitle">Control which groups from <strong>{{ server.name }}</strong> are visible in public pricing, key selection, and usage logs.</p>
+        </div>
+        <div class="page-actions">
+            <a href="/control/servers" class="btn-admin secondary">Back to servers</a>
+            <form method="POST" action="/control/servers/{{ server.id }}/groups/refresh">
+                <button type="submit" class="btn-admin ghost">Refresh catalog</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="admin-card">
+        <div class="actions-row" style="justify-content: space-between;">
+            <div class="inline-list">
+                <span class="badge-soft">{{ source_label }}</span>
+                <span class="badge-soft success"><span x-text="visibleGroups.length"></span> visible</span>
+                <span class="badge-soft warn"><span x-text="groups.length - visibleGroups.length"></span> hidden</span>
+            </div>
+            <div class="muted">Server: <span class="code-block">{{ server.id }}</span></div>
+        </div>
+        {% if server.manual_groups %}
+        <p class="field-help">Manual group override is active. Visibility toggles are applied after this manual list: <span class="code-block">{{ server.manual_groups }}</span></p>
+        {% endif %}
+        <div class="field-grid mt-4" style="grid-template-columns: 1.3fr auto auto auto auto;">
+            <div>
+                <label class="form-label">Search groups</label>
+                <input type="text" class="form-control" placeholder="Filter by name, label, category, or description" x-model="query">
+            </div>
+            <div class="actions-row" style="align-items: end;">
+                <button type="button" class="btn-admin secondary" @click="enableAll()">Enable all</button>
+            </div>
+            <div class="actions-row" style="align-items: end;">
+                <button type="button" class="btn-admin ghost" @click="selectFiltered()">Select filtered</button>
+            </div>
+            <div class="actions-row" style="align-items: end;">
+                <button type="button" class="btn-admin ghost" @click="clearSelection()">Clear selection</button>
+            </div>
+            <div class="actions-row" style="align-items: end;">
+                <button type="button" class="btn-admin ghost" @click="disableSelected()">Disable selected</button>
+            </div>
+        </div>
+    </section>
+
+    <template x-if="groups.length">
+        <form method="POST" action="/control/servers/{{ server.id }}/groups/save" class="table-card">
+            <div class="actions-row" style="justify-content: space-between;">
+                <div>
+                    <h2 class="section-title">Catalog groups</h2>
+                    <p class="section-copy">Unchecked rows are hidden from public pages and public APIs only. Admin still sees the full catalog.</p>
+                </div>
+                <button type="submit" class="btn-admin">Save visibility</button>
+            </div>
+            <div class="table-responsive mt-4">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 56px;">Pick</th>
+                            <th style="width: 88px;">Public</th>
+                            <th>Group</th>
+                            <th style="width: 110px;">Ratio</th>
+                            <th style="width: 160px;">Category</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="group in filteredGroups()" :key="group.name">
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="form-check-input" :value="group.name" x-model="selectedRows">
+                                </td>
+                                <td>
+                                    <input type="checkbox" class="form-check-input" name="visible_groups" :value="group.name" x-model="visibleGroups">
+                                </td>
+                                <td>
+                                    <div class="fw-semibold" x-text="group.label_en || group.name"></div>
+                                    <div class="muted code-block mt-1" x-text="group.name"></div>
+                                </td>
+                                <td x-text="'x' + formatRatio(group.ratio)"></td>
+                                <td x-text="group.category || 'Other'"></td>
+                                <td class="muted" x-text="group.desc || '-'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    </template>
+
+    <template x-if="!groups.length">
+        <section class="table-card">
+            <div class="empty-state">No group catalog found yet. Sync or refresh the server first.</div>
+        </section>
+    </template>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function serverGroupsPage() {
+    return {
+        groups: {{ groups_data | tojson }},
+        visibleGroups: {{ visible_groups | tojson }},
+        selectedRows: [],
+        query: '',
+
+        filteredGroups() {
+            const needle = this.query.toLowerCase().trim();
+            if (!needle) return this.groups;
+            return this.groups.filter((group) => {
+                const haystack = [
+                    group.name,
+                    group.label_en,
+                    group.category,
+                    group.desc,
+                ].join(' ').toLowerCase();
+                return haystack.includes(needle);
+            });
+        },
+
+        formatRatio(value) {
+            const number = Number(value);
+            return Number.isFinite(number) ? number.toFixed(2) : '1.00';
+        },
+
+        enableAll() {
+            this.visibleGroups = this.groups.map((group) => group.name);
+        },
+
+        selectFiltered() {
+            this.selectedRows = this.filteredGroups().map((group) => group.name);
+        },
+
+        clearSelection() {
+            this.selectedRows = [];
+        },
+
+        disableSelected() {
+            const selected = new Set(this.selectedRows);
+            this.visibleGroups = this.visibleGroups.filter((name) => !selected.has(name));
+        },
+    };
+}
+</script>
+{% endblock %}

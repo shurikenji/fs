@@ -1,0 +1,1244 @@
+{% extends "base.html" %}
+{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form, entity_state_checkbox %}
+{% block title %}Máy chủ API{% endblock %}
+{% block content %}
+
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                </svg>
+            </span>
+            Quản lý máy chủ API
+        </h1>
+        <p class="page-subtitle">Cấu hình các máy chủ API, nhóm và chính sách giảm giá theo bậc chi tiêu.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Thêm server
+        </button>
+    </div>
+</div>
+
+<!-- KPI Row -->
+<div class="kpi-grid animate-fade-up">
+    <div class="stat-card">
+        <div class="stat-icon emerald">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ servers|length }}</div>
+            <div class="stat-label">Tổng server</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon sky">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ servers | selectattr('is_active') | list | length }}</div>
+            <div class="stat-label">Đang bật</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon amber">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ servers | selectattr('supports_multi_group') | list | length }}</div>
+            <div class="stat-label">Multi-group</div>
+        </div>
+    </div>
+</div>
+
+<!-- Servers Table -->
+<div class="table-card animate-fade-up">
+    {% if servers %}
+    <table class="table table-responsive-cards">
+        <thead>
+            <tr>
+                <th style="width: 50px;">#</th>
+                <th>Tên server</th>
+                <th style="width: 110px;">Loại API</th>
+                <th>Địa chỉ API</th>
+                <th style="width: 130px;">Giá/$</th>
+                <th style="width: 100px;">Multi-group</th>
+                <th style="width: 110px;">Trạng thái</th>
+                <th style="width: 170px;">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in servers %}
+            <tr>
+                {% set next_url = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
+                <td data-label="#">
+                    <span class="cell-id">#{{ s.id }}</span>
+                </td>
+                <td data-label="Tên server">
+                    <div class="cell-name">{{ s.name }}</div>
+                    {% if s.default_group %}
+                    <div class="cell-meta">Nhóm mặc định: <code class="cell-code--subtle">{{ s.default_group }}</code></div>
+                    {% endif %}
+                </td>
+                <td data-label="Loại API">
+                    {% if s.api_type == 'newapi' %}
+                    <span class="badge badge-info">newapi</span>
+                    {% elif s.api_type == 'rixapi' %}
+                    <span class="badge badge-warning">rixapi</span>
+                    {% else %}
+                    <span class="badge badge-secondary">{{ s.api_type or 'other' }}</span>
+                    {% endif %}
+                </td>
+                <td data-label="Địa chỉ API">
+                    <code class="cell-url">{{ s.base_url }}</code>
+                </td>
+                <td data-label="Giá/$">
+                    <div class="cell-price" style="color:var(--primary);">{{ format_vnd(s.price_per_unit) }}</div>
+                    <div class="cell-meta">/ $1</div>
+                </td>
+                <td data-label="Multi-group">
+                    {% if s.supports_multi_group %}
+                    <span class="badge badge-success">✓ Bật</span>
+                    {% else %}
+                    <span class="badge badge-secondary">Tắt</span>
+                    {% endif %}
+                </td>
+                <td data-label="Trạng thái">{{ entity_state_badge(s.is_active) }}</td>
+                <td>
+                    <div class="actions">
+                        {{ entity_toggle_form('/servers/' ~ s.id ~ '/toggle-active', s.is_active, next_url) }}
+                        <a href="/servers/{{ s.id }}/groups" class="btn btn-sm btn-outline-secondary" title="Nhóm và cấu hình">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </a>
+                        <a
+                            href="/servers/{{ s.id }}/edit"
+                            class="btn btn-sm btn-outline-primary"
+                            data-edit-modal-url="/servers/{{ s.id }}/edit-modal"
+                            data-edit-modal-init="initializeServerEditModal"
+                        >Sửa</a>
+                        <a href="/servers/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Xóa</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">🖥️</div>
+        <h4>Chưa có máy chủ nào</h4>
+        <p>Thêm máy chủ API đầu tiên để bắt đầu cấu hình sản phẩm.</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">Thêm máy chủ đầu tiên</button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="POST" action="/servers/add" id="addForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Thêm Server</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="text-muted mb-2">Thông tin cơ bản</h6>
+                    <div class="mb-2"><label class="form-label">Tên</label><input name="name" class="form-control" required></div>
+                    <div class="mb-2"><label class="form-label">Địa chỉ API</label><input name="base_url" class="form-control" required placeholder="https://api.example.com"></div>
+                    <div class="mb-2">
+                        <label class="form-label">Loại API</label>
+                        <select name="api_type" class="form-select" id="add_api_type">
+                            {% for t in api_types %}
+                            <option value="{{ t.value }}">{{ t.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <hr>
+                    <h6 class="text-muted mb-2">Xác thực</h6>
+                    <div class="mb-2" id="add_auth_type_wrap">
+                        <label class="form-label">Kiểu xác thực</label>
+                        <select name="auth_type" class="form-select" id="add_auth_type">
+                            {% for a in auth_types %}
+                            <option value="{{ a.value }}">{{ a.label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div id="add_auth_fields">
+                        <div class="mb-2" id="add_header_wrap"><label class="form-label">Header mã người dùng</label><input name="auth_user_header" class="form-control" placeholder="new-api-user"></div>
+                        <div class="mb-2"><label class="form-label" id="add_user_value_label">User ID</label><input name="auth_user_value" class="form-control" placeholder="User ID"></div>
+                        <div class="mb-2"><label class="form-label" id="add_token_label">Token truy cập</label><input name="auth_token" class="form-control"></div>
+                    </div>
+
+                    <div id="add_cookie_field" class="mb-2" style="display:none;">
+                        <label class="form-label">Cookie</label><input name="auth_cookie" class="form-control" placeholder="session=abc123; user_id=456">
+                    </div>
+
+                    <div class="form-check mb-2" id="add_multi_group_wrap">
+                        <input class="form-check-input" type="checkbox" name="supports_multi_group" id="add_multi_group" value="1">
+                        <label class="form-check-label" for="add_multi_group">Bật hỗ trợ nhiều nhóm</label>
+                    </div>
+
+                    <hr>
+                    <div id="add_advanced_block">
+                        <h6 class="text-muted mb-2">Nâng cao (Optional)</h6>
+                        <div class="mb-2"><label class="form-label">Đường dẫn lấy nhóm</label><input name="groups_endpoint" class="form-control" placeholder="/api/user/self/groups"></div>
+                        <div class="mb-2"><label class="form-label">Danh sách nhóm nhập tay</label><input name="manual_groups" class="form-control" placeholder="default,azure,gemini,claude"></div>
+                        <div class="mb-2"><label class="form-label">Custom Headers (JSON)</label><textarea name="custom_headers" class="form-control" rows="2" placeholder='[{"key": "X-Custom", "value": "固定值"}]'></textarea></div>
+                    </div>
+                    <hr>
+                    <h6 class="text-muted mb-2">Chính sách giảm giá</h6>
+                    <div class="discount-builder" data-builder="add">
+                        <div class="discount-builder__hero">
+                            <div>
+                                <h4>Thiết lập chiết khấu theo mốc chi tiêu</h4>
+                                <p>Cấu hình trực quan theo từng bậc. Hệ thống vẫn lưu ở dạng JSON ẩn để giữ tương thích backend hiện tại.</p>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="addDiscountTier('add')">Thêm bậc giảm giá</button>
+                        </div>
+                        <div class="discount-builder__grid">
+                            <div class="discount-builder__panel">
+                                <div class="discount-builder__panel-title">Nguồn tích lũy</div>
+                                <strong>Nhập key để cộng chi tiêu</strong>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" name="import_spend_accrual_enabled" id="add_import_spend_accrual_enabled" value="1">
+                                    <label class="form-check-label" for="add_import_spend_accrual_enabled">Bật cộng chi tiêu từ key người dùng nhập vào</label>
+                                </div>
+                            </div>
+                            <div class="discount-builder__panel">
+                                <div class="discount-builder__panel-title">Cách cộng benefit</div>
+                                <label class="form-label">Kiểu áp dụng</label>
+                                <select name="discount_stack_mode" class="form-select">
+                                    {% for mode in discount_stack_modes %}
+                                    <option value="{{ mode.value }}">{{ mode.label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Stack rule picker — full width section -->
+                        <div style="border-top: 1px solid var(--border-light); padding-top: 1rem; margin-top: 0.25rem;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                                <div>
+                                    <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-bottom: 0.25rem;">Ưu đãi được cộng dồn</div>
+                                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.82rem;">Chọn loại ưu đãi có thể kết hợp với nhau. Chỉ áp dụng khi server dùng chế độ <strong>Cộng dồn các loại đã chọn</strong>.</p>
+                                </div>
+                                <div class="stack-rule-picker__presets">
+                                    <span style="font-size: 0.75rem; color: var(--text-tertiary); margin-right: 0.25rem;">Nhanh:</span>
+                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('add', 'cashback_only')">Chỉ hoàn tiền</button>
+                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('add', 'fixed_plus_cashback')">Cố định + hoàn</button>
+                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('add', 'percent_plus_cashback')">% + hoàn</button>
+                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('add', 'tier_price_plus_cashback')">Giá riêng + hoàn</button>
+                                </div>
+                            </div>
+                            <div class="stack-rule-picker" data-stack-picker="add">
+                                <input type="hidden" name="discount_allowed_stack_types" value="cashback">
+                                <div class="stack-rule-picker__choices">
+                                    <label class="stack-rule-card">
+                                        <input type="checkbox" value="percent_off" onchange="toggleDiscountAllowedType('add', this.value, this.checked)">
+                                        <span class="stack-rule-card__body">
+                                            <div><strong>Giảm %</strong><small>Giảm theo phần trăm đơn hàng.</small></div>
+                                        </span>
+                                    </label>
+                                    <label class="stack-rule-card">
+                                        <input type="checkbox" value="fixed_off" onchange="toggleDiscountAllowedType('add', this.value, this.checked)">
+                                        <span class="stack-rule-card__body">
+                                            <div><strong>Giảm cố định</strong><small>Trừ số tiền cố định.</small></div>
+                                        </span>
+                                    </label>
+                                    <label class="stack-rule-card">
+                                        <input type="checkbox" value="cashback" onchange="toggleDiscountAllowedType('add', this.value, this.checked)">
+                                        <span class="stack-rule-card__body">
+                                            <div><strong>Hoàn tiền</strong><small>Hoàn lại sau khi thanh toán.</small></div>
+                                        </span>
+                                    </label>
+                                    <label class="stack-rule-card">
+                                        <input type="checkbox" value="tier_price" onchange="toggleDiscountAllowedType('add', this.value, this.checked)">
+                                        <span class="stack-rule-card__body">
+                                            <div><strong>Giá riêng bậc</strong><small>Áp giá theo bậc chi tiêu.</small></div>
+                                        </span>
+                                    </label>
+                                </div>
+                                <div id="add_stack_rule_summary" class="stack-rule-picker__summary"></div>
+                            </div>
+                        </div>
+                        <div class="discount-badge-row">
+                            <span class="badge badge-info">Giảm theo %</span>
+                            <span class="badge badge-info">Giảm cố định</span>
+                            <span class="badge badge-info">Hoàn tiền</span>
+                            <span class="badge badge-info">Giá riêng theo bậc</span>
+                        </div>
+                        <div id="add_discount_tiers_builder" class="discount-builder__list mt-3"></div>
+                        <div class="discount-builder__advanced">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleDiscountJson('add')">Mở cấu hình JSON nâng cao</button>
+                            <div id="add_discount_json_wrap" class="mt-2" style="display:none;">
+                                <label class="form-label">JSON nâng cao</label>
+                                <textarea id="add_discount_tiers_json" name="discount_tiers_json" class="form-control discount-json-input" rows="8" placeholder='[{"name":"Bạc","min_spend_vnd":100000,"benefits":[{"type":"percent_off","value":5}]}]'></textarea>
+                                <div class="form-text">Các loại benefit hỗ trợ: <code>percent_off</code>, <code>fixed_off</code>, <code>cashback</code>, <code>tier_price</code>.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6 class="text-muted mb-2">Cấu hình giá</h6>
+                    <div class="row">
+                        <div class="col"><label class="form-label">Giá/$ (VNĐ)</label><input name="price_per_unit" type="number" class="form-control" required></div>
+                        <div class="col"><label class="form-label">Quota/$</label><input name="quota_per_unit" type="number" class="form-control" required></div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col"><label class="form-label">Hệ số $</label><input name="dollar_per_unit" type="number" step="0.1" class="form-control" value="10.0"></div>
+                        <div class="col"><label class="form-label">Hệ số quota</label><input name="quota_multiple" type="number" step="0.01" class="form-control" value="1.0"></div>
+                    </div>
+                    <div class="mb-2 mt-2"><label class="form-label">Nhóm mặc định</label><input name="default_group" class="form-control" placeholder="default"></div>
+                    <div class="mb-2"><button type="button" class="btn btn-outline-info btn-sm" onclick="previewServerGroups('add')">Tải groups</button></div>
+                    <div id="add_group_preview" class="mb-2" style="display:none;"></div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary">Thêm</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if editing %}
+{% include "_server_edit_modal.html" %}
+{% endif %}
+
+<!-- Groups Panel -->
+{% if groups_server is defined %}
+{% set source_labels = {
+    'Manual override': 'Danh sách nhập tay',
+    'Saved cache': 'Dữ liệu cache',
+    'Remote refresh': 'Dữ liệu làm mới từ server',
+    'No groups available': 'Chưa có nhóm'
+} %}
+<div class="card mt-3">
+    <div class="card-header d-flex justify-content-between align-items-start gap-3">
+        <div>
+            <h3>Nhóm khả dụng - {{ groups_server.name }}</h3>
+            <div class="small text-secondary">
+                <div>Nguồn danh sách hiện có: <strong>{{ source_labels.get(groups_source_label, groups_source_label) }}</strong></div>
+                <div>Nguồn đang áp dụng cho sản phẩm/API: <strong>{{ source_labels.get(effective_source_label, effective_source_label) }}</strong></div>
+                {% if groups_updated_at %}
+                <div>Thời điểm cache: <code>{{ groups_updated_at }}</code></div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <form method="POST" action="/servers/{{ groups_server.id }}/groups/refresh">
+                <button type="submit" class="btn btn-sm btn-outline-primary">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"></polyline>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                    </svg>
+                    Làm mới danh sách
+                </button>
+            </form>
+            <a href="/servers" class="btn btn-sm btn-outline-secondary">Đóng</a>
+        </div>
+    </div>
+    <div class="card-body">
+        {% if group_flash_message %}
+        <div class="alert alert-{{ group_flash_type or 'info' }}">{{ group_flash_message }}</div>
+        {% endif %}
+        {% if groups_server.manual_groups %}
+        <div class="alert alert-warning">
+            Đang bật danh sách nhóm nhập tay. Sản phẩm và <code>/api/groups</code> sẽ dùng
+            <code>{{ groups_server.manual_groups }}</code> cho đến khi bạn xóa cấu hình này.
+        </div>
+        {% endif %}
+
+        <form method="POST" action="/servers/{{ groups_server.id }}/groups/save" id="groupsConfigForm">
+            <div class="mb-3">
+                <label class="form-label">Nhóm có sẵn</label>
+                {% if groups_data %}
+                    {% if supports_multi_group %}
+                    <p class="text-secondary small mb-2">Bấm vào các nút để ghép danh sách nhóm mặc định cho server.</p>
+                    <div class="d-flex flex-wrap gap-2" id="available_groups">
+                        {% for g in groups_data %}
+                        <button
+                            type="button"
+                            class="btn btn-sm {{ 'btn-primary' if g.name in current_default_groups else 'btn-outline-secondary' }} group-btn"
+                            data-name="{{ g.name }}"
+                            data-ratio="{{ g.ratio }}"
+                            data-label="{{ g.label_en or g.name }}"
+                        >
+                            {{ g.label_en or g.name }} ({{ g.ratio }}x)
+                        </button>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="d-flex flex-wrap gap-3">
+                        {% for g in groups_data %}
+                        <div class="form-check">
+                            <input
+                                class="form-check-input"
+                                type="radio"
+                                name="group_radio"
+                                id="group_{{ loop.index }}"
+                                value="{{ g.name }}"
+                                data-ratio="{{ g.ratio }}"
+                                {% if current_default_groups and current_default_groups[0] == g.name %}checked{% endif %}
+                            >
+                            <label class="form-check-label" for="group_{{ loop.index }}">
+                                {{ g.label_en or g.name }} ({{ g.ratio }}x)
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                {% else %}
+                <div class="alert alert-warning mb-0">
+                    Chưa có dữ liệu nhóm. Hãy <strong>làm mới danh sách</strong> hoặc nhập tay ở bên dưới.
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-7">
+                    <label class="form-label">Nhóm mặc định</label>
+                    <input
+                        type="text"
+                        name="default_group"
+                        id="selected_group_input"
+                        class="form-control"
+                        value="{{ groups_server.default_group or '' }}"
+                        placeholder="group-a hoặc group-a,group-b"
+                    >
+                    <div class="form-text">
+                        Giá trị này sẽ được dùng khi sản phẩm không tự ghi đè nhóm riêng.
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <label class="form-label">Tóm tắt lựa chọn</label>
+                    <div id="selected_groups_summary" class="border rounded p-3 bg-light small"></div>
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label">Danh sách nhóm nhập tay</label>
+                <input
+                    type="text"
+                    name="manual_groups"
+                    id="manual_groups_override"
+                    class="form-control"
+                    value="{{ groups_server.manual_groups or '' }}"
+                    placeholder="group-a,group-b"
+                >
+                <div class="form-text">
+                    Nếu điền giá trị này, sản phẩm và API sẽ dùng danh sách này thay cho dữ liệu đã cache từ máy chủ.
+                </div>
+                <div class="mt-2 d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copySelectionToManualGroups()">
+                        Sao chép từ nhóm mặc định
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearManualGroupsOverride()">
+                        Xóa danh sách nhập tay
+                    </button>
+                </div>
+            </div>
+
+            <div class="mt-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Lưu cấu hình nhóm</button>
+                <a
+                    href="/servers/{{ groups_server.id }}/edit"
+                    class="btn btn-outline-secondary"
+                    data-edit-modal-url="/servers/{{ groups_server.id }}/edit-modal"
+                    data-edit-modal-init="initializeServerEditModal"
+                >Sửa máy chủ</a>
+            </div>
+        </form>
+
+    </div>
+</div>
+{% endif %}
+
+<script>
+// Auth type toggle
+function setupAuthType(prefix) {
+    const authType = document.getElementById(prefix + '_auth_type');
+    const authFields = document.getElementById(prefix + '_auth_fields');
+    const cookieField = document.getElementById(prefix + '_cookie_field');
+
+    function toggle() {
+        if (!authType || !authFields || !cookieField) return;
+        if (authType.value === 'cookie') {
+            authFields.style.display = 'none';
+            cookieField.style.display = 'block';
+        } else if (authType.value === 'none') {
+            authFields.style.display = 'none';
+            cookieField.style.display = 'none';
+        } else {
+            authFields.style.display = 'block';
+            cookieField.style.display = 'none';
+        }
+    }
+
+    if (authType && authType.dataset.bound !== 'true') {
+        authType.dataset.bound = 'true';
+        authType.addEventListener('change', toggle);
+    }
+    toggle();
+}
+
+// Auto-set header based on API type
+function setupApiType(prefix) {
+    const apiType = document.getElementById(prefix + '_api_type');
+    const authType = document.getElementById(prefix + '_auth_type');
+    const authHeader = document.querySelector(`#${prefix}Form input[name="auth_user_header"]`);
+    const authTypeWrap = document.getElementById(prefix + '_auth_type_wrap');
+    const headerWrap = document.getElementById(prefix + '_header_wrap');
+    const multiGroupWrap = document.getElementById(prefix + '_multi_group_wrap');
+    const advancedBlock = document.getElementById(prefix + '_advanced_block');
+    const userValueLabel = document.getElementById(prefix + '_user_value_label');
+    const tokenLabel = document.getElementById(prefix + '_token_label');
+
+    function setHeader() {
+        if (!apiType) return;
+
+        const isOther = apiType.value === 'other';
+
+        if (authTypeWrap) authTypeWrap.style.display = isOther ? '' : 'none';
+        if (headerWrap) headerWrap.style.display = isOther ? '' : 'none';
+        if (multiGroupWrap) multiGroupWrap.style.display = '';
+        if (advancedBlock) advancedBlock.style.display = isOther ? '' : 'none';
+        if (userValueLabel) userValueLabel.textContent = isOther ? 'Giá trị mã người dùng' : 'Mã người dùng';
+        if (tokenLabel) tokenLabel.textContent = isOther ? 'Bearer token' : 'Token truy cập';
+        if (!isOther && authType) authType.value = 'header';
+
+        if (apiType.value === 'newapi' && authHeader) authHeader.value = 'new-api-user';
+        else if (apiType.value === 'rixapi' && authHeader) authHeader.value = 'rix-api-user';
+
+        setupAuthType(prefix);
+    }
+
+    if (apiType && apiType.dataset.bound !== 'true') {
+        apiType.dataset.bound = 'true';
+        apiType.addEventListener('change', setHeader);
+    }
+    setHeader();
+}
+
+const discountBuilderState = { add: [], edit: [] };
+const discountStackOptionOrder = ['percent_off', 'fixed_off', 'cashback', 'tier_price'];
+const discountStackOptionLabels = {
+    percent_off: 'Giảm %',
+    fixed_off: 'Giảm cố định',
+    cashback: 'Hoàn tiền',
+    tier_price: 'Giá riêng theo bậc',
+};
+const discountStackPresets = {
+    cashback_only: ['cashback'],
+    fixed_plus_cashback: ['fixed_off', 'cashback'],
+    percent_plus_cashback: ['percent_off', 'cashback'],
+    tier_price_plus_cashback: ['tier_price', 'cashback'],
+};
+const discountBenefitLabels = {
+    percent_off: 'Giảm theo phần trăm',
+    fixed_off: 'Giảm số tiền cố định',
+    cashback: 'Hoàn tiền sau thanh toán',
+    tier_price: 'Giá riêng theo bậc',
+};
+
+function normalizeDiscountBenefit(benefit) {
+    return {
+        type: benefit?.type || 'percent_off',
+        value: benefit?.value ?? '',
+        is_active: benefit?.is_active !== false,
+        config: { ...(benefit?.config || {}) },
+    };
+}
+
+function normalizeDiscountTier(tier, index) {
+    return {
+        name: tier?.name || `Bậc ${index + 1}`,
+        min_spend_vnd: tier?.min_spend_vnd || 0,
+        is_active: tier?.is_active !== false,
+        benefits: Array.isArray(tier?.benefits) && tier.benefits.length
+            ? tier.benefits.map(normalizeDiscountBenefit)
+            : [normalizeDiscountBenefit({ type: 'percent_off', value: 5 })],
+    };
+}
+
+function loadDiscountBuilder(prefix) {
+    const textarea = document.getElementById(`${prefix}_discount_tiers_json`);
+    const raw = textarea?.value?.trim() || '[]';
+    try {
+        const parsed = JSON.parse(raw);
+        discountBuilderState[prefix] = Array.isArray(parsed)
+            ? parsed.map((tier, index) => normalizeDiscountTier(tier, index))
+            : [];
+    } catch {
+        discountBuilderState[prefix] = [];
+    }
+    renderDiscountBuilder(prefix);
+}
+
+function getDiscountStackModeSelect(prefix) {
+    return document.querySelector(`#${prefix}Form select[name="discount_stack_mode"]`);
+}
+
+function getDiscountAllowedInput(prefix) {
+    return document.querySelector(`#${prefix}Form input[name="discount_allowed_stack_types"]`);
+}
+
+function getDiscountAllowedSelections(prefix) {
+    const input = getDiscountAllowedInput(prefix);
+    return new Set(
+        String(input?.value || '')
+            .split(',')
+            .map(item => item.trim())
+            .filter(Boolean)
+    );
+}
+
+function syncDiscountAllowedTypesInput(prefix) {
+    const root = document.querySelector(`[data-stack-picker="${prefix}"]`);
+    const input = getDiscountAllowedInput(prefix);
+    if (!root || !input) return;
+
+    const selected = Array.from(root.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(node => node.value)
+        .filter(Boolean);
+    const ordered = discountStackOptionOrder.filter(type => selected.includes(type));
+    input.value = ordered.join(',');
+    renderDiscountStackSummary(prefix);
+}
+
+function hydrateDiscountAllowedTypeControls(prefix) {
+    const root = document.querySelector(`[data-stack-picker="${prefix}"]`);
+    if (!root) return;
+
+    const selected = getDiscountAllowedSelections(prefix);
+    root.querySelectorAll('input[type="checkbox"]').forEach(node => {
+        node.checked = selected.has(node.value);
+    });
+    renderDiscountStackSummary(prefix);
+}
+
+function renderDiscountStackSummary(prefix) {
+    const root = document.querySelector(`[data-stack-picker="${prefix}"]`);
+    const summary = document.getElementById(`${prefix}_stack_rule_summary`);
+    if (!root || !summary) return;
+
+    const stackMode = getDiscountStackModeSelect(prefix)?.value || 'exclusive';
+    const selected = Array.from(getDiscountAllowedSelections(prefix));
+
+    if (stackMode !== 'combine_selected_types') {
+        root.classList.add('is-disabled');
+        summary.innerHTML = '<strong>Không dùng trong chế độ hiện tại.</strong> Server đang lấy một ưu đãi tốt nhất, nên phần chọn cộng dồn sẽ tạm bị bỏ qua.';
+        return;
+    }
+
+    root.classList.remove('is-disabled');
+
+    if (!selected.length) {
+        summary.innerHTML = '<strong>Chưa chọn loại nào.</strong> Nếu để trống, hệ thống sẽ không cộng dồn benefit nào trong chế độ này.';
+        return;
+    }
+
+    if (selected.includes('tier_price')) {
+        summary.innerHTML = '<strong>Quy tắc đặc biệt:</strong> Khi có <code>Giá riêng theo bậc</code>, hệ thống chỉ cho cộng thêm <code>Hoàn tiền</code>; các loại giảm khác sẽ bị bỏ qua.';
+        return;
+    }
+
+    const names = discountStackOptionOrder
+        .filter(type => selected.includes(type))
+        .map(type => discountStackOptionLabels[type] || type);
+    summary.innerHTML = `<strong>Đang cộng dồn:</strong> ${names.join(', ')}.`;
+}
+
+function updateDiscountStackModeState(prefix) {
+    renderDiscountStackSummary(prefix);
+}
+
+function toggleDiscountAllowedType(prefix, type, checked) {
+    const root = document.querySelector(`[data-stack-picker="${prefix}"]`);
+    if (!root) return;
+
+    if (type === 'tier_price' && checked) {
+        root.querySelectorAll('input[type="checkbox"]').forEach(node => {
+            if (node.value === 'percent_off' || node.value === 'fixed_off') {
+                node.checked = false;
+            }
+        });
+    }
+
+    if ((type === 'percent_off' || type === 'fixed_off') && checked) {
+        const tierPrice = root.querySelector('input[value="tier_price"]');
+        if (tierPrice) tierPrice.checked = false;
+    }
+
+    syncDiscountAllowedTypesInput(prefix);
+}
+
+function applyDiscountStackPreset(prefix, presetKey) {
+    const root = document.querySelector(`[data-stack-picker="${prefix}"]`);
+    if (!root) return;
+
+    const selected = new Set(discountStackPresets[presetKey] || []);
+    root.querySelectorAll('input[type="checkbox"]').forEach(node => {
+        node.checked = selected.has(node.value);
+    });
+    syncDiscountAllowedTypesInput(prefix);
+}
+
+function setupDiscountStackPicker(prefix) {
+    hydrateDiscountAllowedTypeControls(prefix);
+
+    const select = getDiscountStackModeSelect(prefix);
+    if (select) {
+        select.addEventListener('change', () => updateDiscountStackModeState(prefix));
+    }
+
+    updateDiscountStackModeState(prefix);
+}
+
+function commitDiscountJsonIfDirty(prefix) {
+    const textarea = document.getElementById(`${prefix}_discount_tiers_json`);
+    if (!textarea || textarea.dataset.manualDirty !== '1') return true;
+
+    try {
+        const parsed = JSON.parse(textarea.value || '[]');
+        if (!Array.isArray(parsed)) {
+            return false;
+        }
+        discountBuilderState[prefix] = parsed.map((tier, index) => normalizeDiscountTier(tier, index));
+        textarea.dataset.manualDirty = '0';
+        renderDiscountBuilder(prefix);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function serializeDiscountBuilder(prefix) {
+    const textarea = document.getElementById(`${prefix}_discount_tiers_json`);
+    if (!textarea) return;
+
+    const cleaned = discountBuilderState[prefix].map((tier, index) => ({
+        name: (tier.name || `Bậc ${index + 1}`).trim(),
+        min_spend_vnd: Number(tier.min_spend_vnd || 0),
+        is_active: tier.is_active !== false,
+        benefits: (tier.benefits || [])
+            .filter(benefit => benefit.type)
+            .map(benefit => ({
+                type: benefit.type,
+                value: benefit.value === '' ? 0 : Number(benefit.value || 0),
+                is_active: benefit.is_active !== false,
+                config: { ...(benefit.config || {}) },
+            })),
+    }));
+
+    textarea.value = JSON.stringify(cleaned, null, 2);
+}
+
+function renderDiscountBuilder(prefix) {
+    const root = document.getElementById(`${prefix}_discount_tiers_builder`);
+    if (!root) return;
+
+    const tiers = discountBuilderState[prefix] || [];
+    if (!tiers.length) {
+        root.innerHTML = `
+            <div class="discount-builder__empty">
+                Chưa có bậc chiết khấu nào. Hãy thêm bậc đầu tiên để thiết lập mốc chi tiêu và quyền lợi.
+            </div>
+        `;
+        serializeDiscountBuilder(prefix);
+        return;
+    }
+
+    root.innerHTML = tiers.map((tier, tierIndex) => `
+        <div class="discount-tier-card">
+            <div class="discount-tier-card__header">
+                <div>
+                    <h4>${escapeHtml(tier.name || `Bậc ${tierIndex + 1}`)}</h4>
+                    <div class="text-secondary small">Mốc chi tiêu: ${formatNumber(tier.min_spend_vnd)} đ</div>
+                </div>
+                <div class="discount-builder__actions">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleDiscountTierActive('${prefix}', ${tierIndex})">
+                        ${tier.is_active !== false ? 'Tạm tắt' : 'Bật lại'}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeDiscountTier('${prefix}', ${tierIndex})">Xóa bậc</button>
+                </div>
+            </div>
+            <div class="discount-tier-card__body">
+                <div class="discount-tier-card__meta">
+                    <div>
+                        <label class="form-label">Tên bậc</label>
+                        <input type="text" class="form-control" data-discount-focus-key="${prefix}-tier-${tierIndex}-name" value="${escapeAttribute(tier.name || '')}" oninput="updateDiscountTierField('${prefix}', ${tierIndex}, 'name', this.value)">
+                    </div>
+                    <div>
+                        <label class="form-label">Chi tiêu tối thiểu (VNĐ)</label>
+                        <input type="number" class="form-control" data-discount-focus-key="${prefix}-tier-${tierIndex}-min-spend" value="${escapeAttribute(tier.min_spend_vnd || 0)}" oninput="updateDiscountTierField('${prefix}', ${tierIndex}, 'min_spend_vnd', this.value)">
+                    </div>
+                    <div>
+                        <label class="form-label">Trạng thái</label>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" ${tier.is_active !== false ? 'checked' : ''} onchange="updateDiscountTierCheckbox('${prefix}', ${tierIndex}, this.checked)">
+                            <label class="form-check-label">Đang áp dụng</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="discount-benefit-list">
+                    ${(tier.benefits || []).map((benefit, benefitIndex) => renderDiscountBenefit(prefix, tierIndex, benefit, benefitIndex)).join('')}
+                </div>
+                <div class="discount-builder__actions mt-3">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addDiscountBenefit('${prefix}', ${tierIndex})">Thêm quyền lợi</button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    serializeDiscountBuilder(prefix);
+}
+
+function renderDiscountBenefit(prefix, tierIndex, benefit, benefitIndex) {
+    const type = benefit.type || 'percent_off';
+    const config = benefit.config || {};
+    const cashbackMode = config.mode || 'percent';
+    const pricePerDollar = config.price_per_dollar ?? '';
+
+    return `
+        <div class="discount-benefit-item">
+            <div class="discount-benefit-item__row">
+                <div>
+                    <label class="form-label">Loại quyền lợi</label>
+                    <select class="form-select" data-discount-focus-key="${prefix}-tier-${tierIndex}-benefit-${benefitIndex}-type" onchange="updateDiscountBenefitField('${prefix}', ${tierIndex}, ${benefitIndex}, 'type', this.value)">
+                        ${Object.entries(discountBenefitLabels).map(([value, label]) => `
+                            <option value="${value}" ${value === type ? 'selected' : ''}>${label}</option>
+                        `).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">${type === 'percent_off' ? 'Phần trăm giảm' : type === 'fixed_off' ? 'Số tiền giảm' : type === 'cashback' ? 'Giá trị hoàn' : 'Giá trị'}</label>
+                    <input type="number" step="0.01" class="form-control" data-discount-focus-key="${prefix}-tier-${tierIndex}-benefit-${benefitIndex}-value" value="${escapeAttribute(benefit.value ?? '')}" oninput="updateDiscountBenefitField('${prefix}', ${tierIndex}, ${benefitIndex}, 'value', this.value)">
+                </div>
+                <div class="discount-builder__actions">
+                    <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeDiscountBenefit('${prefix}', ${tierIndex}, ${benefitIndex})">Xóa</button>
+                </div>
+            </div>
+            <div class="discount-benefit-item__extra">
+                ${type === 'cashback' ? `
+                    <div>
+                        <label class="form-label">Cách tính hoàn tiền</label>
+                        <select class="form-select" data-discount-focus-key="${prefix}-tier-${tierIndex}-benefit-${benefitIndex}-mode" onchange="updateDiscountBenefitConfig('${prefix}', ${tierIndex}, ${benefitIndex}, 'mode', this.value)">
+                            <option value="percent" ${cashbackMode === 'percent' ? 'selected' : ''}>Theo phần trăm</option>
+                            <option value="fixed" ${cashbackMode === 'fixed' ? 'selected' : ''}>Số tiền cố định</option>
+                        </select>
+                    </div>
+                ` : ''}
+                ${type === 'tier_price' ? `
+                    <div>
+                        <label class="form-label">Giá theo mỗi 1$</label>
+                        <input type="number" step="0.01" class="form-control" data-discount-focus-key="${prefix}-tier-${tierIndex}-benefit-${benefitIndex}-price-per-dollar" value="${escapeAttribute(pricePerDollar)}" oninput="updateDiscountBenefitConfig('${prefix}', ${tierIndex}, ${benefitIndex}, 'price_per_dollar', this.value)">
+                    </div>
+                ` : ''}
+                <div>
+                    <label class="form-label">Trạng thái</label>
+                    <div class="form-check mt-2">
+                        <input class="form-check-input" type="checkbox" ${benefit.is_active !== false ? 'checked' : ''} onchange="updateDiscountBenefitCheckbox('${prefix}', ${tierIndex}, ${benefitIndex}, this.checked)">
+                        <label class="form-check-label">Đang áp dụng</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function captureDiscountBuilderView(prefix) {
+    const root = document.getElementById(`${prefix}_discount_tiers_builder`);
+    if (!root) return null;
+
+    const scrollContainer = root.closest('.modal-body') || document.scrollingElement;
+    const activeElement = document.activeElement;
+    const focusKey = activeElement?.dataset?.discountFocusKey || '';
+    const selectionStart = typeof activeElement?.selectionStart === 'number' ? activeElement.selectionStart : null;
+    const selectionEnd = typeof activeElement?.selectionEnd === 'number' ? activeElement.selectionEnd : null;
+    const scrollTop = scrollContainer === document.scrollingElement
+        ? window.scrollY
+        : scrollContainer?.scrollTop || 0;
+
+    return { focusKey, scrollTop, selectionStart, selectionEnd };
+}
+
+function restoreDiscountBuilderView(prefix, viewState) {
+    if (!viewState) return;
+
+    requestAnimationFrame(() => {
+        const root = document.getElementById(`${prefix}_discount_tiers_builder`);
+        const scrollContainer = root?.closest('.modal-body') || document.scrollingElement;
+        if (scrollContainer === document.scrollingElement) {
+            window.scrollTo({ top: viewState.scrollTop, behavior: 'instant' });
+        } else if (scrollContainer) {
+            scrollContainer.scrollTop = viewState.scrollTop;
+        }
+
+        if (!viewState.focusKey) return;
+        const target = document.querySelector(`[data-discount-focus-key="${viewState.focusKey}"]`);
+        if (!target) return;
+
+        target.focus({ preventScroll: true });
+        if (
+            typeof viewState.selectionStart === 'number' &&
+            typeof viewState.selectionEnd === 'number' &&
+            typeof target.setSelectionRange === 'function'
+        ) {
+            target.setSelectionRange(viewState.selectionStart, viewState.selectionEnd);
+        }
+    });
+}
+
+function rerenderDiscountBuilder(prefix, preserveView = false) {
+    const viewState = preserveView ? captureDiscountBuilderView(prefix) : null;
+    renderDiscountBuilder(prefix);
+    restoreDiscountBuilderView(prefix, viewState);
+}
+
+function addDiscountTier(prefix) {
+    discountBuilderState[prefix].push(normalizeDiscountTier({}, discountBuilderState[prefix].length));
+    rerenderDiscountBuilder(prefix, true);
+}
+
+function removeDiscountTier(prefix, tierIndex) {
+    discountBuilderState[prefix].splice(tierIndex, 1);
+    rerenderDiscountBuilder(prefix, true);
+}
+
+function toggleDiscountTierActive(prefix, tierIndex) {
+    const tier = discountBuilderState[prefix][tierIndex];
+    if (!tier) return;
+    tier.is_active = tier.is_active === false;
+    rerenderDiscountBuilder(prefix, true);
+}
+
+function updateDiscountTierField(prefix, tierIndex, field, value) {
+    const tier = discountBuilderState[prefix][tierIndex];
+    if (!tier) return;
+    tier[field] = field === 'min_spend_vnd' ? Number(value || 0) : value;
+    serializeDiscountBuilder(prefix);
+}
+
+function updateDiscountTierCheckbox(prefix, tierIndex, checked) {
+    const tier = discountBuilderState[prefix][tierIndex];
+    if (!tier) return;
+    tier.is_active = checked;
+    serializeDiscountBuilder(prefix);
+}
+
+function addDiscountBenefit(prefix, tierIndex) {
+    const tier = discountBuilderState[prefix][tierIndex];
+    if (!tier) return;
+    tier.benefits = tier.benefits || [];
+    tier.benefits.push(normalizeDiscountBenefit({ type: 'percent_off', value: 5 }));
+    rerenderDiscountBuilder(prefix, true);
+}
+
+function removeDiscountBenefit(prefix, tierIndex, benefitIndex) {
+    const tier = discountBuilderState[prefix][tierIndex];
+    if (!tier || !tier.benefits) return;
+    tier.benefits.splice(benefitIndex, 1);
+    if (!tier.benefits.length) {
+        tier.benefits.push(normalizeDiscountBenefit({ type: 'percent_off', value: 5 }));
+    }
+    rerenderDiscountBuilder(prefix, true);
+}
+
+function updateDiscountBenefitField(prefix, tierIndex, benefitIndex, field, value) {
+    const benefit = discountBuilderState[prefix]?.[tierIndex]?.benefits?.[benefitIndex];
+    if (!benefit) return;
+    benefit[field] = field === 'value' ? value : value;
+    if (field === 'type' && value !== 'cashback') {
+        delete benefit.config.mode;
+    }
+    if (field === 'value') {
+        serializeDiscountBuilder(prefix);
+        return;
+    }
+    rerenderDiscountBuilder(prefix, true);
+}
+
+function updateDiscountBenefitConfig(prefix, tierIndex, benefitIndex, key, value) {
+    const benefit = discountBuilderState[prefix]?.[tierIndex]?.benefits?.[benefitIndex];
+    if (!benefit) return;
+    benefit.config = benefit.config || {};
+    benefit.config[key] = key === 'price_per_dollar' ? Number(value || 0) : value;
+    serializeDiscountBuilder(prefix);
+}
+
+function updateDiscountBenefitCheckbox(prefix, tierIndex, benefitIndex, checked) {
+    const benefit = discountBuilderState[prefix]?.[tierIndex]?.benefits?.[benefitIndex];
+    if (!benefit) return;
+    benefit.is_active = checked;
+    serializeDiscountBuilder(prefix);
+}
+
+function toggleDiscountJson(prefix) {
+    const wrap = document.getElementById(`${prefix}_discount_json_wrap`);
+    if (!wrap) return;
+    serializeDiscountBuilder(prefix);
+    wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function escapeAttribute(value) {
+    return escapeHtml(value ?? '');
+}
+
+function formatNumber(value) {
+    return Number(value || 0).toLocaleString('vi-VN');
+}
+
+async function previewServerGroups(prefix) {
+    const form = document.getElementById(prefix + 'Form');
+    const preview = document.getElementById(prefix + '_group_preview');
+    if (!form || !preview) return;
+
+    preview.style.display = 'block';
+    preview.className = 'alert alert-info';
+    preview.textContent = 'Đang tải groups...';
+
+    try {
+        const resp = await fetch('/servers/preview-groups', {
+            method: 'POST',
+            body: new FormData(form)
+        });
+        const data = await resp.json();
+        if (!data.success) {
+            preview.className = 'alert alert-danger';
+            preview.textContent = data.message || 'Không tải được groups';
+            return;
+        }
+        renderGroupPreview(prefix, data.data || [], !!data.supports_multi_group);
+    } catch (error) {
+        preview.className = 'alert alert-danger';
+        preview.textContent = 'Lỗi tải groups: ' + error.message;
+    }
+}
+
+function renderGroupPreview(prefix, groups, isMulti) {
+    const preview = document.getElementById(prefix + '_group_preview');
+    const defaultGroupInput = document.querySelector(`#${prefix}Form input[name="default_group"]`);
+    const manualGroupsInput = document.querySelector(`#${prefix}Form input[name="manual_groups"]`);
+    if (!preview) return;
+
+    if (!groups.length) {
+        preview.className = 'alert alert-warning';
+        preview.textContent = 'Không có groups nào trả về.';
+        return;
+    }
+
+    const selected = isMulti
+        ? new Set((manualGroupsInput?.value || '').split(',').map(v => v.trim()).filter(Boolean))
+        : new Set([(defaultGroupInput?.value || '').trim()].filter(Boolean));
+
+    preview.className = 'border rounded p-3 bg-light';
+    preview.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <strong>${isMulti ? 'Chọn danh sách nhóm nhập tay' : 'Chọn nhóm mặc định'}</strong>
+            <small class="text-muted">${groups.length} nhóm</small>
+        </div>
+        <div class="d-flex flex-wrap gap-2" id="${prefix}_group_buttons"></div>
+    `;
+
+    const buttons = preview.querySelector(`#${prefix}_group_buttons`);
+    groups.forEach(group => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = selected.has(group.name) ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-outline-secondary';
+        const label = group.label_en || group.name;
+        btn.textContent = `${label} (${group.ratio ?? 1}x)`;
+        btn.addEventListener('click', function () {
+            if (isMulti) {
+                if (selected.has(group.name)) selected.delete(group.name);
+                else selected.add(group.name);
+                const selectedValue = Array.from(selected).join(',');
+                if (manualGroupsInput) manualGroupsInput.value = selectedValue;
+                if (defaultGroupInput) defaultGroupInput.value = selectedValue;
+            } else {
+                if (defaultGroupInput) defaultGroupInput.value = group.name;
+            }
+            renderGroupPreview(prefix, groups, isMulti);
+        });
+        buttons.appendChild(btn);
+    });
+}
+
+{% if groups_server is defined %}
+function splitServerGroups(value) {
+    return (value || '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+function renderSelectedGroupsSummary() {
+    const input = document.getElementById('selected_group_input');
+    const summary = document.getElementById('selected_groups_summary');
+    if (!input || !summary) return;
+
+    const selected = splitServerGroups(input.value);
+    if (!selected.length) {
+        summary.innerHTML = '<span class="text-muted">Chưa chọn nhóm mặc định.</span>';
+        return;
+    }
+
+    summary.innerHTML = selected
+        .map(name => `<span class="badge bg-primary me-1 mb-1">${name}</span>`)
+        .join('');
+}
+
+function copySelectionToManualGroups() {
+    const input = document.getElementById('selected_group_input');
+    const manual = document.getElementById('manual_groups_override');
+    if (!input || !manual) return;
+    manual.value = splitServerGroups(input.value).join(',');
+}
+
+function clearManualGroupsOverride() {
+    const manual = document.getElementById('manual_groups_override');
+    if (!manual) return;
+    manual.value = '';
+}
+
+const groupsSupportsMulti = {{ 'true' if supports_multi_group else 'false' }};
+const selectedGroupInput = document.getElementById('selected_group_input');
+
+if (selectedGroupInput) {
+    selectedGroupInput.addEventListener('input', renderSelectedGroupsSummary);
+    renderSelectedGroupsSummary();
+}
+
+if (groupsSupportsMulti) {
+    document.querySelectorAll('.group-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (!selectedGroupInput) return;
+
+            const name = this.dataset.name;
+            const selected = new Set(splitServerGroups(selectedGroupInput.value));
+            if (selected.has(name)) selected.delete(name);
+            else selected.add(name);
+
+            selectedGroupInput.value = Array.from(selected).join(',');
+            this.classList.toggle('btn-primary', selected.has(name));
+            this.classList.toggle('btn-outline-secondary', !selected.has(name));
+            renderSelectedGroupsSummary();
+        });
+    });
+} else {
+    document.querySelectorAll('input[name="group_radio"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (!selectedGroupInput) return;
+            selectedGroupInput.value = this.value;
+            renderSelectedGroupsSummary();
+        });
+    });
+}
+{% endif %}
+
+
+function confirmDelete() {
+    return confirm('Bạn có chắc muốn xóa server này?');
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    setupAuthType('add');
+    setupApiType('add');
+    loadDiscountBuilder('add');
+    setupDiscountStackPicker('add');
+    initializeServerForm('add');
+
+    {% if editing %}
+    const editModalEl = document.getElementById('editModal');
+    if (editModalEl) {
+        showEditModalFallback(editModalEl, '/servers', initializeServerEditModal);
+    }
+    {% endif %}
+});
+
+function bindDiscountJsonInput(prefix) {
+    const textarea = document.getElementById(`${prefix}_discount_tiers_json`);
+    if (!textarea || textarea.dataset.bound === 'true') return;
+
+    textarea.dataset.bound = 'true';
+    textarea.addEventListener('input', function () {
+        textarea.dataset.manualDirty = '1';
+    });
+}
+
+function bindDiscountFormSubmit(prefix) {
+    const form = document.getElementById(`${prefix}Form`);
+    if (!form || form.dataset.bound === 'true') return;
+
+    form.dataset.bound = 'true';
+    form.addEventListener('submit', function (event) {
+        if (!commitDiscountJsonIfDirty(prefix)) {
+            event.preventDefault();
+            return;
+        }
+        syncDiscountAllowedTypesInput(prefix);
+        serializeDiscountBuilder(prefix);
+    });
+}
+
+function initializeServerForm(prefix) {
+    setupAuthType(prefix);
+    setupApiType(prefix);
+    bindDiscountJsonInput(prefix);
+    bindDiscountFormSubmit(prefix);
+}
+
+function initializeServerEditModal() {
+    initializeServerForm('edit');
+    loadDiscountBuilder('edit');
+    setupDiscountStackPicker('edit');
+}
+
+function showEditModalFallback(modalEl, redirectUrl, onReady) {
+    if (!modalEl) return;
+
+    if (window.AdminRemoteModal && typeof window.AdminRemoteModal.showExisting === 'function') {
+        AdminRemoteModal.showExisting(modalEl, {
+            onReady,
+            onHiddenNavigate: redirectUrl,
+        });
+        return;
+    }
+
+    if (typeof onReady === 'function') {
+        onReady(modalEl);
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const handleHidden = function () {
+        modalEl.removeEventListener('hidden.bs.modal', handleHidden);
+        window.location.href = redirectUrl;
+    };
+
+    modalEl.addEventListener('hidden.bs.modal', handleHidden);
+    modal.show();
+}
+</script>
+{% endblock %}

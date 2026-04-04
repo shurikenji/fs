@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Đơn #{{ order.order_code }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>
+        <span class="icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+        </span>
+        Đơn {{ order.order_code }}
+    </h1>
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3>Chi tiết đơn hàng</h3>
+                <span class="status-badge {{ order.status }}">
+                    {{ status_emoji(order.status) }} {{ status_text_vi(order.status) }}
+                </span>
+            </div>
+            <div class="card-body" style="padding: 0;">
+                <table class="table">
+                    <tr>
+                        <th width="30%">Mã đơn</th>
+                        <td><code style="background: var(--primary-50); color: var(--primary-dark); padding: 0.25rem 0.5rem; border-radius: 6px;">{{ order.order_code }}</code></td>
+                    </tr>
+                    <tr>
+                        <th>User ID</th>
+                        <td>
+                            {{ order.user_id }}
+                            <a href="/users/{{ order.user_id }}" class="btn btn-sm btn-outline-secondary" style="margin-left: 0.5rem;">Xem</a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Sản phẩm</th>
+                        <td>{{ order.product_name|default('—') }} ({{ order.product_type }})</td>
+                    </tr>
+                    {% if order.server_id %}
+                    <tr>
+                        <th>Máy chủ</th>
+                        <td>
+                            {{ server_name or ('Server #' ~ order.server_id) }}
+                            <span class="text-secondary">(ID: {{ order.server_id }})</span>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th>Số tiền</th>
+                        <td><span class="fw-bold" style="font-size: 1.1rem;">{{ format_vnd(order.amount) }}</span></td>
+                    </tr>
+                    {% if (order.quantity or 1) > 1 %}
+                    <tr>
+                        <th>Số lượng</th>
+                        <td>x{{ order.quantity }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if order.base_amount %}
+                    <tr>
+                        <th>Giá gốc</th>
+                        <td>{{ format_vnd(order.base_amount) }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if order.discount_amount %}
+                    <tr>
+                        <th>Giảm giá</th>
+                        <td>-{{ format_vnd(order.discount_amount) }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if order.cashback_amount %}
+                    <tr>
+                        <th>Cashback</th>
+                        <td>{{ format_vnd(order.cashback_amount) }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th>Thanh toán</th>
+                        <td>
+                            {% if order.payment_method == 'wallet' %}
+                            <span class="badge badge-secondary">Ví nội bộ</span>
+                            {% else %}
+                            <span class="badge badge-info">Chuyển khoản QR</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Ngày tạo</th>
+                        <td>{{ order.created_at | time_vn }}</td>
+                    </tr>
+                    {% if order.paid_at %}
+                    <tr>
+                        <th>Thanh toán lúc</th>
+                        <td>{{ order.paid_at | time_vn }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if order.expired_at %}
+                    <tr>
+                        <th>Hết hạn lúc</th>
+                        <td>{{ order.expired_at | time_vn }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if order.refunded_at %}
+                    <tr>
+                        <th>Hoàn tiền lúc</th>
+                        <td>{{ order.refunded_at | time_vn }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if order.api_key %}
+                    <tr>
+                        <th>API Key</th>
+                        <td><code>{{ order.api_key }}</code></td>
+                    </tr>
+                    {% endif %}
+                    {% if order.quota_before is not none %}
+                    <tr>
+                        <th>Quota</th>
+                        <td>{{ "{:,}".format(order.quota_before) }} → {{ "{:,}".format(order.quota_after) }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if order.delivery_info %}
+                    <tr>
+                        <th>Delivery</th>
+                        <td><pre class="mb-0" style="background: var(--background-subtle); padding: 0.5rem; border-radius: 6px;">{{ order.delivery_info }}</pre></td>
+                    </tr>
+                    {% endif %}
+                    {% if order.mb_transaction_id %}
+                    <tr>
+                        <th>MB TX ID</th>
+                        <td><code>{{ order.mb_transaction_id }}</code></td>
+                    </tr>
+                    {% endif %}
+                    {% if order.refund_reason %}
+                    <tr>
+                        <th>Hoàn tiền</th>
+                        <td>{{ order.refund_reason }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h3>Thao tác</h3>
+            </div>
+            <div class="card-body">
+                {% if order.status in ['paid', 'processing'] and order.product_type == 'service_upgrade' %}
+                <form method="POST" action="/orders/{{ order.id }}/complete" class="mb-2" onsubmit="return confirm('Đánh dấu đơn Dịch vụ này là Hoàn thành và báo luôn cho khách hàng?');">
+                    <button type="submit" class="btn btn-success w-100">Hoàn thành đơn Dịch vụ</button>
+                </form>
+                {% endif %}
+
+                {% if order.status in ['pending','paid'] %}
+                <a href="/orders/{{ order.id }}/cancel" class="btn btn-outline-danger w-100 mb-2" onclick="return confirmDelete('Hủy đơn này?')">Hủy đơn (Không hoàn tiền)</a>
+                {% endif %}
+
+                {% if order.status in ['paid','processing','completed'] and order.product_type != 'wallet_topup' %}
+                <a href="/orders/{{ order.id }}/refund" class="btn btn-danger w-100 mb-2" onclick="return confirmDelete('Hủy đơn & HOÀN TIỀN vào ví khách hàng?')">Hủy & Hoàn tiền</a>
+                {% endif %}
+
+                <a href="/orders" class="btn btn-outline-secondary w-100">Quay lại</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function confirmDelete(msg) {
+    return confirm(msg || 'Bạn có chắc muốn thực hiện thao tác này?');
+}
+</script>
+{% endblock %}
+

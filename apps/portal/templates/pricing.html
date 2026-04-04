@@ -1,0 +1,727 @@
+{% extends "portal_base.html" %}
+{% block title %}Model Pricing — Shupremium{% endblock %}
+
+{% block content %}
+<div x-data="pricingApp()" x-init="init()" x-cloak class="page-stack">
+    <section class="fade-up" style="text-align: center;">
+        <h1 class="page-title" style="max-width: 18ch; margin: 0 auto;">Model Pricing</h1>
+        <p class="page-subtitle" style="max-width: 48ch; margin: var(--space-3) auto 0;">Search and compare rates across
+            all available AI models.</p>
+
+        <div style="margin-top: var(--space-6); max-width: 560px; margin-left: auto; margin-right: auto;">
+            <div class="search-bar">
+                <span class="search-bar__icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                    </svg>
+                </span>
+                <input type="text" placeholder="Search models by name, provider, or type…" class="control"
+                    x-model="searchQuery" @input.debounce.200ms="applyFilters()">
+            </div>
+        </div>
+    </section>
+
+    <section class="shell-panel fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Filters</h2>
+                <p class="panel-copy">Narrow down the model list by source, group, or pricing type.</p>
+            </div>
+            <div class="controls-row">
+                <button type="button" class="button-secondary" @click="viewMode = 'grid'"
+                    :style="viewMode === 'grid' ? 'border-color: var(--border-accent); background: var(--accent-subtle);' : ''">Grid</button>
+                <button type="button" class="button-secondary" @click="viewMode = 'list'"
+                    :style="viewMode === 'list' ? 'border-color: var(--border-accent); background: var(--accent-subtle);' : ''">Table</button>
+                <button type="button" class="button" @click="loadPricing()" :disabled="loading || !selectedServer">
+                    <span x-text="loading ? 'Refreshing…' : 'Refresh'"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="toolbar-grid">
+            <div>
+                <label class="field-label">Source</label>
+                <select class="select-control" x-model="selectedServer" @change="loadPricing()" autocomplete="off">
+                    <option value="">Choose a source</option>
+                    {% for s in servers %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="field-label">Group</label>
+                <select class="select-control" x-model="selectedGroup" @change="applyFilters()">
+                    <option value="">All groups</option>
+                    <template x-for="group in groups" :key="selectedServer + ':' + group.name">
+                        <option :value="group.name"
+                            x-text="group.display_name + ' (' + formatRatio(group.ratio) + 'x)'"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="field-label">Type</label>
+                <select class="select-control" x-model="selectedTag" @change="applyFilters()">
+                    <option value="">All types</option>
+                    <template x-for="tag in allTags" :key="tag">
+                        <option :value="tag" x-text="tag"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="field-label">Pricing</label>
+                <select class="select-control" x-model="selectedMode" @change="applyFilters()">
+                    <option value="">All modes</option>
+                    <option value="token">Per token</option>
+                    <option value="fixed">Fixed price</option>
+                    <option value="request_scaled">Per request</option>
+                </select>
+            </div>
+            <div>
+                <label class="field-label">Sort</label>
+                <select class="select-control" x-model="sortBy" @change="applyFilters()">
+                    <option value="name_asc">Name A → Z</option>
+                    <option value="name_desc">Name Z → A</option>
+                    <option value="price_asc">Cheapest first</option>
+                    <option value="price_desc">Most expensive first</option>
+                    <option value="provider">By provider</option>
+                    <option value="groups">By groups count</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="chip-cloud" x-show="groups.length" style="margin-top: var(--space-4);">
+            <template x-for="group in groups" :key="selectedServer + ':' + group.name + '-chip'">
+                <button type="button" class="chip" :class="selectedGroup === group.name ? 'is-selected' : ''"
+                    @click="toggleSelectedGroup(group.name)" x-text="group.display_name"></button>
+            </template>
+        </div>
+    </section>
+
+    <!-- Empty state: no server selected -->
+    <div x-show="!loading && !selectedServer" class="status-banner is-info fade-up">
+        <span class="status-banner__dot"></span>
+        <div>
+            <strong>Choose a source to start browsing.</strong>
+            <div class="panel-copy mt-1">Select a pricing source from the filter above to load model data.</div>
+        </div>
+    </div>
+
+    <!-- Loading state -->
+    <div x-show="loading" class="shell-panel fade-up">
+        <div class="empty-state">
+            <div>
+                <div class="empty-state__icon">
+                    <svg class="spin-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5" stroke-linecap="round">
+                        <path
+                            d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4m-3.93 7.07l-2.83-2.83M7.76 7.76L4.93 4.93" />
+                    </svg>
+                </div>
+                <h3 class="panel-title">Loading pricing data…</h3>
+                <p class="panel-copy mt-2">Fetching the latest rates from the selected source.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Result count -->
+    <div x-show="!loading && selectedServer && filteredModels.length > 0" class="fade-up"
+        style="display: flex; align-items: center; gap: var(--space-3);">
+        <span class="tag is-accent" x-text="filteredModels.length + ' models'"></span>
+        <span class="tag" x-text="activeServerName()"></span>
+    </div>
+
+    <!-- Grid view -->
+    <section x-show="!loading && viewMode === 'grid' && filteredModels.length > 0" class="model-grid fade-up">
+        <template x-for="model in filteredModels" :key="model.model_name">
+            <article class="shell-card shell-card--compact model-card" @click="openDetail(model)">
+                <div class="meta-line">
+                    <span class="tag is-accent" x-text="model.vendor_name || activeServerName()"></span>
+                    <button type="button" class="icon-button" @click.stop="copyModelId(model, $event.currentTarget)"
+                        :aria-label="'Copy ' + model.model_name" style="width:32px;height:32px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                d="M8 16.5h8.25A2.25 2.25 0 0018.5 14.25V6a2.25 2.25 0 00-2.25-2.25H8A2.25 2.25 0 005.75 6v8.25A2.25 2.25 0 008 16.5z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                d="M8.25 7.5H6A2.25 2.25 0 003.75 9.75V18A2.25 2.25 0 006 20.25h8.25A2.25 2.25 0 0016.5 18v-2.25" />
+                        </svg>
+                    </button>
+                </div>
+
+                <h3 class="model-card__name" x-text="model.model_name"></h3>
+                <p class="panel-copy copy-clamp" x-text="model.description || 'No description available.'"></p>
+
+                <div class="controls-row mt-4">
+                    <template x-for="tag in model.tags.slice(0, 3)" :key="tag">
+                        <span class="chip" x-text="tag"></span>
+                    </template>
+                    <span class="chip" x-show="(model.enable_groups || []).length"
+                        x-text="(model.enable_groups || []).length + ' groups'"></span>
+                </div>
+
+                <div class="divider" style="margin: var(--space-5) 0;"></div>
+
+                <div class="price-stack">
+                    <template x-if="model.pricing_mode === 'token'">
+                        <div style="display:grid;gap:var(--space-3);">
+                            <div class="price-line">
+                                <span class="price-kicker">Input / 1M</span>
+                                <span class="price-value" style="color:var(--success);"
+                                    x-text="formatPrice(displayInputPrice(model), '/1M')"></span>
+                            </div>
+                            <div class="price-line">
+                                <span class="price-kicker">Output / 1M</span>
+                                <span class="price-value" style="color:var(--warning);"
+                                    x-text="formatPrice(displayOutputPrice(model), '/1M')"></span>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="model.pricing_mode !== 'token'">
+                        <div class="price-line">
+                            <span class="price-kicker" x-text="priceHeading(model)"></span>
+                            <span class="price-value" style="color:var(--accent);"
+                                x-text="formatPrice(displayRequestPrice(model), priceSuffix(model))"></span>
+                        </div>
+                    </template>
+                </div>
+            </article>
+        </template>
+    </section>
+
+    <!-- Table view -->
+    <section x-show="!loading && viewMode === 'list' && filteredModels.length > 0" class="shell-table fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">All models</h2>
+                <p class="panel-copy">Click any row to see full details.</p>
+            </div>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Provider</th>
+                        <th>Input</th>
+                        <th>Output</th>
+                        <th>Tags</th>
+                        <th>Groups</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="model in filteredModels" :key="model.model_name + '-row'">
+                        <tr style="cursor:pointer;" @click="openDetail(model)">
+                            <td>
+                                <div class="code-text" style="font-size:13px;" x-text="model.model_name"></div>
+                            </td>
+                            <td x-text="model.vendor_name || activeServerName()"></td>
+                            <td
+                                x-text="model.pricing_mode === 'token' ? formatPrice(displayInputPrice(model), '/1M') : formatPrice(displayRequestPrice(model), priceSuffix(model))">
+                            </td>
+                            <td
+                                x-text="model.pricing_mode === 'token' ? formatPrice(displayOutputPrice(model), '/1M') : '-'">
+                            </td>
+                            <td>
+                                <div class="controls-row">
+                                    <template x-for="tag in model.tags.slice(0, 3)" :key="tag + '-row'">
+                                        <span class="chip" x-text="tag"></span>
+                                    </template>
+                                </div>
+                            </td>
+                            <td x-text="(model.enable_groups || []).length"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Empty results -->
+    <div x-show="!loading && selectedServer && filteredModels.length === 0" class="shell-panel fade-up">
+        <div class="empty-state">
+            <div>
+                <div class="empty-state__icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round">
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                    </svg>
+                </div>
+                <h3 class="panel-title">No models match your search</h3>
+                <p class="panel-copy mt-2">Try adjusting your filters or search term.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail panel -->
+    <template x-if="detailOpen && detailModel">
+        <div>
+            <div class="detail-overlay" @click="detailOpen = false"></div>
+            <aside class="detail-panel fade-up">
+                <button type="button" class="icon-button detail-close" @click="detailOpen = false"
+                    aria-label="Close detail panel">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <div style="margin-top: var(--space-5);">
+                    <div class="controls-row"
+                        style="justify-content: space-between; align-items: center; margin-bottom: var(--space-4);">
+                        <span class="tag is-accent" x-text="detailModel.vendor_name || activeServerName()"></span>
+                        <button type="button" class="button-secondary"
+                            @click="copyModelId(detailModel, $event.currentTarget)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                    d="M8 16.5h8.25A2.25 2.25 0 0018.5 14.25V6a2.25 2.25 0 00-2.25-2.25H8A2.25 2.25 0 005.75 6v8.25A2.25 2.25 0 008 16.5z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"
+                                    d="M8.25 7.5H6A2.25 2.25 0 003.75 9.75V18A2.25 2.25 0 006 20.25h8.25A2.25 2.25 0 0016.5 18v-2.25" />
+                            </svg>
+                            <span>Copy model ID</span>
+                        </button>
+                    </div>
+                    <h2 class="section-title code-text" x-text="detailModel.model_name"></h2>
+                    <p class="lead" style="margin-top: var(--space-4);"
+                        x-text="detailModel.description || 'No additional description available.'"></p>
+                </div>
+
+                <div class="controls-row" style="margin-top: var(--space-5);">
+                    <template x-for="tag in detailModel.tags" :key="tag + '-detail'">
+                        <span class="chip is-selected" x-text="tag"></span>
+                    </template>
+                </div>
+
+                <template x-if="detailEndpointEntries(detailModel).length">
+                    <section class="shell-panel" style="margin-top: var(--space-6); padding: var(--space-5);">
+                        <div class="panel-heading">
+                            <div>
+                                <h3 class="panel-title">Supported endpoints</h3>
+                                <p class="panel-copy">API endpoints where this model is available.</p>
+                            </div>
+                        </div>
+                        <div style="display:grid;gap:var(--space-2);">
+                            <template x-for="endpoint in detailEndpointEntries(detailModel)" :key="endpoint.key + '-' + endpoint.public_path">
+                                <div class="chip code-text"
+                                    style="width:100%;justify-content:flex-start;border-radius:var(--radius-md);padding:var(--space-3) var(--space-4);"
+                                >
+                                    <span x-text="endpoint.public_path || endpoint.label"></span>
+                                    <span x-show="endpoint.method" style="margin-left:auto;opacity:.75;" x-text="endpoint.method"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </section>
+                </template>
+
+                <template x-if="(detailModel.pricing_variants || []).length">
+                    <section class="shell-table" style="margin-top: var(--space-6); padding: var(--space-5);">
+                        <div class="panel-heading">
+                            <div>
+                                <h3 class="panel-title">Exact pricing variants</h3>
+                                <p class="panel-copy">Server-specific pricing matrix after the current public quota multiplier is applied.</p>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Variant</th>
+                                        <th>Version</th>
+                                        <th>Resolution</th>
+                                        <th x-text="priceHeading(detailModel)"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="variant in detailModel.pricing_variants" :key="variant.key">
+                                        <tr>
+                                            <td x-text="variant.label || detailModel.model_name"></td>
+                                            <td x-text="variant.version || '-'"></td>
+                                            <td x-text="variant.resolution || '-'"></td>
+                                            <td x-text="formatPrice(displayVariantRequestPrice(variant), variantPriceSuffix(variant))"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </template>
+
+                <template x-if="(detailModel.enable_groups || []).length">
+                    <section class="shell-panel" style="margin-top: var(--space-6); padding: var(--space-5);">
+                        <div class="panel-heading">
+                            <div>
+                                <h3 class="panel-title">Available in groups</h3>
+                                <p class="panel-copy">Groups where this model can be used.</p>
+                            </div>
+                        </div>
+                        <div class="chip-cloud">
+                            <template x-for="groupName in detailModel.enable_groups" :key="groupName">
+                                <span class="chip" x-text="groupDisplayName(groupName)"></span>
+                            </template>
+                        </div>
+                    </section>
+                </template>
+
+                <template x-if="sortedGroupEntries(detailModel).length">
+                    <section class="shell-table" style="margin-top: var(--space-6); padding: var(--space-5);">
+                        <div class="panel-heading">
+                            <div>
+                                <h3 class="panel-title">Pricing by group</h3>
+                                <p class="panel-copy">Each group has its own rate based on the ratio multiplier.</p>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Group</th>
+                                        <th>Ratio</th>
+                                        <th>Input / 1M</th>
+                                        <th>Output / 1M</th>
+                                        <th x-text="priceHeading(detailModel)"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="[groupName, groupPrice] in sortedGroupEntries(detailModel)"
+                                        :key="groupName + '-price'">
+                                        <tr>
+                                            <td x-text="groupPrice.group_display_name || groupDisplayName(groupName)">
+                                            </td>
+                                            <td x-text="'x' + formatRatio(groupPrice.group_ratio || 1)"></td>
+                                            <td x-text="formatPrice(groupPrice.input_price_per_1m, '/1M')"></td>
+                                            <td x-text="formatPrice(groupPrice.output_price_per_1m, '/1M')"></td>
+                                            <td x-text="formatPrice(groupPrice.request_price, priceSuffix(detailModel))"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </template>
+            </aside>
+        </div>
+    </template>
+
+    <!-- Toast -->
+    <div x-show="toastVisible" x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0"
+        x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 translate-y-0"
+        x-transition:leave-end="opacity-0 translate-y-2" class="toast-notification" x-text="toastMessage"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function pricingApp() {
+        return {
+            selectedServer: '{{ selected_server_id }}',
+            pricing: {{ pricing | tojson if pricing else 'null' }},
+            serverCatalog: {{ servers | tojson }},
+            loading: false,
+            viewMode: 'grid',
+            searchQuery: '',
+            selectedGroup: '',
+            selectedTag: '',
+            selectedMode: '',
+            sortBy: 'name_asc',
+            detailOpen: false,
+            detailModel: null,
+            models: [],
+            groups: [],
+            filteredModels: [],
+                                                    allTags: [],
+                                                        loadRequestId: 0,
+                                                            toastMessage: '',
+                                                                toastVisible: false,
+                                                                    toastTimer: null,
+
+                                                                        init() {
+        this.selectedServer = String(this.pricing?.server_id || '{{ selected_server_id }}' || '');
+        if (this.pricing) {
+            this.models = this.pricing.models || [];
+            this.groups = this.pricing.groups || [];
+            this.buildTags();
+            this.applyFilters();
+        } else if (this.selectedServer) {
+            this.loadPricing();
+        }
+    },
+
+    activeServer() {
+        return this.serverCatalog.find((server) => String(server.id) === String(this.selectedServer)) || null;
+    },
+
+    activeServerName() {
+        return this.pricing?.server_name || this.activeServer()?.name || 'No source selected';
+    },
+
+    prettyMode(mode) {
+        if (mode === 'request_scaled') return 'Per request';
+        if (mode === 'fixed') return 'Fixed';
+        if (mode === 'token') return 'Per token';
+        return 'Unknown';
+    },
+
+    formatPrice(value, suffix = '') {
+        if (value == null || value === '') return '-';
+        return '$' + Number(value).toFixed(2).replace(/\.00$/, '') + suffix;
+    },
+
+    formatRatio(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return '0.00';
+        return number.toFixed(2);
+    },
+
+        async loadPricing() {
+        const serverId = String(this.selectedServer || '').trim();
+        if (!serverId) {
+            this.clearPricingState();
+            history.replaceState(null, '', '/pricing');
+            return;
+        }
+
+        const requestId = ++this.loadRequestId;
+        this.loading = true;
+        this.clearPricingState();
+        try {
+            const resp = await fetch(`/api/pricing/${serverId}`);
+            const payload = await resp.json();
+            if (requestId !== this.loadRequestId) return;
+            if (!resp.ok || payload.error) {
+                throw new Error(payload.error || 'Failed to load pricing');
+            }
+            this.selectedServer = serverId;
+            this.pricing = payload;
+            this.models = this.pricing.models || [];
+            this.groups = this.pricing.groups || [];
+            this.buildTags();
+            this.applyFilters();
+            history.replaceState(null, '', `/pricing?server=${this.selectedServer}`);
+        } catch (e) {
+            console.error('Failed to load pricing:', e);
+            if (requestId !== this.loadRequestId) return;
+            this.clearPricingState();
+        } finally {
+            if (requestId === this.loadRequestId) {
+                this.loading = false;
+            }
+        }
+    },
+
+    clearPricingState() {
+        this.pricing = null;
+        this.models = [];
+        this.groups = [];
+        this.filteredModels = [];
+        this.allTags = [];
+        this.selectedGroup = '';
+        this.selectedTag = '';
+        this.selectedMode = '';
+        this.searchQuery = '';
+        this.detailOpen = false;
+        this.detailModel = null;
+    },
+
+    buildTags() {
+        const tagSet = new Set();
+        for (const model of this.models) {
+            for (const tag of (model.tags || [])) tagSet.add(tag);
+        }
+        this.allTags = [...tagSet].sort();
+    },
+
+    applyFilters() {
+        let result = this.models;
+        const query = this.searchQuery.toLowerCase().trim();
+
+        if (query) {
+            result = result.filter((model) =>
+                model.model_name.toLowerCase().includes(query) ||
+                (model.description || '').toLowerCase().includes(query) ||
+                (model.vendor_name || '').toLowerCase().includes(query)
+            );
+        }
+        if (this.selectedGroup) {
+            result = result.filter((model) => this.availableGroupNames(model).includes(this.selectedGroup));
+        }
+        if (this.selectedTag) {
+            result = result.filter((model) => (model.tags || []).includes(this.selectedTag));
+        }
+        if (this.selectedMode) {
+            result = result.filter((model) => model.pricing_mode === this.selectedMode);
+        }
+        this.filteredModels = this.sortModels([...result]);
+    },
+
+    modelPrimaryCost(model) {
+        if (model.pricing_mode === 'token') {
+            const snap = this.preferredGroupSnapshot(model);
+            return snap?.input_price_per_1m ?? model.input_price_per_1m ?? Infinity;
+        }
+        const snap = this.preferredGroupSnapshot(model);
+        return snap?.request_price ?? model.request_price ?? Infinity;
+    },
+
+    sortModels(list) {
+        const collator = new Intl.Collator('en', { sensitivity: 'base' });
+        switch (this.sortBy) {
+            case 'name_asc':
+                return list.sort((a, b) => collator.compare(a.model_name, b.model_name));
+            case 'name_desc':
+                return list.sort((a, b) => collator.compare(b.model_name, a.model_name));
+            case 'price_asc':
+                return list.sort((a, b) => this.modelPrimaryCost(a) - this.modelPrimaryCost(b));
+            case 'price_desc':
+                return list.sort((a, b) => this.modelPrimaryCost(b) - this.modelPrimaryCost(a));
+            case 'provider':
+                return list.sort((a, b) => {
+                    const va = (a.vendor_name || '').toLowerCase();
+                    const vb = (b.vendor_name || '').toLowerCase();
+                    return va === vb ? collator.compare(a.model_name, b.model_name) : collator.compare(va, vb);
+                });
+            case 'groups':
+                return list.sort((a, b) => {
+                    const ga = (a.enable_groups || []).length;
+                    const gb = (b.enable_groups || []).length;
+                    return gb - ga || collator.compare(a.model_name, b.model_name);
+                });
+            default:
+                return list;
+        }
+    },
+
+    groupDisplayName(groupName) {
+        return this.groups.find((group) => group.name === groupName)?.display_name || groupName;
+    },
+
+    toggleSelectedGroup(groupName) {
+        this.selectedGroup = this.selectedGroup === groupName ? '' : groupName;
+        this.applyFilters();
+    },
+
+    availableGroupNames(model) {
+        const names = new Set([
+            ...(model.enable_groups || []),
+            ...Object.keys(model.group_prices || {}),
+        ]);
+        for (const variant of (model.pricing_variants || [])) {
+            for (const groupName of (variant.enable_groups || [])) names.add(groupName);
+            for (const groupName of Object.keys(variant.group_prices || {})) names.add(groupName);
+        }
+        return [...names];
+    },
+
+    preferredGroupSnapshot(model) {
+        const snapshots = Object.values(model.group_prices || {}).filter((snapshot) => snapshot && (
+            snapshot.input_price_per_1m != null ||
+            snapshot.output_price_per_1m != null ||
+            snapshot.request_price != null
+        ));
+
+        if (!snapshots.length) return null;
+
+        if (this.selectedGroup && model.group_prices?.[this.selectedGroup]) {
+            return model.group_prices[this.selectedGroup];
+        }
+
+        if (model.pricing_mode === 'token') {
+            return snapshots
+                .filter((snapshot) => snapshot.input_price_per_1m != null || snapshot.output_price_per_1m != null)
+                .sort((left, right) => {
+                    const leftValue = left.input_price_per_1m ?? left.output_price_per_1m ?? Number.POSITIVE_INFINITY;
+                    const rightValue = right.input_price_per_1m ?? right.output_price_per_1m ?? Number.POSITIVE_INFINITY;
+                    return leftValue - rightValue;
+                })[0] || null;
+        }
+
+        return snapshots
+            .filter((snapshot) => snapshot.request_price != null)
+            .sort((left, right) => (left.request_price ?? Number.POSITIVE_INFINITY) - (right.request_price ?? Number.POSITIVE_INFINITY))[0] || null;
+    },
+
+    displayInputPrice(model) {
+        return this.preferredGroupSnapshot(model)?.input_price_per_1m ?? model.input_price_per_1m;
+    },
+
+    displayOutputPrice(model) {
+        return this.preferredGroupSnapshot(model)?.output_price_per_1m ?? model.output_price_per_1m;
+    },
+
+    displayRequestPrice(model) {
+        return this.preferredGroupSnapshot(model)?.request_price ?? model.request_price;
+    },
+
+    displayVariantRequestPrice(variant) {
+        if (!variant) return null;
+        if (this.selectedGroup && variant.group_prices?.[this.selectedGroup]) {
+            return variant.group_prices[this.selectedGroup]?.request_price ?? variant.request_price;
+        }
+        return variant.request_price;
+    },
+
+    priceHeading(model) {
+        return model?.billing_label || 'Per request';
+    },
+
+    priceSuffix(model) {
+        const unit = String(model?.billing_unit || '').trim();
+        if (!unit || unit === 'request') return '';
+        return '/' + unit;
+    },
+
+    variantPriceSuffix(variant) {
+        const unit = String(variant?.billing_unit || this.detailModel?.billing_unit || '').trim();
+        if (!unit || unit === 'request') return '';
+        return '/' + unit;
+    },
+
+    sortedGroupEntries(model) {
+        return Object.entries(model.group_prices || {}).sort((left, right) => {
+            return Number(left[1].group_ratio || 0) - Number(right[1].group_ratio || 0);
+        });
+    },
+
+    detailEndpointEntries(model) {
+        if (!model) return [];
+        if ((model.endpoint_aliases || []).length) {
+            return model.endpoint_aliases;
+        }
+        return (model.supported_endpoints || []).map((endpoint) => ({
+            key: endpoint,
+            label: endpoint,
+            public_path: endpoint,
+            method: '',
+        }));
+    },
+
+    openDetail(model) {
+        this.detailModel = model;
+        this.detailOpen = true;
+    },
+
+    showToast(message) {
+        if (this.toastTimer) clearTimeout(this.toastTimer);
+        this.toastMessage = message;
+        this.toastVisible = true;
+        this.toastTimer = setTimeout(() => { this.toastVisible = false; }, 2000);
+    },
+
+        async copyModelId(model, button) {
+        if (!model?.model_name) return;
+        try {
+            await navigator.clipboard.writeText(model.model_name);
+            this.showToast(`Copied: ${model.model_name}`);
+        } catch (error) {
+            console.error('Copy failed:', error);
+            this.showToast('Copy failed');
+        }
+    },
+    };
+}
+</script>
+{% endblock %}

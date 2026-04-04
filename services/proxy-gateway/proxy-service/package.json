@@ -1,0 +1,19 @@
+{
+  "name": "proxy-service",
+  "version": "1.0.0",
+  "description": "High Performance AI API Proxy Service",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "fastify": "^4.24.3",
+    "@fastify/http-proxy": "^9.3.0",
+    "undici": "^5.27.2",
+    "pino": "^8.16.2",
+    "pino-pretty": "^10.2.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

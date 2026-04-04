@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Platform Control{% endblock %}</title>
+    <style>
+        :root {
+            --bg: #f4f3ef;
+            --card: #ffffff;
+            --line: #d9d4c7;
+            --text: #1f1f1f;
+            --muted: #6c685f;
+            --brand: #155e63;
+            --brand-soft: #e2f0ef;
+            --danger: #9d2d2d;
+            --success: #1f6f3b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Tahoma, sans-serif;
+            background: linear-gradient(180deg, #f6f2e8 0%, var(--bg) 100%);
+            color: var(--text);
+        }
+        a { color: var(--brand); text-decoration: none; }
+        .shell { max-width: 1200px; margin: 0 auto; padding: 32px 20px 48px; }
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding: 16px 20px;
+            background: rgba(255,255,255,0.82);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+        }
+        .brand { font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+        .grid { display: grid; gap: 20px; }
+        .cols-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 14px 40px rgba(20, 25, 24, 0.06);
+        }
+        h1, h2, h3 { margin: 0 0 12px; }
+        p { margin: 0 0 10px; color: var(--muted); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+        th, td { padding: 10px 8px; border-bottom: 1px solid #ece7dc; text-align: left; vertical-align: top; }
+        th { color: var(--muted); font-weight: 600; }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.85rem;
+            background: var(--brand-soft);
+            color: var(--brand);
+        }
+        .pill.danger { background: #f8e3e3; color: var(--danger); }
+        .pill.success { background: #e2f4e6; color: var(--success); }
+        .flash { margin-bottom: 16px; padding: 12px 14px; border-radius: 14px; }
+        .flash.success { background: #e2f4e6; color: var(--success); }
+        .flash.error { background: #f8e3e3; color: var(--danger); }
+        form.inline { display: inline; }
+        input, select, textarea, button {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #cfc7b7;
+            border-radius: 12px;
+            font: inherit;
+            background: #fffef9;
+        }
+        textarea { min-height: 88px; resize: vertical; }
+        button, .btn { cursor: pointer; background: var(--brand); color: white; border-color: var(--brand); }
+        button.secondary, .btn.secondary { background: transparent; color: var(--brand); }
+        .stack { display: grid; gap: 10px; }
+        .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+        .mono { font-family: Consolas, monospace; font-size: 0.9rem; }
+        .small { font-size: 0.9rem; }
+        .quick-links {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+        .quick-links a {
+            display: inline-flex;
+            align-items: center;
+            height: 34px;
+            padding: 0 12px;
+            border-radius: 999px;
+            border: 1px solid var(--line);
+            background: rgba(255,255,255,0.9);
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <div class="nav">
+            <a class="brand" href="/">Shupremium Platform</a>
+            <div style="display:flex; gap:12px; align-items:center;">
+                <a href="/status">Status</a>
+                <a href="/control">Admin</a>
+            </div>
+        </div>
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

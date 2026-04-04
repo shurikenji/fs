@@ -1,0 +1,158 @@
+{% from "_entity_controls.html" import entity_state_checkbox %}
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="POST" action="/products/{{ editing.id }}/edit" id="editForm">
+                <div class="modal-header">
+                    <h5 class="modal-title">Sửa sản phẩm: {{ editing.name }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Tên</label>
+                                <input name="name" class="form-control" value="{{ editing.name }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">Danh mục</label>
+                                <select name="category_id" class="form-select" id="editCategorySelect" onchange="syncProductTypeOptions('edit')">
+                                    {% for c in categories %}
+                                    <option value="{{ c.id }}" data-cat-type="{{ c.cat_type }}" {% if c.id == editing.category_id %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="form-label">Loại</label>
+                                <select name="product_type" class="form-select" id="editProductType" onchange="toggleEditFields()">
+                                    <option value="key_new" {% if editing.product_type == 'key_new' %}selected{% endif %}>Key mới</option>
+                                    <option value="key_topup" {% if editing.product_type == 'key_topup' %}selected{% endif %}>Nạp thêm key</option>
+                                    <option value="account_stocked" {% if editing.product_type == 'account_stocked' %}selected{% endif %}>Tài khoản có sẵn</option>
+                                    <option value="service_upgrade" {% if editing.product_type == 'service_upgrade' %}selected{% endif %}>Dịch vụ / Nâng cấp</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="form-label">Giá (VND)</label>
+                                <input name="price_vnd" type="number" class="form-control" value="{{ editing.price_vnd }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label class="form-label">Tồn kho (-1 = vô hạn)</label>
+                                <input name="stock" type="number" class="form-control" value="{{ editing.stock }}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="editKeyFields">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Server</label>
+                                    <select name="server_id" id="editServerSelect" class="form-select">
+                                        <option value="">- Không có -</option>
+                                        {% for s in servers %}
+                                        <option value="{{ s.id }}" {% if s.id == editing.server_id %}selected{% endif %}>{{ s.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Quota</label>
+                                    <input name="quota_amount" type="number" class="form-control" value="{{ editing.quota_amount }}">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label class="form-label">Số USD</label>
+                                    <input name="dollar_amount" type="number" step="0.1" class="form-control" value="{{ editing.dollar_amount }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group" id="editGroupWrap" style="display:none;">
+                            <div class="d-flex justify-content-between align-items-end mb-2">
+                                <label class="form-label mb-0">Ghi đè nhóm</label>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearGroupOverride('edit')">Mặc định server</button>
+                                    <button type="button" class="btn btn-sm btn-outline-info" id="editFetchGroupBtn" onclick="fetchGroups('edit')" style="display:none;">Tải lại</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="editToggleGroupModeBtn" onclick="toggleGroupInputMode('edit')">Danh sách</button>
+                                </div>
+                            </div>
+                            <div id="editGroupInputContainer">
+                                <input name="group_name" id="editGroupInput" class="form-control" value="{{ editing.group_name or '' }}" placeholder="Nhập tên group...">
+                            </div>
+                            <div class="product-group-helper" id="editGroupStrategy"></div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="editFormatWrap" style="display:none;">
+                        <label class="form-label">Mẫu định dạng</label>
+                        <input name="format_template" class="form-control" value="{{ editing.format_template or '' }}" placeholder="Email|Password|Cookie">
+                    </div>
+
+                    <div class="form-group" id="editInputPromptWrap" style="display:none;">
+                        <label class="form-label">Hướng dẫn nhập liệu</label>
+                        <input name="input_prompt" class="form-control" value="{{ editing.input_prompt or '' }}" placeholder="Nhập thông tin khách cần cung cấp...">
+                    </div>
+
+                    <div class="form-group" id="editPromotionWrap">
+                        <label class="form-label">Chương trình khuyến mãi</label>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <input name="promotion_name" class="form-control" value="{{ editing.promotion.name if editing.promotion else '' }}" placeholder="Tên chương trình">
+                            </div>
+                            <div class="col-md-4">
+                                <select name="promotion_type" class="form-select">
+                                    <option value="">- Không áp dụng -</option>
+                                    <option value="percent_off" {% if editing.promotion and editing.promotion.promotion_type == 'percent_off' %}selected{% endif %}>Giảm theo phần trăm</option>
+                                    <option value="fixed_off" {% if editing.promotion and editing.promotion.promotion_type == 'fixed_off' %}selected{% endif %}>Giảm số tiền cố định</option>
+                                    <option value="override_price" {% if editing.promotion and editing.promotion.promotion_type == 'override_price' %}selected{% endif %}>Chốt giá bán</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <input name="promotion_value" type="number" step="0.01" class="form-control" value="{{ editing.promotion.value_amount if editing.promotion else '' }}" placeholder="Giá trị">
+                            </div>
+                        </div>
+                        <div class="row mt-2">
+                            <div class="col-md-4">
+                                <input name="promotion_priority" type="number" class="form-control" value="{{ editing.promotion.priority if editing.promotion else 0 }}" placeholder="Độ ưu tiên">
+                            </div>
+                            <div class="col-md-4">
+                                <input name="promotion_start_at" class="form-control" value="{{ editing.promotion.starts_at if editing.promotion else '' }}" placeholder="2026-03-20T09:00:00">
+                            </div>
+                            <div class="col-md-4">
+                                <input name="promotion_end_at" class="form-control" value="{{ editing.promotion.ends_at if editing.promotion else '' }}" placeholder="2026-03-31T23:59:59">
+                            </div>
+                        </div>
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" name="promotion_is_active" id="editPromotionActive" value="1" {% if not editing.promotion or editing.promotion.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="editPromotionActive">Đang áp dụng khuyến mãi</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Mô tả</label>
+                        <textarea name="description" class="form-control" rows="3">{{ editing.description or '' }}</textarea>
+                    </div>
+
+                    {{ entity_state_checkbox('editActive', editing.is_active) }}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">Lưu</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

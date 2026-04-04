@@ -1,0 +1,103 @@
+{% extends "control/base.html" %}
+{% block title %}Tổng quan{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+    <section class="page-header">
+        <div>
+            <p class="page-eyebrow">Điều hành hệ thống</p>
+            <h1 class="page-title">Tổng quan Pricing Hub</h1>
+            <p class="page-subtitle">Theo dõi server đang bật, translation cache, và các lần sync gần nhất.</p>
+        </div>
+        <div class="page-actions">
+            <a href="/control/servers" class="btn-admin">Quản lý máy chủ</a>
+        </div>
+    </section>
+
+    <section class="stats-grid">
+        <article class="stat-card">
+            <span class="stat-card__label">Enabled servers</span>
+            <div class="stat-card__value">{{ enabled_server_count }}</div>
+            <div class="stat-card__copy">Nguồn dữ liệu đang bật cho pricing, logs, và key lookup.</div>
+        </article>
+        <article class="stat-card">
+            <span class="stat-card__label">Cached translations</span>
+            <div class="stat-card__value">{{ cached_translation_count }}</div>
+            <div class="stat-card__copy">Số label nhóm đã lưu trong translation cache.</div>
+        </article>
+        <article class="stat-card">
+            <span class="stat-card__label">Recent syncs</span>
+            <div class="stat-card__value">{{ recent_sync_logs | length }}</div>
+            <div class="stat-card__copy">Số lần đồng bộ gần nhất đang hiển thị bên dưới.</div>
+        </article>
+    </section>
+
+    <section class="split-grid">
+        <article class="admin-card">
+            <h2 class="section-title">Tác vụ nhanh</h2>
+            <p class="section-copy">Các thao tác quản trị cần dùng thường xuyên.</p>
+
+            <div class="actions-row mt-4">
+                <a href="/control/servers" class="btn-admin secondary">Mở danh sách máy chủ</a>
+            </div>
+
+            <form method="POST" action="/control/translations/refresh" class="mt-4">
+                <button type="submit" class="btn-admin">Refresh translations</button>
+            </form>
+        </article>
+
+        <article class="table-card">
+            <h2 class="section-title">Sync gần đây</h2>
+            <p class="section-copy">Theo dõi trạng thái và thời lượng của từng lần sync.</p>
+
+            {% if recent_sync_logs %}
+            <div class="table-wrap mt-3">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Thời gian</th>
+                            <th>Server</th>
+                            <th>Source</th>
+                            <th>Trạng thái</th>
+                            <th>Models</th>
+                            <th>Groups</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in recent_sync_logs %}
+                        <tr>
+                            <td>{{ log.created_at }}</td>
+                            <td>{{ log.server_id }}</td>
+                            <td>
+                                <span class="badge-soft">{{ log.trigger or "manual" }}</span>
+                            </td>
+                            <td>
+                                {% if log.status == "success" %}
+                                <span class="badge-soft success">success</span>
+                                {% else %}
+                                <span class="badge-soft warn">failed</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ log.model_count }}</td>
+                            <td>{{ log.group_count }}</td>
+                            <td>{{ log.duration_ms }} ms</td>
+                        </tr>
+                        {% if log.error_message %}
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td colspan="5" style="color: var(--admin-danger);">{{ log.error_message }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state">Chưa có lịch sử đồng bộ.</div>
+            {% endif %}
+        </article>
+    </section>
+</div>
+{% endblock %}

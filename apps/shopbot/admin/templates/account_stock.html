@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Kho Tài Khoản{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>
+        <span class="icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+        </span>
+        Kho Tài Khoản
+    </h1>
+    <div class="page-actions">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Thêm tài khoản
+        </button>
+    </div>
+</div>
+
+{% if not stock_by_product %}
+<div class="alert alert-info">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0; margin-right: 0.5rem;">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="16" x2="12" y2="12"></line>
+        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+    </svg>
+    Chưa có sản phẩm nào thuộc loại <b>Tài khoản có sẵn</b>. Hãy tạo sản phẩm với loại <code>account_stocked</code> trước.
+</div>
+{% endif %}
+
+{% for pid, info in stock_by_product.items() %}
+<div class="card mb-3">
+    <div class="card-header">
+        <div>
+            <h3 style="font-size: 1rem; margin-bottom: 0.25rem;">
+                {{ info.product_name }}
+                <span class="badge badge-secondary">{{ info.cat_icon }} {{ info.cat_name }}</span>
+            </h3>
+            <div class="text-secondary" style="font-size: 0.85rem;">
+                Còn: <span class="text-success fw-bold">{{ info.available }}</span> / {{ info.total }}
+                {% if info.format_template %}
+                — Định dạng: <code>{{ info.format_template }}</code>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <table class="table table-responsive-cards">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    {% if info.format_template %}
+                    {% for label in info.format_template.split('|') %}
+                    <th>{{ label.strip() }}</th>
+                    {% endfor %}
+                    {% else %}
+                    <th>Data</th>
+                    {% endif %}
+                    <th>Trạng thái</th>
+                    <th>Bán cho</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in info.accounts %}
+                <tr>
+                    <td data-label="#">{{ a.id }}</td>
+                    {% if info.format_template %}
+                    {% set parts = a.account_data.split('|') %}
+                    {% set labels = info.format_template.split('|') %}
+                    {% for i in range(labels|length) %}
+                    <td data-label="{{ labels[i].strip() }}">
+                        <code>{{ parts[i]|default('—') if i < parts|length else '—' }}</code>
+                    </td>
+                    {% endfor %}
+                    {% else %}
+                    <td data-label="Data">
+                        <code>{{ a.account_data[:80] }}{{ '...' if a.account_data|length > 80 }}</code>
+                    </td>
+                    {% endif %}
+                    <td data-label="Trạng thái">
+                        {% if not a.is_sold %}
+                        <span class="badge badge-success">Còn</span>
+                        {% else %}
+                        <span class="badge badge-danger">Đã bán</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Bán cho">{{ a.sold_to_user|default('—') }}</td>
+                    <td data-label="" class="actions">
+                        {% if not a.is_sold %}
+                        <a href="/account-stock/{{ a.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Xóa</a>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="/account-stock/add">
+                <div class="modal-header">
+                    <h5 class="modal-title">Thêm tài khoản vào kho</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <label class="form-label">Sản phẩm</label>
+                        <select name="product_id" class="form-select" id="stockProductSelect" onchange="updatePlaceholder()">
+                            {% for p in stock_products %}
+                            {% set cat = cat_map.get(p.category_id, {}) %}
+                            <option value="{{ p.id }}" data-format="{{ p.format_template or '' }}">
+                                {{ cat.get('icon','📁') }} {{ cat.get('name','') }} — {{ p.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-2" id="formatHint"></div>
+                    <div class="mb-2">
+                        <label class="form-label">Dữ liệu tài khoản (mỗi dòng 1 account)</label>
+                        <textarea name="accounts_data" class="form-control" rows="5" required id="accountsInput" placeholder="email@example.com|password123"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" class="btn btn-primary">Thêm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function updatePlaceholder() {
+    var sel = document.getElementById('stockProductSelect');
+    var opt = sel.options[sel.selectedIndex];
+    var fmt = opt.getAttribute('data-format') || '';
+    var hint = document.getElementById('formatHint');
+    var input = document.getElementById('accountsInput');
+    if (fmt) {
+        hint.innerHTML = '<small class="text-info">Định dạng: <code>' + fmt + '</code> — Nhập theo thứ tự, cách nhau bằng <b>|</b></small>';
+        input.placeholder = fmt.split('|').map(function (f) { return f.trim().toLowerCase() + '_value'; }).join('|');
+    } else {
+        hint.innerHTML = '';
+        input.placeholder = 'Dữ liệu tài khoản (text tùy ý)';
+    }
+}
+
+function confirmDelete() {
+    return confirm('Bạn có chắc muốn xóa tài khoản này?');
+}
+
+document.addEventListener('DOMContentLoaded', updatePlaceholder);
+</script>
+{% endblock %}

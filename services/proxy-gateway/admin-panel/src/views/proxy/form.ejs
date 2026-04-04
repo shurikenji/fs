@@ -1,0 +1,134 @@
+<%- include('../partials/header') %>
+<%- include('../partials/sidebar') %>
+
+<div class="main-content">
+    <div class="page-header d-flex justify-content-between align-items-center">
+        <h1>
+            <i class="bi bi-<%= proxy ? 'pencil' : 'plus-lg' %> me-2"></i>
+            <%= proxy ? 'Chinh sua Proxy' : 'Them Proxy moi' %>
+        </h1>
+        <a href="/proxy" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Quay lai
+        </a>
+    </div>
+
+    <% if (error) { %>
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-circle me-2"></i><%= error %>
+        </div>
+    <% } %>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-gear me-2"></i>Cau hinh Proxy
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="/proxy/<%= proxy ? 'edit/' + proxy.id : 'add' %>">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Ten Proxy <span class="text-danger">*</span></label>
+                                <input type="text" name="name" class="form-control" value="<%= proxy ? proxy.name : '' %>" placeholder="VD: GPT-API-1" required>
+                                <div class="form-text">Ten de nhan dien, chi dung noi bo</div>
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Domain <span class="text-danger">*</span></label>
+                                <input type="text" name="domain" class="form-control" value="<%= proxy ? proxy.domain : '' %>" placeholder="VD: gpt6.shupremium.com" required>
+                                <div class="form-text">Subdomain trong wildcard zone cua <code>shupremium.com</code></div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-5 mb-3">
+                                <label class="form-label">Target API Host <span class="text-danger">*</span></label>
+                                <input type="text" name="target_host" class="form-control" value="<%= proxy ? proxy.target_host : '' %>" placeholder="VD: api.openai.com" required>
+                                <div class="form-text">Host cua upstream origin, khong co giao thuc</div>
+                            </div>
+
+                            <div class="col-md-3 mb-3">
+                                <label class="form-label">Upstream Protocol <span class="text-danger">*</span></label>
+                                <select name="target_protocol" class="form-select">
+                                    <option value="https" <%= !proxy || !proxy.target_protocol || proxy.target_protocol === 'https' ? 'selected' : '' %>>HTTPS</option>
+                                    <option value="http" <%= proxy && proxy.target_protocol === 'http' ? 'selected' : '' %>>HTTP</option>
+                                </select>
+                                <div class="form-text">Dung HTTP khi origin chi mo noi bo</div>
+                            </div>
+
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label">Port <span class="text-danger">*</span></label>
+                                <input type="number" name="port" class="form-control" value="<%= proxy ? proxy.port : nextPort %>" min="3000" max="9999" required>
+                                <div class="form-text">Port noi bo cho proxy runtime</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" name="tls_skip_verify" id="tls_skip_verify" class="form-check-input" <%= proxy && proxy.tls_skip_verify ? 'checked' : '' %>>
+                                <label class="form-check-label" for="tls_skip_verify">Bo qua verify TLS cua upstream</label>
+                                <div class="form-text">Chi dung tam thoi khi origin HTTPS het han SSL, sai chain, hoac self-signed.</div>
+                            </div>
+                        </div>
+
+                        <% if (proxy) { %>
+                        <div class="mb-3">
+                            <label class="form-label">Trang thai</label>
+                            <select name="status" class="form-select">
+                                <option value="active" <%= proxy.status === 'active' ? 'selected' : '' %>>Hoat dong</option>
+                                <option value="inactive" <%= proxy.status === 'inactive' ? 'selected' : '' %>>Tam tat</option>
+                            </select>
+                        </div>
+                        <% } %>
+
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            Flow moi se gui desired state sang <strong>proxy-operator</strong>. Wildcard SSL va runtime rollout duoc quan ly tap trung thay vi thao tac tung domain.
+                        </div>
+
+                        <hr>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="/proxy" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-lg me-1"></i>Huy
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-lg me-1"></i>
+                                <%= proxy ? 'Cap nhat' : 'Tao Proxy' %>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-info-circle me-2"></i>Huong dan
+                </div>
+                <div class="card-body">
+                    <h6>1. DNS</h6>
+                    <p class="small text-muted">Su dung wildcard DNS <code>*.shupremium.com</code> tro ve VPS ARM.</p>
+
+                    <h6>2. Runtime apply</h6>
+                    <p class="small text-muted">Admin panel luu desired state vao DB, sau do proxy-operator render Nginx/PM2 va health-check.</p>
+
+                    <h6>3. SSL</h6>
+                    <p class="small text-muted mb-0">Wildcard certificate duoc quan ly mot lan trong tab SSL, khong expand cert theo subdomain nua.</p>
+
+                    <hr>
+
+                    <h6>Vi du target</h6>
+                    <ul class="small text-muted mb-0">
+                        <li><code>api.openai.com + HTTPS</code></li>
+                        <li><code>10.0.0.15 + HTTP</code></li>
+                        <li><code>origin.internal + HTTPS + skip verify</code></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,53 @@
+{% extends "admin_base.html" %}
+{% set active_page = "logs" %}
+{% block title %}Nhật ký{% endblock %}
+{% block page_title %}Nhật ký hoạt động{% endblock %}
+
+{% block content %}
+<div class="page-stack">
+    <section class="page-head">
+        <div>
+            <h1 class="page-title">Nhật ký hoạt động</h1>
+            <p class="page-subtitle">Tất cả hành động quản trị gần đây trên control plane.</p>
+        </div>
+        <div class="page-actions">
+            <span class="top-badge">{{ logs|length }} entries</span>
+        </div>
+    </section>
+
+    <section class="shell-table">
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width:60px;">ID</th>
+                        <th style="width:160px;">Action</th>
+                        <th>Details</th>
+                        <th style="width:120px;">IP</th>
+                        <th style="width:180px;">Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr>
+                        <td style="color:var(--text-tertiary);">{{ log.id }}</td>
+                        <td>
+                            {% if 'FAIL' in log.action or 'FAILED' in log.action %}
+                            <span class="tag is-warm">{{ log.action }}</span>
+                            {% elif 'LOGIN' == log.action or 'SYNC' in log.action %}
+                            <span class="tag is-accent">{{ log.action }}</span>
+                            {% else %}
+                            <span class="tag">{{ log.action }}</span>
+                            {% endif %}
+                        </td>
+                        <td style="color:var(--text-secondary); font-size:13px;">{{ log.details }}</td>
+                        <td class="code-text" style="font-size:12px;">{{ log.ip_address or "—" }}</td>
+                        <td style="color:var(--text-tertiary); font-size:13px;">{{ log.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+{% endblock %}

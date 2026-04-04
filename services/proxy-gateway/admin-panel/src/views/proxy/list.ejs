@@ -1,0 +1,124 @@
+<%- include('../partials/header') %>
+<%- include('../partials/sidebar') %>
+
+<div class="main-content">
+    <div class="page-header d-flex justify-content-between align-items-center">
+        <h1><i class="bi bi-server me-2"></i>Quản lý Proxy</h1>
+        <a href="/proxy/add" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Thêm Proxy
+        </a>
+    </div>
+    
+    <% if (success) { %>
+        <div class="alert alert-success alert-dismissible fade show">
+            <i class="bi bi-check-circle me-2"></i><%= success %>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <% } %>
+    
+    <% if (error) { %>
+        <div class="alert alert-danger alert-dismissible fade show">
+            <i class="bi bi-exclamation-circle me-2"></i><%= error %>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    <% } %>
+    
+    <!-- Hướng dẫn nhanh -->
+    <div class="alert alert-info mb-4">
+        <h6 class="alert-heading"><i class="bi bi-lightbulb me-2"></i>Hướng dẫn sử dụng Proxy</h6>
+        <p class="mb-2 small">Sau khi tạo proxy, bạn có thể gọi API qua domain proxy của mình:</p>
+        <code>curl https://[domain-proxy]/v1/chat/completions -H "Authorization: Bearer YOUR_KEY" -d '...'</code>
+    </div>
+    
+    <div class="card">
+        <div class="card-body p-0">
+            <% if (proxies.length === 0) { %>
+                <div class="text-center py-5">
+                    <i class="bi bi-server text-muted" style="font-size: 4rem;"></i>
+                    <h5 class="mt-3 text-muted">Chưa có proxy nào</h5>
+                    <p class="text-muted">Bắt đầu bằng cách tạo proxy đầu tiên</p>
+                    <a href="/proxy/add" class="btn btn-primary">
+                        <i class="bi bi-plus-lg me-1"></i>Tạo Proxy
+                    </a>
+                </div>
+            <% } else { %>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Proxy</th>
+                                <th>Target API</th>
+                                <th>Port</th>
+                                <th>Trạng thái</th>
+                                <th class="text-end">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% proxies.forEach(proxy => { %>
+                                <tr>
+                                    <td>
+                                        <div>
+                                            <strong><%= proxy.name %></strong>
+                                        </div>
+                                        <a href="https://<%= proxy.domain %>/health" target="_blank" 
+                                           class="text-muted small text-decoration-none">
+                                            <%= proxy.domain %> <i class="bi bi-box-arrow-up-right"></i>
+                                        </a>
+                                    </td>
+                                    <td><code><%= proxy.target_host %></code></td>
+                                    <td><span class="badge bg-light text-dark"><%= proxy.port %></span></td>
+                                    <td>
+                                        <span class="badge badge-<%= proxy.status %>">
+                                            <i class="bi bi-<%= proxy.status === 'active' ? 'check-circle' : 'pause-circle' %> me-1"></i>
+                                            <%= proxy.status === 'active' ? 'Hoạt động' : 'Đã tắt' %>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex gap-1 justify-content-end">
+                                            <!-- Edit -->
+                                            <a href="/proxy/edit/<%= proxy.id %>" 
+                                               class="btn btn-sm btn-outline-primary btn-action" 
+                                               title="Chỉnh sửa">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            
+                                            <!-- Toggle -->
+                                            <form action="/proxy/toggle/<%= proxy.id %>" method="POST" class="d-inline">
+                                                <button type="submit" 
+                                                        class="btn btn-sm btn-outline-<%= proxy.status === 'active' ? 'warning' : 'success' %> btn-action"
+                                                        title="<%= proxy.status === 'active' ? 'Tắt' : 'Bật' %>">
+                                                    <i class="bi bi-<%= proxy.status === 'active' ? 'pause' : 'play' %>"></i>
+                                                </button>
+                                            </form>
+                                            
+                                            <!-- Restart -->
+                                            <form action="/proxy/restart/<%= proxy.id %>" method="POST" class="d-inline">
+                                                <button type="submit" 
+                                                        class="btn btn-sm btn-outline-info btn-action"
+                                                        title="Restart">
+                                                    <i class="bi bi-arrow-clockwise"></i>
+                                                </button>
+                                            </form>
+                                            
+                                            <!-- Delete -->
+                                            <form action="/proxy/delete/<%= proxy.id %>" method="POST" 
+                                                  class="d-inline" data-confirm="Bạn có chắc muốn xóa proxy này?">
+                                                <button type="submit" 
+                                                        class="btn btn-sm btn-outline-danger btn-action"
+                                                        title="Xóa">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <% }) %>
+                        </tbody>
+                    </table>
+                </div>
+            <% } %>
+        </div>
+    </div>
+</div>
+
+<%- include('../partials/footer') %>

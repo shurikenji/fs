@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form, entity_state_checkbox %}
+{% block title %}Danh mục{% endblock %}
+{% block content %}
+
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                </svg>
+            </span>
+            Danh mục sản phẩm
+        </h1>
+        <p class="page-subtitle">Quản lý danh mục và phân loại sản phẩm trong hệ thống.</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Thêm danh mục
+        </button>
+    </div>
+</div>
+
+<!-- KPI Row -->
+<div class="kpi-grid animate-fade-up">
+    <div class="stat-card">
+        <div class="stat-icon emerald">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ categories|length }}</div>
+            <div class="stat-label">Tổng danh mục</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon amber">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ categories | selectattr('cat_type', 'eq', 'key_api') | list | length }}</div>
+            <div class="stat-label">Key API</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon sky">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+        </div>
+        <div class="stat-content">
+            <div class="stat-value">{{ categories | selectattr('is_active') | list | length }}</div>
+            <div class="stat-label">Đang bật</div>
+        </div>
+    </div>
+</div>
+
+<!-- Categories Table -->
+<div class="table-card animate-fade-up">
+    {% if categories %}
+    <table class="table table-responsive-cards">
+        <thead>
+            <tr>
+                <th style="width: 60px;">#</th>
+                <th style="width: 70px;">Icon</th>
+                <th>Tên & Mô tả</th>
+                <th style="width: 130px;">Loại</th>
+                <th style="width: 90px;">Thứ tự</th>
+                <th style="width: 110px;">Trạng thái</th>
+                <th style="width: 160px;">Thao tác</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in categories %}
+            <tr>
+                {% set next_url = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
+                <td data-label="#">
+                    <span class="cell-id">#{{ c.id }}</span>
+                </td>
+                <td data-label="Icon">
+                    <span class="cell-icon-lg">{{ c.icon }}</span>
+                </td>
+                <td data-label="Tên & Mô tả">
+                    <div class="cell-name">{{ c.name }}</div>
+                    <div class="cell-meta cell-truncate" style="max-width:320px;">{{ c.description or '— Không có mô tả' }}</div>
+                </td>
+                <td data-label="Loại">
+                    {% if c.cat_type == 'key_api' %}
+                    <span class="badge badge-warning">🔑 Key API</span>
+                    {% else %}
+                    <span class="badge badge-secondary">🗂️ Tổng quát</span>
+                    {% endif %}
+                </td>
+                <td data-label="Thứ tự">
+                    <span class="cell-sort">{{ c.sort_order }}</span>
+                </td>
+                <td data-label="Trạng thái">{{ entity_state_badge(c.is_active) }}</td>
+                <td data-label="">
+                    <div class="actions">
+                        {{ entity_toggle_form('/categories/' ~ c.id ~ '/toggle-active', c.is_active, next_url) }}
+                        <a
+                            href="/categories/{{ c.id }}/edit"
+                            class="btn btn-sm btn-outline-primary"
+                            data-edit-modal-url="/categories/{{ c.id }}/edit-modal"
+                            data-edit-modal-init="initializeCategoriesEditModal"
+                        >Sửa</a>
+                        <a href="/categories/{{ c.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Xóa</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">📁</div>
+        <h4>Chưa có danh mục nào</h4>
+        <p>Tạo danh mục đầu tiên để phân loại sản phẩm.</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">Thêm danh mục đầu tiên</button>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" action="/categories/add">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem; color: var(--primary);"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                        Thêm danh mục mới
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" style="display: grid; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label">Tên danh mục <span style="color: var(--danger);">*</span></label>
+                        <input name="name" class="form-control" required placeholder="Ví dụ: API ChatGPT">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label">Icon (Emoji)</label>
+                            <input name="icon" class="form-control" value="📦" placeholder="📦" style="font-size: 1.25rem; text-align: center;">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Loại danh mục</label>
+                            <select name="cat_type" class="form-select">
+                                <option value="general">🗂️ Tổng quát</option>
+                                <option value="key_api">🔑 Key API</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Mô tả</label>
+                        <textarea name="description" class="form-control" rows="2" placeholder="Mô tả ngắn về danh mục..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Thứ tự hiển thị</label>
+                        <input name="sort_order" type="number" class="form-control" value="0">
+                        <div class="form-text">Số nhỏ hơn sẽ hiển thị trước (0 = mặc định).</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="submit" class="btn btn-primary">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Tạo danh mục
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if editing %}
+{% include "_category_edit_modal.html" %}
+{% endif %}
+
+<script>
+function confirmDelete() {
+    return confirm('Bạn có chắc muốn xóa danh mục này? Hành động này không thể hoàn tác.');
+}
+
+function initializeCategoriesEditModal() {}
+
+function showEditModalFallback(modalEl, redirectUrl, onReady) {
+    if (!modalEl) return;
+
+    if (window.AdminRemoteModal && typeof window.AdminRemoteModal.showExisting === 'function') {
+        AdminRemoteModal.showExisting(modalEl, {
+            onReady,
+            onHiddenNavigate: redirectUrl,
+        });
+        return;
+    }
+
+    if (typeof onReady === 'function') {
+        onReady(modalEl);
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const handleHidden = function () {
+        modalEl.removeEventListener('hidden.bs.modal', handleHidden);
+        window.location.href = redirectUrl;
+    };
+
+    modalEl.addEventListener('hidden.bs.modal', handleHidden);
+    modal.show();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    {% if editing %}
+    const editModalEl = document.getElementById('editModal');
+    if (editModalEl) {
+        showEditModalFallback(editModalEl, '/categories', initializeCategoriesEditModal);
+    }
+    {% endif %}
+});
+</script>
+{% endblock %}

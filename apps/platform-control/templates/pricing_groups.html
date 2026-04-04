@@ -1,0 +1,127 @@
+{% extends "admin_base.html" %}
+{% set active_page = "pricing-groups" %}
+{% block title %}Pricing Groups{% endblock %}
+{% block page_title %}Pricing Groups{% endblock %}
+
+{% block content %}
+<div class="page-stack" x-data="pricingGroupsPage()">
+    <section class="page-head">
+        <div>
+            <h1 class="page-title">Pricing Groups</h1>
+            <p class="page-subtitle">Visibility controls for group catalog imported from pricing runtime.</p>
+        </div>
+        <div class="page-actions">
+            <a class="button-secondary" href="/control/pricing/sources">Back to sources</a>
+            <form method="POST" action="/control/pricing/sources/{{ source.id }}/groups/refresh">
+                <button type="submit" class="button-secondary">Refresh Catalog</button>
+            </form>
+        </div>
+    </section>
+
+    <section class="shell-card">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">{{ source.name }}</h2>
+                <p class="panel-copy">{{ source_label }}. Hidden groups in control plane: {{ hidden_group_count }}.</p>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <span class="tag">{{ groups_data|length }} groups</span>
+                <span class="tag is-accent"><span x-text="visibleGroups.length"></span> visible</span>
+            </div>
+        </div>
+        <div style="display:grid; gap:16px; grid-template-columns: minmax(0, 1fr) auto auto auto;">
+            <div>
+                <label class="field-label">Search groups</label>
+                <input class="control" type="text" x-model="query" placeholder="Filter by name, label, category, description">
+            </div>
+            <div style="align-self:end;"><button type="button" class="button-secondary" @click="showAll()">Show all</button></div>
+            <div style="align-self:end;"><button type="button" class="button-secondary" @click="selectFiltered()">Select filtered</button></div>
+            <div style="align-self:end;"><button type="button" class="button-secondary" @click="hideSelected()">Hide selected</button></div>
+        </div>
+    </section>
+
+    <form method="POST" action="/control/pricing/sources/{{ source.id }}/groups/save" class="shell-card">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Catalog visibility</h2>
+                <p class="panel-copy">Unchecked rows are hidden from public pricing-related surfaces only.</p>
+            </div>
+            <button type="submit" class="button">Save visibility</button>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width:54px;">Pick</th>
+                        <th style="width:70px;">Public</th>
+                        <th>Name</th>
+                        <th style="width:100px;">Ratio</th>
+                        <th style="width:160px;">Category</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="group in filteredGroups()" :key="group.name">
+                        <tr>
+                            <td><input type="checkbox" :value="group.name" x-model="selectedRows"></td>
+                            <td><input type="checkbox" name="visible_groups" :value="group.name" x-model="visibleGroups"></td>
+                            <td>
+                                <strong x-text="group.label_en || group.name"></strong>
+                                <div class="code-text" style="font-size:12px;" x-text="group.name"></div>
+                            </td>
+                            <td x-text="'x' + formatRatio(group.ratio)"></td>
+                            <td x-text="group.category || 'Other'"></td>
+                            <td style="color:var(--text-secondary);" x-text="group.desc || '-'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pricingGroupsPage() {
+    return {
+        groups: {{ groups_data | tojson }},
+        visibleGroups: {{ visible_groups | tojson }},
+        selectedRows: [],
+        query: '',
+
+        filteredGroups() {
+            const needle = this.query.toLowerCase().trim();
+            if (!needle) return this.groups;
+            return this.groups.filter((group) => {
+                const haystack = [
+                    group.name,
+                    group.label_en,
+                    group.category,
+                    group.desc,
+                ].join(' ').toLowerCase();
+                return haystack.includes(needle);
+            });
+        },
+
+        formatRatio(value) {
+            const number = Number(value);
+            return Number.isFinite(number) ? number.toFixed(2) : '1.00';
+        },
+
+        showAll() {
+            this.visibleGroups = this.groups.map((group) => group.name);
+        },
+
+        selectFiltered() {
+            this.selectedRows = this.filteredGroups().map((group) => group.name);
+        },
+
+        hideSelected() {
+            const selected = new Set(this.selectedRows);
+            this.visibleGroups = this.visibleGroups.filter((name) => !selected.has(name));
+        },
+    };
+}
+</script>
+{% endblock %}
