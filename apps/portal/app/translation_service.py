@@ -11,7 +11,7 @@ from app.translation_ai_payloads import (
     normalize_ai_text_response,
     parse_ai_json,
 )
-from app.config import get_settings
+from app.translation_ai_settings import get_runtime_ai_settings
 from app.public_pricing_presenter import (
     prepare_public_pricing_presentation,
     render_public_pricing,
@@ -38,7 +38,6 @@ from app.translation_text import (
     sanitize_model_description_text,
     sanitize_short_label_text,
 )
-from db.queries.settings import get_settings_dict
 from db.queries.translations import (
     get_cached_text_translations,
     get_cached_translations,
@@ -227,7 +226,7 @@ async def warm_model_label_cache(pricing: NormalizedPricing, server_type: str) -
 
 
 async def _translate_groups_with_ai(groups: list[dict[str, str]]) -> dict[str, dict[str, Any]]:
-    ai_settings = await _get_runtime_ai_settings()
+    ai_settings = await get_runtime_ai_settings()
     if not ai_settings["enabled"] or not ai_settings["api_key"]:
         return {}
 
@@ -261,7 +260,7 @@ async def _translate_groups_with_ai(groups: list[dict[str, str]]) -> dict[str, d
 async def _translate_model_descriptions_with_ai(
     payloads: list[dict[str, str]],
 ) -> dict[str, str]:
-    ai_settings = await _get_runtime_ai_settings()
+    ai_settings = await get_runtime_ai_settings()
     if not ai_settings["enabled"] or not ai_settings["api_key"]:
         return {}
 
@@ -294,7 +293,7 @@ async def _translate_short_texts_with_ai(
     *,
     label_kind: str,
 ) -> dict[str, str]:
-    ai_settings = await _get_runtime_ai_settings()
+    ai_settings = await get_runtime_ai_settings()
     if not ai_settings["enabled"] or not ai_settings["api_key"]:
         return {}
 
@@ -375,25 +374,6 @@ async def _resolve_short_text_translations(
             or original_text
         )
     return resolved
-
-
-async def _get_runtime_ai_settings() -> dict[str, str | bool]:
-    env_settings = get_settings()
-    defaults = {
-        "ai_provider": env_settings.ai_provider,
-        "ai_api_key": env_settings.ai_api_key,
-        "ai_model": env_settings.ai_model,
-        "ai_base_url": env_settings.ai_base_url,
-        "ai_enabled": "true" if env_settings.ai_enabled else "false",
-    }
-    stored = await get_settings_dict(defaults)
-    return {
-        "provider": str(stored.get("ai_provider") or "openai").strip().lower(),
-        "api_key": str(stored.get("ai_api_key") or "").strip(),
-        "model": str(stored.get("ai_model") or env_settings.ai_model).strip(),
-        "base_url": str(stored.get("ai_base_url") or "").strip(),
-        "enabled": str(stored.get("ai_enabled") or "").strip().lower() == "true",
-    }
 
 
 async def test_ai_connection(provider: str, api_key: str, model: str, base_url: str = "") -> tuple[bool, str]:
