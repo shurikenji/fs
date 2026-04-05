@@ -294,12 +294,20 @@ run_http_smoke_checks() {
   local url
   local accepted
   local status
+  local attempt
 
   [[ -n "${SMOKE_URLS:-}" ]] || return 0
 
   while IFS='|' read -r url accepted; do
     [[ -n "$url" ]] || continue
-    status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url" || true)"
+    status=""
+    for attempt in {1..15}; do
+      status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "$url" || true)"
+      case ",$accepted," in
+        *",$status,"*) break ;;
+      esac
+      sleep 1
+    done
     case ",$accepted," in
       *",$status,"*) log "Smoke OK: $url -> $status" ;;
       *) fail "Smoke FAIL: $url -> $status (expected $accepted)" ;;
@@ -315,6 +323,7 @@ run_proxy_gateway_smoke_checks() {
   local name
   local port
   local status
+  local attempt
 
   require_cmd curl
   require_cmd pm2
@@ -339,7 +348,14 @@ for (const app of (cfg.apps || [])) {
       [[ -n "$name" ]] || continue
       ensure_pm2_process_online "$name"
       [[ -n "$port" ]] || fail "Missing PORT for proxy service app: $name"
-      status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/_internal/health" || true)"
+      status=""
+      for attempt in {1..15}; do
+        status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/_internal/health" || true)"
+        case ",200," in
+          *",$status,"*) break ;;
+        esac
+        sleep 1
+      done
       case ",200," in
         *",$status,"*) log "Smoke OK: proxy $name -> $status" ;;
         *) fail "Smoke FAIL: proxy $name -> $status (expected 200)" ;;
@@ -357,7 +373,14 @@ if (!app) process.exit(1);
 process.stdout.write(String(app.env && (app.env.ADMIN_PORT ?? app.env.PORT ?? "8080")));
 ' "$admin_cfg"
     )"
-    status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/auth/login" || true)"
+    status=""
+    for attempt in {1..15}; do
+      status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/auth/login" || true)"
+      case ",200,302," in
+        *",$status,"*) break ;;
+      esac
+      sleep 1
+    done
     case ",200,302," in
       *",$status,"*) log "Smoke OK: admin-panel -> $status" ;;
       *) fail "Smoke FAIL: admin-panel -> $status (expected 200,302)" ;;

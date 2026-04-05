@@ -1,5 +1,5 @@
-// PM2 Ecosystem - Auto-generated 2026-03-25T11:46:14.075Z
-// DO NOT EDIT MANUALLY - Managed by Admin Panel
+// PM2 Ecosystem - Auto-generated 2026-04-05T00:00:00.000Z
+// DO NOT EDIT MANUALLY - Managed by Proxy Operator
 
 module.exports = {
   apps: [
@@ -15,6 +15,8 @@ module.exports = {
             "NODE_ENV": "production",
             "PORT": 3001,
             "TARGET_HOST": "api.aabao.top",
+            "TARGET_PROTOCOL": "https",
+            "TLS_SKIP_VERIFY": "false",
             "SERVICE_NAME": "GPT1",
             "PROXY_DOMAIN": "gpt1.shupremium.com",
             "LOG_LEVEL": "warn"
@@ -36,6 +38,8 @@ module.exports = {
             "NODE_ENV": "production",
             "PORT": 3002,
             "TARGET_HOST": "api.996444.cn",
+            "TARGET_PROTOCOL": "https",
+            "TLS_SKIP_VERIFY": "false",
             "SERVICE_NAME": "GPT2",
             "PROXY_DOMAIN": "gpt2.shupremium.com",
             "LOG_LEVEL": "warn"
@@ -57,7 +61,9 @@ module.exports = {
             "NODE_ENV": "production",
             "PORT": 3003,
             "TARGET_HOST": "www.mnapi.com",
-            "SERVICE_NAME": "gpt3",
+            "TARGET_PROTOCOL": "https",
+            "TLS_SKIP_VERIFY": "false",
+            "SERVICE_NAME": "GPT3",
             "PROXY_DOMAIN": "gpt3.shupremium.com",
             "LOG_LEVEL": "warn"
         },
@@ -78,6 +84,8 @@ module.exports = {
             "NODE_ENV": "production",
             "PORT": 3004,
             "TARGET_HOST": "api.kksj.org",
+            "TARGET_PROTOCOL": "https",
+            "TLS_SKIP_VERIFY": "false",
             "SERVICE_NAME": "GPT4",
             "PROXY_DOMAIN": "gpt4.shupremium.com",
             "LOG_LEVEL": "warn"
@@ -99,6 +107,8 @@ module.exports = {
             "NODE_ENV": "production",
             "PORT": 3005,
             "TARGET_HOST": "new.xjai.cc",
+            "TARGET_PROTOCOL": "https",
+            "TLS_SKIP_VERIFY": "false",
             "SERVICE_NAME": "GPT5",
             "PROXY_DOMAIN": "gpt5.shupremium.com",
             "LOG_LEVEL": "warn"
@@ -120,7 +130,9 @@ module.exports = {
             "NODE_ENV": "production",
             "PORT": 4001,
             "TARGET_HOST": "api.zhongzhuan.chat",
-            "SERVICE_NAME": "sv1",
+            "TARGET_PROTOCOL": "https",
+            "TLS_SKIP_VERIFY": "false",
+            "SERVICE_NAME": "SV1",
             "PROXY_DOMAIN": "sv1.shupremium.com",
             "LOG_LEVEL": "warn"
         },
@@ -141,7 +153,9 @@ module.exports = {
             "NODE_ENV": "production",
             "PORT": 4002,
             "TARGET_HOST": "kfcv50.link",
-            "SERVICE_NAME": "sv2",
+            "TARGET_PROTOCOL": "https",
+            "TLS_SKIP_VERIFY": "false",
+            "SERVICE_NAME": "SV2",
             "PROXY_DOMAIN": "sv2.shupremium.com",
             "LOG_LEVEL": "warn"
         },
