@@ -514,10 +514,11 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
         ip = _client_ip(request)
+        normalized_source_id = source_id.strip() or None
         try:
             await upsert_proxy_endpoint(
                 endpoint_id.strip(),
-                source_id=source_id.strip(),
+                source_id=normalized_source_id,
                 name=name.strip(),
                 domain=domain.strip().lower(),
                 target_host=target_host.strip(),
