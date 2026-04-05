@@ -233,18 +233,20 @@ ensure_pm2_process_online() {
 
 restart_pm2_python_app() {
   local cwd="$CURRENT_DIR/$APP_ID"
-  local interpreter="$SHARED_DIR/$SHARED_NAME/venv/bin/python"
+  local python_bin="$SHARED_DIR/$SHARED_NAME/venv/bin/python"
+  local entry_path="$cwd/$PM2_ENTRY"
 
   require_cmd pm2
 
   if pm2_process_exists "$PROCESS_NAME"; then
-    pm2 restart "$PROCESS_NAME" --update-env
-  else
-    pm2 start "$PM2_ENTRY" \
-      --name "$PROCESS_NAME" \
-      --cwd "$cwd" \
-      --interpreter "$interpreter"
+    pm2 delete "$PROCESS_NAME"
   fi
+
+  pm2 start "$python_bin" \
+    --name "$PROCESS_NAME" \
+    --cwd "$cwd" \
+    --interpreter none \
+    -- "$entry_path"
 }
 
 restart_shopbot_systemd() {

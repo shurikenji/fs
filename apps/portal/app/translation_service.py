@@ -368,7 +368,7 @@ async def _resolve_short_text_translations(
     resolved: dict[str, str] = {}
     for item in payloads:
         original_text = item["original_text"]
-        resolved[original_text] = _sanitize_short_label_text(
+        resolved[original_text] = sanitize_short_label_text(
             cached.get(original_text)
             or generated.get(original_text)
             or original_text

@@ -2,8 +2,8 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from app.public_pricing_presenter import PublicPricingPresentation
-from app.schemas import NormalizedPricing
-from app.translation_service import build_public_pricing
+from app.schemas import NormalizedModel, NormalizedPricing
+from app.translation_service import build_public_pricing, apply_model_label_translations
 
 
 def _sample_pricing(server_name: str = "Server 1") -> NormalizedPricing:
@@ -98,3 +98,40 @@ class BuildPublicPricingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(result, final)
         groups_mock.assert_awaited_once_with(labeled, "newapi")
         render_mock.assert_called_once_with(grouped, presentation)
+
+
+class ApplyModelLabelTranslationsTests(unittest.IsolatedAsyncioTestCase):
+    async def test_short_text_translation_uses_public_sanitizer_name(self) -> None:
+        pricing = NormalizedPricing(
+            server_id="server-1",
+            server_name="Server 1",
+            models=[
+                NormalizedModel(
+                    model_name="alpha",
+                    vendor_name="阿里云",
+                    tags=["视频模型"],
+                )
+            ],
+            groups=[],
+            fetched_at="2026-04-05T00:00:00Z",
+        )
+
+        with (
+            patch(
+                "app.translation_service.get_cached_text_translations",
+                AsyncMock(
+                    side_effect=[
+                        {"阿里云": "Alibaba Cloud"},
+                        {"视频模型": "Video Model"},
+                    ]
+                ),
+            ),
+            patch(
+                "app.translation_service.save_text_translations",
+                AsyncMock(),
+            ),
+        ):
+            translated = await apply_model_label_translations(pricing, "newapi")
+
+        self.assertEqual(translated.models[0].vendor_name, "Alibaba Cloud")
+        self.assertEqual(translated.models[0].tags, ["Video Model"])
