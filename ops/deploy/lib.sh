@@ -188,11 +188,9 @@ prepare_proxy_gateway_release() {
   local release_dir="$1"
   local shared_root="$SHARED_DIR/$SHARED_NAME"
 
-  mkdir -p "$shared_root/proxy-operator" "$shared_root/admin-panel/data"
+  mkdir -p "$shared_root/proxy-operator"
 
   link_shared_file "$shared_root/proxy-operator/.env" "$release_dir/proxy-operator/.env" true
-  link_shared_file "$shared_root/admin-panel/.env" "$release_dir/admin-panel/.env" false
-  link_shared_dir "$shared_root/admin-panel/data" "$release_dir/admin-panel/data"
 }
 
 pm2_process_exists() {
@@ -279,15 +277,6 @@ restart_proxy_gateway_pm2() {
     fi
   )
 
-  if [[ "${DEPLOY_ADMIN_PANEL:-false}" == "true" ]]; then
-    (
-      cd "$cwd/admin-panel"
-      npm ci --omit=dev
-      if ! pm2 reload ecosystem.config.js --update-env >/dev/null 2>&1; then
-        pm2 start ecosystem.config.js
-      fi
-    )
-  fi
 }
 
 run_http_smoke_checks() {
@@ -318,7 +307,6 @@ run_http_smoke_checks() {
 run_proxy_gateway_smoke_checks() {
   local cwd="$CURRENT_DIR/$APP_ID"
   local service_cfg="$cwd/proxy-service/ecosystem.config.js"
-  local admin_cfg="$cwd/admin-panel/ecosystem.config.js"
   local entry
   local name
   local port
@@ -363,29 +351,6 @@ for (const app of (cfg.apps || [])) {
     done
   fi
 
-  if [[ "${DEPLOY_ADMIN_PANEL:-false}" == "true" && -f "$admin_cfg" ]]; then
-    ensure_pm2_process_online "admin-panel"
-    port="$(
-      node -e '
-const cfg = require(process.argv[1]);
-const app = (cfg.apps || []).find((item) => item && item.name === "admin-panel");
-if (!app) process.exit(1);
-process.stdout.write(String(app.env && (app.env.ADMIN_PORT ?? app.env.PORT ?? "8080")));
-' "$admin_cfg"
-    )"
-    status=""
-    for attempt in {1..15}; do
-      status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/auth/login" || true)"
-      case ",200,302," in
-        *",$status,"*) break ;;
-      esac
-      sleep 1
-    done
-    case ",200,302," in
-      *",$status,"*) log "Smoke OK: admin-panel -> $status" ;;
-      *) fail "Smoke FAIL: admin-panel -> $status (expected 200,302)" ;;
-    esac
-  fi
 }
 
 run_runtime_smoke_checks() {

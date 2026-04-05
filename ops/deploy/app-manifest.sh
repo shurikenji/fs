@@ -62,7 +62,6 @@ app_manifest() {
       SHARED_NAME="proxy-gateway"
       RUNTIME_KIND="pm2-node-multi"
       PROCESS_NAME="proxy-operator"
-      OPTIONAL_PM2_APPS="admin-panel"
       ;;
     balance-checker)
       APP_ID="balance-checker"
@@ -81,4 +80,3 @@ app_manifest() {
   export RUNTIME_KIND PROCESS_NAME SYSTEMD_UNIT PM2_ENTRY PM2_INTERPRETER
   export PYTHON_REQUIREMENTS SMOKE_URLS OPTIONAL_PM2_APPS
 }
-

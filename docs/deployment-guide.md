@@ -49,9 +49,6 @@ Không dùng Docker ở giai đoạn này vì:
     proxy-gateway/
       proxy-operator/
         .env
-      admin-panel/
-        .env
-        data/
 ```
 
 ## 3. Tạo repo GitHub mới
@@ -136,10 +133,7 @@ python3 -m venv /srv/shupremium-stack/shared/shopbot/venv
 
 ```bash
 mkdir -p /srv/shupremium-stack/shared/proxy-gateway/proxy-operator
-mkdir -p /srv/shupremium-stack/shared/proxy-gateway/admin-panel/data
 cp /path/to/current-proxy-operator/.env /srv/shupremium-stack/shared/proxy-gateway/proxy-operator/.env
-cp /path/to/current-admin-panel/.env /srv/shupremium-stack/shared/proxy-gateway/admin-panel/.env
-cp -a /path/to/current-admin-panel/data/. /srv/shupremium-stack/shared/proxy-gateway/admin-panel/data/
 ```
 
 ## 6. Deploy theo app
@@ -178,7 +172,7 @@ bash ops/deploy/rollback-app.sh portal /srv/shupremium-stack/releases/20260405-1
 ## 8. Ghi chú runtime
 
 - `portal`, `platform-control`: chạy bằng `PM2`
-- `proxy-gateway`: `proxy-service` và `admin-panel` dùng PM2 ecosystem, `proxy-operator` là PM2 process đơn
+- `proxy-gateway`: `proxy-service` dùng PM2 ecosystem, `proxy-operator` là PM2 process đơn
 - `shopbot`: giữ `systemd` làm runtime chính vì app hiện đã có flow này, không ép PM2 chỉ để đồng bộ bề ngoài
 
 ## 9. Vì sao monorepo vẫn dễ trên 2 VPS
@@ -195,4 +189,3 @@ Monorepo chỉ là cách tổ chức code. Việc deploy vẫn tách theo app:
 - script deploy đồng nhất
 - rollback đồng nhất
 - không cần tarball thủ công
-

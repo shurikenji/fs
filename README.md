@@ -38,7 +38,7 @@ shupremium-stack/
 - `apps/portal`: public pricing, balance, keys, logs
 - `apps/platform-control`: control plane và admin shell
 - `apps/shopbot`: bot + admin panel của shopbot
-- `services/proxy-gateway`: proxy-service, proxy-operator, admin-panel legacy
+- `services/proxy-gateway`: proxy-service và proxy-operator
 - `services/balance-checker`: service legacy giữ riêng
 
 ## Triển khai trên 2 VPS
@@ -76,4 +76,3 @@ Layout production khuyến nghị nằm ở:
 ```
 
 Chi tiết vận hành xem thêm ở [docs/deployment-guide.md](docs/deployment-guide.md).
-

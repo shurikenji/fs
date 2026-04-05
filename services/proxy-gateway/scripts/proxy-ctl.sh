@@ -5,10 +5,9 @@
 # ========================================
 
 PROXY_DIR="$HOME/proxy-gateway"
-ADMIN_DIR="$PROXY_DIR/admin-panel"
+OPERATOR_DIR="$PROXY_DIR/proxy-operator"
 SERVICE_DIR="$PROXY_DIR/proxy-service"
 
-# Màu sắc
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -17,9 +16,9 @@ NC='\033[0m'
 
 print_header() {
     echo -e "${BLUE}"
-    echo "╔═══════════════════════════════════════════════════════════╗"
-    echo "║              PROXY GATEWAY CONTROL                        ║"
-    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo "============================================================"
+    echo "                 PROXY GATEWAY CONTROL"
+    echo "============================================================"
     echo -e "${NC}"
 }
 
@@ -30,36 +29,39 @@ case "$1" in
         pm2 status
         echo ""
         echo -e "${YELLOW}Nginx Status:${NC}"
-        sudo systemctl is-active nginx && echo -e "${GREEN}● nginx is running${NC}" || echo -e "${RED}● nginx is stopped${NC}"
+        sudo systemctl is-active nginx && echo -e "${GREEN}* nginx is running${NC}" || echo -e "${RED}* nginx is stopped${NC}"
         ;;
-    
+
     start)
-        echo "Starting all services..."
+        echo "Starting proxy runtime..."
         cd "$SERVICE_DIR" && pm2 start ecosystem.config.js 2>/dev/null
-        cd "$ADMIN_DIR" && pm2 start ecosystem.config.js 2>/dev/null
+        cd "$OPERATOR_DIR" && pm2 start src/server.js --name proxy-operator 2>/dev/null
         pm2 save
-        echo -e "${GREEN}✓ Services started${NC}"
+        echo -e "${GREEN}OK: Proxy runtime started${NC}"
         ;;
-    
+
     stop)
-        echo "Stopping all services..."
-        pm2 stop all
-        echo -e "${GREEN}✓ Services stopped${NC}"
+        echo "Stopping proxy runtime..."
+        pm2 stop proxy-operator 2>/dev/null || true
+        cd "$SERVICE_DIR" && pm2 stop ecosystem.config.js 2>/dev/null || true
+        echo -e "${GREEN}OK: Proxy runtime stopped${NC}"
         ;;
-    
+
     restart|r)
-        echo "Restarting all services..."
-        pm2 restart all
-        echo -e "${GREEN}✓ Services restarted${NC}"
+        echo "Restarting proxy runtime..."
+        pm2 restart proxy-operator 2>/dev/null || true
+        cd "$SERVICE_DIR" && pm2 reload ecosystem.config.js --update-env 2>/dev/null || pm2 restart ecosystem.config.js
+        echo -e "${GREEN}OK: Proxy runtime restarted${NC}"
         ;;
-    
+
     reload)
-        echo "Reloading configurations..."
+        echo "Reloading proxy runtime..."
         cd "$SERVICE_DIR" && pm2 reload ecosystem.config.js --update-env
+        pm2 restart proxy-operator --update-env 2>/dev/null || true
         sudo nginx -t && sudo nginx -s reload
-        echo -e "${GREEN}✓ Configurations reloaded${NC}"
+        echo -e "${GREEN}OK: Configurations reloaded${NC}"
         ;;
-    
+
     logs|l)
         if [ -n "$2" ]; then
             pm2 logs "$2" --lines 50
@@ -67,70 +69,67 @@ case "$1" in
             pm2 logs --lines 30
         fi
         ;;
-    
+
     nginx-test|nt)
         sudo nginx -t
         ;;
-    
+
     nginx-reload|nr)
         sudo nginx -t && sudo nginx -s reload
-        echo -e "${GREEN}✓ Nginx reloaded${NC}"
+        echo -e "${GREEN}OK: Nginx reloaded${NC}"
         ;;
-    
+
     ssl-status|ss)
         sudo certbot certificates
         ;;
-    
+
     ssl-renew|sr)
         sudo certbot renew
         sudo nginx -s reload
-        echo -e "${GREEN}✓ SSL renewed${NC}"
+        echo -e "${GREEN}OK: SSL renewed${NC}"
         ;;
-    
+
     ip-add|ip)
         "$PROXY_DIR/scripts/admin-ip-sync.sh" "$2"
         ;;
-    
+
     ip-list|ipl)
         "$PROXY_DIR/scripts/admin-ip-sync.sh" --list
         ;;
-    
+
     health|h)
         print_header
         echo -e "${YELLOW}Health Check:${NC}"
         echo ""
-        
-        # Admin Panel
-        status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:8080/auth/login 2>/dev/null)
-        if [ "$status" = "200" ]; then
-            echo -e "Admin Panel (localhost:8080): ${GREEN}✓ Online${NC}"
+
+        operator_status=$(pm2 jlist 2>/dev/null | jq -r '.[] | select(.name=="proxy-operator") | .pm2_env.status' 2>/dev/null)
+        if [ "$operator_status" = "online" ]; then
+            echo -e "Proxy Operator: ${GREEN}OK Online${NC}"
         else
-            echo -e "Admin Panel (localhost:8080): ${RED}✗ Offline (HTTP $status)${NC}"
+            echo -e "Proxy Operator: ${RED}FAIL ${operator_status:-missing}${NC}"
         fi
-        
-        # Proxy Services
+
         for port in $(seq 3001 3010); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:$port/health 2>/dev/null)
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:$port/_internal/health 2>/dev/null)
             if [ "$status" = "200" ]; then
-                echo -e "Proxy Service (localhost:$port): ${GREEN}✓ Online${NC}"
+                echo -e "Proxy Service (localhost:$port): ${GREEN}OK Online${NC}"
             elif [ "$status" = "000" ]; then
-                # Không có service trên port này
                 continue
             else
-                echo -e "Proxy Service (localhost:$port): ${RED}✗ HTTP $status${NC}"
+                echo -e "Proxy Service (localhost:$port): ${RED}FAIL HTTP $status${NC}"
             fi
         done
         ;;
-    
+
     *)
         print_header
         echo "Usage: proxy-ctl <command> [options]"
         echo ""
         echo -e "${YELLOW}Service Commands:${NC}"
         echo "  status, s          Show PM2 and Nginx status"
-        echo "  start              Start all services"
-        echo "  stop               Stop all services"
-        echo "  restart, r         Restart all services"
+        echo "  start              Start proxy-service and proxy-operator"
+        echo "  stop               Stop proxy-service and proxy-operator"
+        echo "  restart, r         Restart proxy-service and proxy-operator"
         echo "  reload             Reload configurations"
         echo "  logs, l [name]     View logs (optional: service name)"
         echo "  health, h          Health check all services"

@@ -70,7 +70,6 @@ sv1..sv2
 Trong repo proxy-gateway hiện có:
 proxy-service: runtime proxy thực tế
 proxy-operator: control runtime mới
-admin-panel: admin Node cũ, hiện đã dừng
 proxy-operator
 Vai trò: apply desired state xuống proxy runtime.
 Chạy trên ARM VPS :8091.
@@ -105,7 +104,7 @@ platform-control launch sang shopbot khi cần admin commerce
 Phần còn legacy/chuyển tiếp
 
 balance-checker cũ vẫn còn chạy trên VPS Oracle free-tier, chưa thay hoàn toàn.
-admin-panel cũ trong proxy-gateway/admin-panel vẫn còn code nhưng runtime đã dừng, không còn là admin chính.
+admin-panel cũ đã bị loại khỏi runtime và source tree, không còn là admin chính.
 Kiến trúc theo domain/runtime
 
 text
