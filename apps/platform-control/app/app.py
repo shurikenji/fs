@@ -128,6 +128,20 @@ def _issue_shopbot_launch_token() -> str:
     return _shopbot_serializer().dumps(payload)
 
 
+def _describe_proxy_endpoint_error(exc: Exception) -> str:
+    message = str(exc).strip()
+    lowered = message.lower()
+    if "proxy_endpoints.domain" in lowered or "unique constraint failed: proxy_endpoints.domain" in lowered:
+        return "Domain proxy da ton tai. Hay doi domain khac hoac sua proxy hien co."
+    if "proxy_endpoints.port" in lowered or "unique constraint failed: proxy_endpoints.port" in lowered:
+        return "Port noi bo da duoc su dung. Hay chon port khac."
+    if "foreign key constraint failed" in lowered:
+        return "Source ID khong hop le hoac khong ton tai."
+    if message:
+        return message
+    return exc.__class__.__name__
+
+
 async def _require_admin_post(request: Request) -> RedirectResponse | None:
     if not request.session.get("is_admin"):
         return _redirect("/control/login")
@@ -500,19 +514,23 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
         ip = _client_ip(request)
-        await upsert_proxy_endpoint(
-            endpoint_id.strip(),
-            source_id=source_id.strip(),
-            name=name.strip(),
-            domain=domain.strip().lower(),
-            target_host=target_host.strip(),
-            target_protocol=target_protocol.strip() or "https",
-            tls_skip_verify=1 if tls_skip_verify else 0,
-            port=port,
-            status=status.strip() or "active",
-        )
-        await create_activity_log("SAVE_PROXY", f"Luu proxy endpoint: {endpoint_id.strip()} ({domain.strip()})", ip)
-        request.session["flash_message"] = f"Đã lưu proxy endpoint {endpoint_id.strip()}."
+        try:
+            await upsert_proxy_endpoint(
+                endpoint_id.strip(),
+                source_id=source_id.strip(),
+                name=name.strip(),
+                domain=domain.strip().lower(),
+                target_host=target_host.strip(),
+                target_protocol=target_protocol.strip() or "https",
+                tls_skip_verify=1 if tls_skip_verify else 0,
+                port=port,
+                status=status.strip() or "active",
+            )
+            await create_activity_log("SAVE_PROXY", f"Luu proxy endpoint: {endpoint_id.strip()} ({domain.strip()})", ip)
+            request.session["flash_message"] = f"Đã lưu proxy endpoint {endpoint_id.strip()}."
+        except Exception as exc:
+            await create_activity_log("SAVE_PROXY_FAIL", f"Luu proxy that bai: {endpoint_id.strip()} - {exc}", ip)
+            request.session["flash_error"] = f"Luu proxy loi: {_describe_proxy_endpoint_error(exc)}"
         return _redirect("/control")
 
     @app.post("/control/proxy-endpoints/delete")
@@ -521,9 +539,13 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
         ip = _client_ip(request)
-        await delete_proxy_endpoint(endpoint_id)
-        await create_activity_log("DELETE_PROXY", f"Xoa proxy endpoint: {endpoint_id}", ip)
-        request.session["flash_message"] = f"Đã xóa proxy endpoint {endpoint_id}."
+        try:
+            await delete_proxy_endpoint(endpoint_id)
+            await create_activity_log("DELETE_PROXY", f"Xoa proxy endpoint: {endpoint_id}", ip)
+            request.session["flash_message"] = f"Đã xóa proxy endpoint {endpoint_id}."
+        except Exception as exc:
+            await create_activity_log("DELETE_PROXY_FAIL", f"Xoa proxy that bai: {endpoint_id} - {exc}", ip)
+            request.session["flash_error"] = f"Xoa proxy loi: {_describe_proxy_endpoint_error(exc)}"
         return _redirect("/control")
 
     @app.post("/control/proxy-endpoints/toggle")
