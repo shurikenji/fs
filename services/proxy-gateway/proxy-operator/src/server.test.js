@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
     buildNginxConfig,
+    classifyDesiredPm2Apps,
     getCertCandidateDirs,
     serializeError
 } = require('./server');
@@ -62,5 +63,21 @@ test('serializeError preserves operator step metadata', () => {
         error: 'nginx -t failed',
         step: 'nginx_test',
         details: { file: 'proxy-managed-sv3.conf' }
+    });
+});
+
+test('classifyDesiredPm2Apps separates existing, restarting, and missing entries', () => {
+    const result = classifyDesiredPm2Apps(
+        new Set(['proxy-gpt1', 'proxy-sv3', 'proxy-sv4']),
+        [
+            { name: 'proxy-gpt1', status: 'online' },
+            { name: 'proxy-sv3', status: 'stopped' }
+        ]
+    );
+
+    assert.deepEqual(result, {
+        existingNames: ['proxy-gpt1'],
+        restartNames: ['proxy-sv3'],
+        missingNames: ['proxy-sv4']
     });
 });
