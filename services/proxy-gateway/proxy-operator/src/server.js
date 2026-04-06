@@ -310,16 +310,24 @@ server {
     };
 }
 
-async function fetchPm2ProxyNames() {
+async function fetchPm2ProxyApps() {
     try {
         const raw = await execAsync('pm2 jlist', 15000);
         const items = JSON.parse(raw || '[]');
         return items
-            .map((item) => item && item.name)
-            .filter((name) => typeof name === 'string' && name.startsWith('proxy-') && name !== 'proxy-operator');
+            .map((item) => ({
+                name: item && item.name,
+                status: item?.pm2_env?.status || 'unknown'
+            }))
+            .filter((item) => typeof item.name === 'string' && item.name.startsWith('proxy-') && item.name !== 'proxy-operator');
     } catch (error) {
         return [];
     }
+}
+
+async function fetchPm2ProxyNames() {
+    const apps = await fetchPm2ProxyApps();
+    return apps.map((item) => item.name);
 }
 
 async function deleteStalePm2Apps(desiredNames) {
@@ -336,17 +344,48 @@ function sleep(ms) {
 }
 
 async function startMissingPm2Apps(desiredNames) {
-    const currentNames = new Set(await fetchPm2ProxyNames());
-    const missingNames = Array.from(desiredNames).filter((name) => !currentNames.has(name));
+    const currentApps = await fetchPm2ProxyApps();
+    const currentByName = new Map(currentApps.map((item) => [item.name, item.status]));
+    const restartableStatuses = new Set(['online', 'launching']);
+    const missingNames = [];
+    const restartNames = [];
+
+    for (const name of desiredNames) {
+        const status = currentByName.get(name);
+        if (!status) {
+            missingNames.push(name);
+            continue;
+        }
+        if (!restartableStatuses.has(status)) {
+            restartNames.push(name);
+        }
+    }
+
     if (missingNames.length === 0) {
-        return [];
+        for (const name of restartNames) {
+            await execAsync(`pm2 restart ${shellQuote(name)} --update-env`, 30000).catch(async () => {
+                await execAsync(
+                    `cd ${shellQuote(PROXY_SERVICE_PATH)} && pm2 start ecosystem.config.js --only ${shellQuote(name)} --update-env`,
+                    60000
+                );
+            });
+        }
+        return restartNames;
     }
 
     await execAsync(
         `cd ${shellQuote(PROXY_SERVICE_PATH)} && pm2 start ecosystem.config.js --only ${shellQuote(missingNames.join(','))} --update-env`,
         60000
     );
-    return missingNames;
+    for (const name of restartNames) {
+        await execAsync(`pm2 restart ${shellQuote(name)} --update-env`, 30000).catch(async () => {
+            await execAsync(
+                `cd ${shellQuote(PROXY_SERVICE_PATH)} && pm2 start ecosystem.config.js --only ${shellQuote(name)} --update-env`,
+                60000
+            );
+        });
+    }
+    return [...missingNames, ...restartNames];
 }
 
 function listManagedNginxFiles() {
@@ -580,7 +619,7 @@ async function applyRuntimeState(proxies, options = {}) {
 
         logStep('pm2_reload', 'start', { job_id: jobId, proxy_service_path: PROXY_SERVICE_PATH });
         await execAsync(
-            `cd ${shellQuote(PROXY_SERVICE_PATH)} && (pm2 reload ecosystem.config.js --update-env || pm2 start ecosystem.config.js)`,
+            `cd ${shellQuote(PROXY_SERVICE_PATH)} && (pm2 startOrReload ecosystem.config.js --update-env || pm2 reload ecosystem.config.js --update-env || pm2 start ecosystem.config.js)`,
             60000
         );
         const startedMissing = await startMissingPm2Apps(desiredPm2Names);
