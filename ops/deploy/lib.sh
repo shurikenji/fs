@@ -304,11 +304,9 @@ restart_proxy_gateway_pm2() {
   local cwd="$CURRENT_DIR/$APP_ID"
 
   require_cmd pm2
-  require_cmd npm
 
   (
     cd "$cwd/proxy-operator"
-    npm ci --omit=dev
     if pm2_process_exists "proxy-operator"; then
       pm2 restart proxy-operator --update-env
     else
@@ -318,7 +316,6 @@ restart_proxy_gateway_pm2() {
 
   (
     cd "$cwd/proxy-service"
-    npm ci --omit=dev
     if ! pm2 reload ecosystem.config.js --update-env >/dev/null 2>&1; then
       pm2 start ecosystem.config.js
     fi
