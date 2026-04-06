@@ -4,7 +4,8 @@
   "description": "Internal operator for proxy runtime, nginx, pm2, and wildcard SSL",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test": "node --test"
   },
   "dependencies": {
     "dotenv": "^16.4.1",

@@ -16,8 +16,18 @@ def _response_error_message(response: httpx.Response) -> str:
 
     if isinstance(payload, dict):
         detail = payload.get("error") or payload.get("detail") or payload.get("message")
+        step = payload.get("step")
+        details = payload.get("details")
         if detail:
-            return str(detail)
+            parts = [str(detail)]
+            if step:
+                parts.append(f"(step: {step})")
+            if details:
+                if isinstance(details, (dict, list)):
+                    parts.append(str(details))
+                else:
+                    parts.append(str(details))
+            return " ".join(parts)
 
     body = (response.text or "").strip()
     if body:

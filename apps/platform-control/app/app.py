@@ -7,6 +7,7 @@ import time
 from contextlib import asynccontextmanager
 from html import escape
 import secrets
+from typing import Any, Awaitable, Callable
 
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -39,7 +40,6 @@ from db.queries import (
     get_service_sources,
     get_source_stats,
     mark_deploy_job_finished,
-    toggle_proxy_status,
     upsert_portal_module,
     upsert_proxy_endpoint,
     upsert_service_source,
@@ -142,6 +142,98 @@ def _describe_proxy_endpoint_error(exc: Exception) -> str:
     return exc.__class__.__name__
 
 
+def _build_proxy_endpoint_fields(
+    *,
+    source_id: str | None,
+    name: str,
+    domain: str,
+    target_host: str,
+    target_protocol: str,
+    tls_skip_verify: bool,
+    port: int,
+    status: str,
+) -> dict[str, Any]:
+    return {
+        "source_id": source_id,
+        "name": name.strip(),
+        "domain": domain.strip().lower(),
+        "target_host": target_host.strip(),
+        "target_protocol": target_protocol.strip() or "https",
+        "tls_skip_verify": 1 if tls_skip_verify else 0,
+        "port": port,
+        "status": status.strip() or "active",
+    }
+
+
+def _proxy_endpoint_fields_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "source_id": snapshot.get("source_id"),
+        "name": snapshot.get("name"),
+        "domain": snapshot.get("domain"),
+        "target_host": snapshot.get("target_host"),
+        "target_protocol": snapshot.get("target_protocol") or "https",
+        "tls_skip_verify": int(snapshot.get("tls_skip_verify") or 0),
+        "port": snapshot.get("port"),
+        "status": snapshot.get("status") or "active",
+    }
+
+
+async def _get_proxy_endpoint_snapshot(endpoint_id: str) -> dict[str, Any] | None:
+    rows = await get_proxy_endpoints(active_only=False)
+    for row in rows:
+        if row.get("id") == endpoint_id:
+            return dict(row)
+    return None
+
+
+async def _restore_proxy_endpoint_snapshot(endpoint_id: str, snapshot: dict[str, Any] | None) -> None:
+    if snapshot is None:
+        await delete_proxy_endpoint(endpoint_id)
+        return
+    await upsert_proxy_endpoint(endpoint_id, **_proxy_endpoint_fields_from_snapshot(snapshot))
+
+
+async def _run_proxy_runtime_transaction(
+    *,
+    job_type: str,
+    request_payload: dict[str, Any],
+    mutate: Callable[[], Awaitable[None]],
+    rollback: Callable[[], Awaitable[None]],
+) -> dict[str, Any]:
+    await mutate()
+    active = await get_proxy_endpoints(active_only=True)
+    job_id = await create_deploy_job(job_type, "queued", "proxy-runtime", request_payload)
+    try:
+        result = await apply_proxy_state(active)
+    except Exception as exc:
+        rollback_error: Exception | None = None
+        try:
+            await rollback()
+        except Exception as inner_exc:  # pragma: no cover - defensive fallback
+            rollback_error = inner_exc
+        error_message = str(exc)
+        if rollback_error is not None:
+            error_message = f"{error_message} | rollback failed: {rollback_error}"
+        await mark_deploy_job_finished(job_id, "failed", error_message=error_message)
+        raise RuntimeError(error_message) from exc
+
+    await mark_deploy_job_finished(job_id, "success", response_payload=result)
+    return {"job_id": job_id, "result": result, "active_count": len(active)}
+
+
+async def _apply_current_proxy_state(*, job_type: str, request_payload: dict[str, Any]) -> dict[str, Any]:
+    active = await get_proxy_endpoints(active_only=True)
+    job_id = await create_deploy_job(job_type, "queued", "proxy-runtime", request_payload)
+    try:
+        result = await apply_proxy_state(active)
+    except Exception as exc:
+        await mark_deploy_job_finished(job_id, "failed", error_message=str(exc))
+        raise RuntimeError(str(exc)) from exc
+
+    await mark_deploy_job_finished(job_id, "success", response_payload=result)
+    return {"job_id": job_id, "result": result, "active_count": len(active)}
+
+
 async def _require_admin_post(request: Request) -> RedirectResponse | None:
     if not request.session.get("is_admin"):
         return _redirect("/control/login")
@@ -213,15 +305,8 @@ def create_app() -> FastAPI:
 
     @app.post("/api/internal/deploy/proxies/sync", dependencies=[Depends(require_control_plane_token)])
     async def internal_deploy_proxies_sync():
-        active = await get_proxy_endpoints(active_only=True)
-        job_id = await create_deploy_job("proxy_sync", "queued", "proxy-runtime", {"count": len(active)})
-        try:
-            result = await apply_proxy_state(active)
-            await mark_deploy_job_finished(job_id, "success", response_payload=result)
-            return {"job_id": job_id, "result": result}
-        except Exception as exc:
-            await mark_deploy_job_finished(job_id, "failed", error_message=str(exc))
-            raise
+        outcome = await _apply_current_proxy_state(job_type="proxy_sync", request_payload={"mode": "internal"})
+        return {"job_id": outcome["job_id"], "result": outcome["result"]}
 
     # ── Auth ─────────────────────────────────────────────────────
 
@@ -514,23 +599,37 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
         ip = _client_ip(request)
-        normalized_source_id = source_id.strip() or None
+        endpoint_id = endpoint_id.strip()
+        fields = _build_proxy_endpoint_fields(
+            source_id=source_id.strip() or None,
+            name=name,
+            domain=domain,
+            target_host=target_host,
+            target_protocol=target_protocol,
+            tls_skip_verify=bool(tls_skip_verify),
+            port=port,
+            status=status,
+        )
+        previous = await _get_proxy_endpoint_snapshot(endpoint_id)
         try:
-            await upsert_proxy_endpoint(
-                endpoint_id.strip(),
-                source_id=normalized_source_id,
-                name=name.strip(),
-                domain=domain.strip().lower(),
-                target_host=target_host.strip(),
-                target_protocol=target_protocol.strip() or "https",
-                tls_skip_verify=1 if tls_skip_verify else 0,
-                port=port,
-                status=status.strip() or "active",
+            outcome = await _run_proxy_runtime_transaction(
+                job_type="proxy_save_apply",
+                request_payload={"endpoint_id": endpoint_id, "status": fields["status"]},
+                mutate=lambda: upsert_proxy_endpoint(endpoint_id, **fields),
+                rollback=lambda: _restore_proxy_endpoint_snapshot(endpoint_id, previous),
             )
-            await create_activity_log("SAVE_PROXY", f"Luu proxy endpoint: {endpoint_id.strip()} ({domain.strip()})", ip)
+            await create_activity_log(
+                "SAVE_PROXY",
+                f"Luu proxy endpoint: {endpoint_id} ({fields['domain']}) va apply runtime thanh cong",
+                ip,
+            )
             request.session["flash_message"] = f"Đã lưu proxy endpoint {endpoint_id.strip()}."
+            request.session["flash_message"] = (
+                f"Da luu proxy endpoint {endpoint_id} va apply runtime thanh cong "
+                f"({outcome['active_count']} proxy dang active)."
+            )
         except Exception as exc:
-            await create_activity_log("SAVE_PROXY_FAIL", f"Luu proxy that bai: {endpoint_id.strip()} - {exc}", ip)
+            await create_activity_log("SAVE_PROXY_FAIL", f"Luu proxy that bai: {endpoint_id} - {exc}", ip)
             request.session["flash_error"] = f"Luu proxy loi: {_describe_proxy_endpoint_error(exc)}"
         return _redirect("/control")
 
@@ -540,10 +639,24 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
         ip = _client_ip(request)
+        endpoint_id = endpoint_id.strip()
+        previous = await _get_proxy_endpoint_snapshot(endpoint_id)
+        if previous is None:
+            request.session["flash_error"] = f"Xoa proxy loi: Proxy endpoint {endpoint_id} khong ton tai."
+            return _redirect("/control")
         try:
-            await delete_proxy_endpoint(endpoint_id)
-            await create_activity_log("DELETE_PROXY", f"Xoa proxy endpoint: {endpoint_id}", ip)
+            outcome = await _run_proxy_runtime_transaction(
+                job_type="proxy_delete_apply",
+                request_payload={"endpoint_id": endpoint_id},
+                mutate=lambda: delete_proxy_endpoint(endpoint_id),
+                rollback=lambda: _restore_proxy_endpoint_snapshot(endpoint_id, previous),
+            )
+            await create_activity_log("DELETE_PROXY", f"Xoa proxy endpoint: {endpoint_id} va apply runtime thanh cong", ip)
             request.session["flash_message"] = f"Đã xóa proxy endpoint {endpoint_id}."
+            request.session["flash_message"] = (
+                f"Da xoa proxy endpoint {endpoint_id} va apply runtime thanh cong "
+                f"({outcome['active_count']} proxy dang active)."
+            )
         except Exception as exc:
             await create_activity_log("DELETE_PROXY_FAIL", f"Xoa proxy that bai: {endpoint_id} - {exc}", ip)
             request.session["flash_error"] = f"Xoa proxy loi: {_describe_proxy_endpoint_error(exc)}"
@@ -555,6 +668,32 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
         ip = _client_ip(request)
+        endpoint_id = endpoint_id.strip()
+        previous = await _get_proxy_endpoint_snapshot(endpoint_id)
+        if previous is None:
+            request.session["flash_error"] = f"Toggle proxy loi: Proxy endpoint {endpoint_id} khong ton tai."
+            return _redirect("/control")
+
+        next_status = "inactive" if previous.get("status") == "active" else "active"
+        fields = _proxy_endpoint_fields_from_snapshot(previous)
+        fields["status"] = next_status
+        try:
+            outcome = await _run_proxy_runtime_transaction(
+                job_type="proxy_toggle_apply",
+                request_payload={"endpoint_id": endpoint_id, "status": next_status},
+                mutate=lambda: upsert_proxy_endpoint(endpoint_id, **fields),
+                rollback=lambda: _restore_proxy_endpoint_snapshot(endpoint_id, previous),
+            )
+            action = "Bat" if next_status == "active" else "Tat"
+            await create_activity_log("TOGGLE_PROXY", f"{action} proxy: {endpoint_id} va apply runtime thanh cong", ip)
+            request.session["flash_message"] = (
+                f"Da {action.lower()} proxy {endpoint_id} va apply runtime thanh cong "
+                f"({outcome['active_count']} proxy dang active)."
+            )
+        except Exception as exc:
+            await create_activity_log("TOGGLE_PROXY_FAIL", f"Toggle proxy that bai: {endpoint_id} - {exc}", ip)
+            request.session["flash_error"] = f"Toggle proxy loi: {_describe_proxy_endpoint_error(exc)}"
+        return _redirect("/control")
         try:
             new_status = await toggle_proxy_status(endpoint_id)
             action = "Bat" if new_status == "active" else "Tat"
@@ -617,6 +756,20 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
         ip = _client_ip(request)
+        try:
+            outcome = await _apply_current_proxy_state(job_type="proxy_sync", request_payload={"mode": "manual"})
+            await create_activity_log(
+                "PROXY_SYNC",
+                f"Sync {outcome['active_count']} proxy xuong runtime - thanh cong",
+                ip,
+            )
+            request.session["flash_message"] = (
+                f"Da dong bo {outcome['active_count']} proxy xuong runtime thanh cong."
+            )
+        except Exception as exc:
+            await create_activity_log("PROXY_SYNC_FAIL", f"Sync proxy that bai: {exc}", ip)
+            request.session["flash_error"] = f"Proxy sync loi: {_describe_proxy_endpoint_error(exc)}"
+        return _redirect("/control")
         active = await get_proxy_endpoints(active_only=True)
         job_id = await create_deploy_job("proxy_sync", "queued", "proxy-runtime", {"count": len(active)})
         try:

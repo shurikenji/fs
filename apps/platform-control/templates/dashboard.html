@@ -27,8 +27,8 @@
                             <input class="control" name="name" x-model="pf.name" placeholder="GPT1" required>
                         </div>
                         <div>
-                            <label class="field-label">Liên kết nguồn (Source ID)</label>
-                            <input class="control" name="source_id" x-model="pf.source_id" placeholder="gpt1">
+                            <label class="field-label">Liên kết nguồn (Source ID, tùy chọn)</label>
+                            <input class="control" name="source_id" x-model="pf.source_id" placeholder="Bo trong neu proxy khong can gan voi 1 source cu the">
                         </div>
                     </div>
                     <div class="modal-grid-3">
@@ -204,7 +204,14 @@
                 <span class="tag is-warm">{{ operator_status.status }}</span>
                 {% endif %}
             </div>
-            <p class="metric-copy">Agent quản lý proxy runtime</p>
+            <p class="metric-copy">
+                Agent quan ly proxy runtime.
+                {% if operator_status.wildcard_cert and operator_status.wildcard_cert.available %}
+                Wildcard SSL san sang.
+                {% else %}
+                Wildcard SSL chua kha dung.
+                {% endif %}
+            </p>
         </article>
     </section>
 
@@ -266,6 +273,10 @@
                     </button>
                 </form>
             </div>
+            <p class="panel-copy" style="margin:0;">
+                Luu, sua, xoa va bat/tat proxy se tu apply runtime ngay. Nut "Dong bo Proxy" chi dung de reconcile/retry thu cong.
+                Nut "Cap Wildcard SSL" chi dung de ensure wildcard cert neu operator chua thay cert kha dung.
+            </p>
         </div>
     </section>
 
@@ -275,7 +286,7 @@
             <div class="panel-heading">
                 <div>
                     <h2 class="panel-title">Proxy Servers</h2>
-                    <p class="panel-copy">Mỗi proxy là 1 domain chuyển tiếp tới 1 API upstream. Thay đổi cần bấm "Đồng bộ Proxy" để áp dụng.</p>
+                    <p class="panel-copy">Moi proxy la 1 domain chuyen tiep toi 1 API upstream. Luu thay doi se tu apply runtime va rollback neu runtime fail.</p>
                 </div>
                 <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddProxy()">+ Thêm Proxy</button>
             </div>
@@ -399,7 +410,7 @@
     <section>
         <article class="shell-table">
             <div class="panel-heading">
-                <div><h2 class="panel-title">Lịch sử thao tác</h2><p class="panel-copy">Log mỗi lần bấm "Đồng bộ Proxy" hoặc "Cấp Wildcard SSL".</p></div>
+                <div><h2 class="panel-title">Lịch sử thao tác</h2><p class="panel-copy">Log cac lan auto-apply proxy, reconcile thu cong/thiet bai va wildcard SSL.</p></div>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
@@ -408,7 +419,21 @@
                         {% for item in deploy_jobs %}
                         <tr>
                             <td>{{ item.id }}</td>
-                            <td class="code-text">{% if item.job_type == 'proxy_sync' %}Đồng bộ Proxy{% elif item.job_type == 'wildcard_cert' %}Wildcard SSL{% else %}{{ item.job_type }}{% endif %}</td>
+                            <td class="code-text">
+                                {% if item.job_type == 'proxy_sync' %}
+                                Đồng bộ Proxy
+                                {% elif item.job_type == 'wildcard_cert' %}
+                                Wildcard SSL
+                                {% elif item.job_type == 'proxy_save_apply' %}
+                                Luu proxy + apply
+                                {% elif item.job_type == 'proxy_delete_apply' %}
+                                Xoa proxy + apply
+                                {% elif item.job_type == 'proxy_toggle_apply' %}
+                                Toggle proxy + apply
+                                {% else %}
+                                {{ item.job_type }}
+                                {% endif %}
+                            </td>
                             <td>{% if item.status == "success" %}<span class="tag is-accent">Thành công</span>{% elif item.status == "failed" %}<span class="tag is-warm">Thất bại</span>{% else %}<span class="tag">{{ item.status }}</span>{% endif %}{% if item.error_message %}<span style="color:var(--danger); font-size:12px; margin-left:8px;">{{ item.error_message }}</span>{% endif %}</td>
                             <td style="color:var(--text-tertiary); font-size:13px;">{{ item.updated_at }}</td>
                         </tr>
