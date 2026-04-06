@@ -33,4 +33,4 @@ if ! restart_app_runtime || ! run_runtime_smoke_checks; then
 fi
 
 log "Deploy portal thành công: $RELEASE_DIR"
-
+cleanup_old_releases 5

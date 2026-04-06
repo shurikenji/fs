@@ -133,6 +133,36 @@ switch_current_link() {
   ln -sfn "$validated_release" "$CURRENT_DIR/$APP_ID"
 }
 
+cleanup_old_releases() {
+  local keep="${1:-5}"
+  local current_release
+  current_release="$(current_target || true)"
+  local app_releases
+  mapfile -t app_releases < <(
+    find "$RELEASES_DIR" -mindepth 2 -maxdepth 2 -type d -name "$APP_ID" | sort -r
+  )
+  local count=0
+  for dir in "${app_releases[@]}"; do
+    local resolved
+    resolved="$(cd "$dir" && pwd -P)"
+    count=$((count + 1))
+    if [[ $count -gt $keep && "$resolved" != "$current_release" ]]; then
+      local parent
+      parent="$(dirname "$dir")"
+      # Only remove the timestamp dir if it has no other app folders left
+      local sibling_count
+      sibling_count="$(find "$parent" -mindepth 1 -maxdepth 1 -type d | wc -l)"
+      if [[ "$sibling_count" -le 1 ]]; then
+        log "Xoá release cũ: $parent"
+        rm -rf "$parent"
+      else
+        log "Xoá app release cũ: $dir"
+        rm -rf "$dir"
+      fi
+    fi
+  done
+}
+
 link_shared_file() {
   local shared_file="$1"
   local release_file="$2"
