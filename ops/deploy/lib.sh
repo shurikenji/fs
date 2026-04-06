@@ -188,9 +188,26 @@ prepare_proxy_gateway_release() {
   local release_dir="$1"
   local shared_root="$SHARED_DIR/$SHARED_NAME"
 
+  require_cmd npm
+
   mkdir -p "$shared_root/proxy-operator"
 
   link_shared_file "$shared_root/proxy-operator/.env" "$release_dir/proxy-operator/.env" true
+
+  # Install Node.js dependencies for proxy-operator
+  if [[ -f "$release_dir/proxy-operator/package.json" ]]; then
+    log "Installing proxy-operator dependencies"
+    ( cd "$release_dir/proxy-operator" && npm ci --omit=dev )
+  fi
+
+  # Install Node.js dependencies for proxy-service
+  if [[ -f "$release_dir/proxy-service/package.json" ]]; then
+    log "Installing proxy-service dependencies"
+    ( cd "$release_dir/proxy-service" && npm ci --omit=dev )
+  fi
+
+  # Ensure logs directory exists for proxy-service
+  mkdir -p "$release_dir/proxy-service/logs"
 }
 
 pm2_process_exists() {
