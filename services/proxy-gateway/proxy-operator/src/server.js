@@ -18,10 +18,39 @@ const ECOSYSTEM_PATH = path.join(PROXY_SERVICE_PATH, 'ecosystem.config.js');
 const NGINX_SITES_AVAILABLE = process.env.NGINX_SITES_AVAILABLE || '/etc/nginx/sites-available';
 const NGINX_SITES_ENABLED = process.env.NGINX_SITES_ENABLED || '/etc/nginx/sites-enabled';
 const BACKUP_ROOT = process.env.OPERATOR_BACKUP_ROOT || path.join(__dirname, '../runtime/backups');
+const JOB_LOG_DIR = process.env.OPERATOR_JOB_LOG_DIR || path.join(__dirname, '../runtime/jobs');
+const JOB_LOG_MAX = parseInt(process.env.OPERATOR_JOB_LOG_MAX || '50', 10);
 const MANAGED_PREFIX = 'proxy-managed-';
 const FALLBACK_CERT_NAMES = ['proxy-gateway', 'shupremium-wildcard', CERT_NAME];
 
 let lastApplyStatus = null;
+
+function persistJobStatus(status) {
+    lastApplyStatus = status;
+    try {
+        fs.mkdirSync(JOB_LOG_DIR, { recursive: true });
+        const filePath = path.join(JOB_LOG_DIR, `${status.job_id}.json`);
+        fs.writeFileSync(filePath, JSON.stringify(status, null, 2));
+        // Cleanup old job logs
+        const files = fs.readdirSync(JOB_LOG_DIR).filter((f) => f.endsWith('.json')).sort().reverse();
+        for (const old of files.slice(JOB_LOG_MAX)) {
+            try { fs.unlinkSync(path.join(JOB_LOG_DIR, old)); } catch { }
+        }
+    } catch (err) {
+        console.error('[proxy-operator] Failed to persist job status:', err.message);
+    }
+}
+
+function loadLastJobStatus() {
+    try {
+        if (!fs.existsSync(JOB_LOG_DIR)) return;
+        const files = fs.readdirSync(JOB_LOG_DIR).filter((f) => f.endsWith('.json')).sort().reverse();
+        if (files.length === 0) return;
+        lastApplyStatus = JSON.parse(fs.readFileSync(path.join(JOB_LOG_DIR, files[0]), 'utf8'));
+    } catch (err) {
+        console.error('[proxy-operator] Failed to load job history:', err.message);
+    }
+}
 
 function requireToken(req, res, next) {
     if (req.headers['x-operator-token'] !== TOKEN) {
@@ -361,7 +390,7 @@ async function deleteStalePm2Apps(desiredNames) {
     const currentNames = await fetchPm2ProxyNames();
     for (const name of currentNames) {
         if (!desiredNames.has(name)) {
-            await execAsync(`pm2 delete ${shellQuote(name)}`, 30000).catch(() => {});
+            await execAsync(`pm2 delete ${shellQuote(name)}`, 30000).catch(() => { });
         }
     }
 }
@@ -382,7 +411,7 @@ async function syncDesiredPm2Apps(desiredNames) {
     }
 
     for (const name of [...restartNames, ...missingNames]) {
-        await execAsync(`pm2 delete ${shellQuote(name)}`, 30000).catch(() => {});
+        await execAsync(`pm2 delete ${shellQuote(name)}`, 30000).catch(() => { });
         await execAsync(
             `cd ${shellQuote(PROXY_SERVICE_PATH)} && pm2 start ecosystem.config.js --only ${shellQuote(name)} --update-env`,
             60000
@@ -439,13 +468,13 @@ async function writeManagedFiles(proxies, certState) {
         const symlink = path.join(NGINX_SITES_ENABLED, config.filename);
         await execAsync(`sudo mv ${shellQuote(tempPath)} ${shellQuote(destination)}`);
         await execAsync(`sudo chmod 644 ${shellQuote(destination)}`);
-        await execAsync(`sudo ln -sf ${shellQuote(destination)} ${shellQuote(symlink)}`).catch(() => {});
+        await execAsync(`sudo ln -sf ${shellQuote(destination)} ${shellQuote(symlink)}`).catch(() => { });
     }
 
     for (const stale of listManagedNginxFiles()) {
         if (!desiredFilenames.has(stale)) {
-            await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_ENABLED, stale))}`).catch(() => {});
-            await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_AVAILABLE, stale))}`).catch(() => {});
+            await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_ENABLED, stale))}`).catch(() => { });
+            await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_AVAILABLE, stale))}`).catch(() => { });
         }
     }
 }
@@ -470,15 +499,15 @@ async function restoreState(state) {
         const destination = path.join(NGINX_SITES_AVAILABLE, filename);
         const symlink = path.join(NGINX_SITES_ENABLED, filename);
         fs.writeFileSync(tempPath, content);
-        await execAsync(`sudo mv ${shellQuote(tempPath)} ${shellQuote(destination)}`).catch(() => {});
-        await execAsync(`sudo chmod 644 ${shellQuote(destination)}`).catch(() => {});
-        await execAsync(`sudo ln -sf ${shellQuote(destination)} ${shellQuote(symlink)}`).catch(() => {});
+        await execAsync(`sudo mv ${shellQuote(tempPath)} ${shellQuote(destination)}`).catch(() => { });
+        await execAsync(`sudo chmod 644 ${shellQuote(destination)}`).catch(() => { });
+        await execAsync(`sudo ln -sf ${shellQuote(destination)} ${shellQuote(symlink)}`).catch(() => { });
         existing.delete(filename);
     }
 
     for (const stale of existing) {
-        await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_ENABLED, stale))}`).catch(() => {});
-        await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_AVAILABLE, stale))}`).catch(() => {});
+        await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_ENABLED, stale))}`).catch(() => { });
+        await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_AVAILABLE, stale))}`).catch(() => { });
     }
 
     await reloadRuntime();
@@ -586,12 +615,12 @@ async function applyRuntimeState(proxies, options = {}) {
     const snapshot = await captureState();
     persistBackup(snapshot, jobId);
 
-    lastApplyStatus = {
+    persistJobStatus({
         status: 'running',
         step: 'validate',
         job_id: jobId,
         updated_at: new Date().toISOString()
-    };
+    });
 
     try {
         logStep('validate', 'start', { job_id: jobId, proxy_count: proxies.length });
@@ -643,12 +672,12 @@ async function applyRuntimeState(proxies, options = {}) {
         const health = await probeHealth(proxies);
         logStep('health_probe', 'ok', { job_id: jobId, proxy_count: health.length });
 
-        lastApplyStatus = {
+        persistJobStatus({
             status: 'success',
             step: 'health_probe',
             job_id: jobId,
             updated_at: new Date().toISOString()
-        };
+        });
 
         return {
             ok: true,
@@ -675,14 +704,14 @@ async function applyRuntimeState(proxies, options = {}) {
         }
 
         stepError.details = Object.keys(details).length > 0 ? details : null;
-        lastApplyStatus = {
+        persistJobStatus({
             status: 'failed',
             step: stepError.step,
             job_id: jobId,
             error: stepError.message,
             details: stepError.details,
             updated_at: new Date().toISOString()
-        };
+        });
         throw stepError;
     }
 }
@@ -734,6 +763,21 @@ app.get('/health', requireToken, async (req, res) => {
     });
 });
 
+app.get('/api/runtime/jobs', requireToken, (req, res) => {
+    try {
+        if (!fs.existsSync(JOB_LOG_DIR)) return res.json([]);
+        const limit = Math.min(parseInt(req.query.limit || '20', 10), JOB_LOG_MAX);
+        const files = fs.readdirSync(JOB_LOG_DIR).filter((f) => f.endsWith('.json')).sort().reverse().slice(0, limit);
+        const jobs = files.map((f) => {
+            try { return JSON.parse(fs.readFileSync(path.join(JOB_LOG_DIR, f), 'utf8')); }
+            catch { return null; }
+        }).filter(Boolean);
+        res.json(jobs);
+    } catch (error) {
+        res.status(500).json(serializeError(makeStepError('list_jobs', error)));
+    }
+});
+
 app.post('/api/runtime/apply', requireToken, async (req, res) => {
     try {
         const proxies = Array.isArray(req.body.proxies) ? req.body.proxies : [];
@@ -764,6 +808,7 @@ app.post('/api/runtime/restart/:name', requireToken, async (req, res) => {
 });
 
 if (require.main === module) {
+    loadLastJobStatus();
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`[proxy-operator] listening on :${PORT}`);
     });
