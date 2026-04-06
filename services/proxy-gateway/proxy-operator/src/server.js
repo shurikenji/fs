@@ -331,6 +331,24 @@ async function deleteStalePm2Apps(desiredNames) {
     }
 }
 
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function startMissingPm2Apps(desiredNames) {
+    const currentNames = new Set(await fetchPm2ProxyNames());
+    const missingNames = Array.from(desiredNames).filter((name) => !currentNames.has(name));
+    if (missingNames.length === 0) {
+        return [];
+    }
+
+    await execAsync(
+        `cd ${shellQuote(PROXY_SERVICE_PATH)} && pm2 start ecosystem.config.js --only ${shellQuote(missingNames.join(','))} --update-env`,
+        60000
+    );
+    return missingNames;
+}
+
 function listManagedNginxFiles() {
     if (!fs.existsSync(NGINX_SITES_AVAILABLE)) {
         return [];
@@ -439,48 +457,73 @@ async function preflightRuntime(proxies) {
     };
 }
 
-async function probeHealth(proxies) {
+async function probeHealth(proxies, options = {}) {
+    const attempts = options.attempts || 15;
+    const retryDelayMs = options.retryDelayMs || 1000;
+    const requestTimeoutMs = options.requestTimeoutMs || 2000;
     const results = [];
     for (const proxy of proxies) {
-        let response;
-        try {
-            response = await fetch(`http://127.0.0.1:${proxy.port}/_internal/health`, {
-                signal: AbortSignal.timeout(5000)
-            });
-        } catch (error) {
-            throw makeStepError('health_probe', error, {
-                proxy_id: proxy.id,
-                domain: proxy.domain,
-                port: proxy.port
-            });
-        }
-
-        if (!response.ok) {
-            throw makeStepError(
-                'health_probe',
-                new Error(`Health probe failed for ${proxy.id} on port ${proxy.port}`),
-                {
+        let lastError = null;
+        for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            let response;
+            try {
+                response = await fetch(`http://127.0.0.1:${proxy.port}/_internal/health`, {
+                    signal: AbortSignal.timeout(requestTimeoutMs)
+                });
+            } catch (error) {
+                lastError = makeStepError('health_probe', error, {
                     proxy_id: proxy.id,
                     domain: proxy.domain,
                     port: proxy.port,
-                    status_code: response.status
+                    attempt
+                });
+                if (attempt < attempts) {
+                    await sleep(retryDelayMs);
+                    continue;
                 }
-            );
+                throw lastError;
+            }
+
+            if (!response.ok) {
+                lastError = makeStepError(
+                    'health_probe',
+                    new Error(`Health probe failed for ${proxy.id} on port ${proxy.port}`),
+                    {
+                        proxy_id: proxy.id,
+                        domain: proxy.domain,
+                        port: proxy.port,
+                        status_code: response.status,
+                        attempt
+                    }
+                );
+                if (attempt < attempts) {
+                    await sleep(retryDelayMs);
+                    continue;
+                }
+                throw lastError;
+            }
+
+            let body = null;
+            try {
+                body = await response.json();
+            } catch (error) {
+                body = { ok: true };
+            }
+
+            results.push({
+                id: proxy.id,
+                domain: proxy.domain,
+                port: proxy.port,
+                attempts: attempt,
+                health: body
+            });
+            lastError = null;
+            break;
         }
 
-        let body = null;
-        try {
-            body = await response.json();
-        } catch (error) {
-            body = { ok: true };
+        if (lastError) {
+            throw lastError;
         }
-
-        results.push({
-            id: proxy.id,
-            domain: proxy.domain,
-            port: proxy.port,
-            health: body
-        });
     }
     return results;
 }
@@ -540,8 +583,13 @@ async function applyRuntimeState(proxies, options = {}) {
             `cd ${shellQuote(PROXY_SERVICE_PATH)} && (pm2 reload ecosystem.config.js --update-env || pm2 start ecosystem.config.js)`,
             60000
         );
+        const startedMissing = await startMissingPm2Apps(desiredPm2Names);
         await deleteStalePm2Apps(desiredPm2Names);
-        logStep('pm2_reload', 'ok', { job_id: jobId, desired_pm2_names: Array.from(desiredPm2Names) });
+        logStep('pm2_reload', 'ok', {
+            job_id: jobId,
+            desired_pm2_names: Array.from(desiredPm2Names),
+            started_missing: startedMissing
+        });
 
         logStep('health_probe', 'start', { job_id: jobId });
         const health = await probeHealth(proxies);
