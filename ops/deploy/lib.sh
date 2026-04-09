@@ -24,6 +24,90 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"
 }
 
+now_ms() {
+  local value
+  value="$(date +%s%3N 2>/dev/null || true)"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo "$value"
+    return 0
+  fi
+
+  require_cmd python3
+  python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+}
+
+duration_since() {
+  local started_at="${1:-0}"
+  local current_ms
+  current_ms="$(now_ms)"
+  echo $((current_ms - started_at))
+}
+
+prepare_audit_log() {
+  mkdir -p "$SHARED_DIR/_ops"
+  DEPLOY_AUDIT_LOG="$SHARED_DIR/_ops/deploy-audit.jsonl"
+  touch "$DEPLOY_AUDIT_LOG"
+}
+
+set_deploy_context() {
+  local host_role="$1"
+  local git_ref="${2:-}"
+  local release_dir="${3:-}"
+  local previous_release="${4:-}"
+
+  prepare_audit_log
+
+  DEPLOY_HOST_ROLE="$host_role"
+  DEPLOY_GIT_REF="$git_ref"
+  DEPLOY_RELEASE_DIR="$release_dir"
+  DEPLOY_PREVIOUS_RELEASE="$previous_release"
+}
+
+append_deploy_audit_record() {
+  local phase="$1"
+  local status="$2"
+  local duration_ms="${3:-0}"
+  local message="${4:-}"
+
+  require_cmd python3
+  DEPLOY_RECORD_PHASE="$phase" \
+  DEPLOY_RECORD_STATUS="$status" \
+  DEPLOY_RECORD_DURATION_MS="$duration_ms" \
+  DEPLOY_RECORD_MESSAGE="$message" \
+  DEPLOY_RECORD_APP="$APP_ID" \
+  DEPLOY_RECORD_HOST_ROLE="${DEPLOY_HOST_ROLE:-$HOST_ROLE}" \
+  DEPLOY_RECORD_RUNTIME_KIND="$RUNTIME_KIND" \
+  DEPLOY_RECORD_GIT_REF="${DEPLOY_GIT_REF:-}" \
+  DEPLOY_RECORD_RELEASE_DIR="${DEPLOY_RELEASE_DIR:-}" \
+  DEPLOY_RECORD_PREVIOUS_RELEASE="${DEPLOY_PREVIOUS_RELEASE:-}" \
+  python3 - <<'PY' >>"$DEPLOY_AUDIT_LOG"
+import datetime
+import json
+import os
+import sys
+
+record = {
+    "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z"),
+    "app": os.environ.get("DEPLOY_RECORD_APP", ""),
+    "host_role": os.environ.get("DEPLOY_RECORD_HOST_ROLE", ""),
+    "runtime_kind": os.environ.get("DEPLOY_RECORD_RUNTIME_KIND", ""),
+    "git_ref": os.environ.get("DEPLOY_RECORD_GIT_REF", ""),
+    "release_dir": os.environ.get("DEPLOY_RECORD_RELEASE_DIR", ""),
+    "previous_release": os.environ.get("DEPLOY_RECORD_PREVIOUS_RELEASE", ""),
+    "phase": os.environ.get("DEPLOY_RECORD_PHASE", ""),
+    "status": os.environ.get("DEPLOY_RECORD_STATUS", ""),
+    "duration_ms": int(os.environ.get("DEPLOY_RECORD_DURATION_MS", "0") or "0"),
+    "message": os.environ.get("DEPLOY_RECORD_MESSAGE", ""),
+}
+
+json.dump(record, sys.stdout, ensure_ascii=True)
+sys.stdout.write("\n")
+PY
+}
+
 canonical_dir() {
   local dir="$1"
   [[ -d "$dir" ]] || fail "Directory does not exist: $dir"
@@ -64,6 +148,7 @@ ensure_host_role() {
 prepare_stack_dirs() {
   mkdir -p "$REPO_DIR" "$RELEASES_DIR" "$CURRENT_DIR" "$SHARED_DIR"
   mkdir -p "$SHARED_DIR/$SHARED_NAME"
+  mkdir -p "$SHARED_DIR/_ops"
 }
 
 ensure_repo() {
@@ -240,6 +325,112 @@ prepare_proxy_gateway_release() {
   mkdir -p "$release_dir/proxy-service/logs"
 }
 
+validate_python_release() {
+  local release_dir="$1"
+  local python_bin="$release_dir/.venv/bin/python"
+
+  require_cmd python3
+  [[ -x "$python_bin" ]] || fail "Missing Python runtime for validation: $python_bin"
+
+  "$python_bin" -m pip check
+
+  case "$APP_ID" in
+    portal|platform-control)
+      (
+        cd "$release_dir"
+        PYTHONPATH="$release_dir" "$python_bin" - <<'PY'
+from dotenv import load_dotenv
+
+load_dotenv(".env")
+
+from app.app import create_app
+
+application = create_app()
+assert application is not None
+PY
+      )
+      ;;
+    shopbot)
+      (
+        cd "$release_dir"
+        PYTHONPATH="$release_dir" "$python_bin" - <<'PY'
+from dotenv import load_dotenv
+
+load_dotenv(".env")
+
+import bot.main  # noqa: F401
+from admin.app import create_admin_app
+
+application = create_admin_app()
+assert application is not None
+PY
+      )
+      ;;
+    *)
+      fail "Unsupported Python app validation for: $APP_ID"
+      ;;
+  esac
+}
+
+validate_node_package_dir() {
+  local package_dir="$1"
+  local syntax_target="$2"
+  shift 2
+  local packages=("$@")
+
+  require_cmd node
+  require_cmd npm
+
+  [[ -f "$package_dir/package.json" ]] || fail "Missing package.json for validation: $package_dir"
+
+  (
+    cd "$package_dir"
+    npm ls --omit=dev --depth=0
+    node --check "$syntax_target"
+    node - "${packages[@]}" <<'NODE'
+const packages = process.argv.slice(2);
+for (const pkg of packages) {
+  require.resolve(pkg);
+}
+NODE
+  )
+}
+
+validate_proxy_gateway_release() {
+  local release_dir="$1"
+
+  validate_node_package_dir \
+    "$release_dir/proxy-operator" \
+    "src/server.js" \
+    dotenv \
+    express
+
+  validate_node_package_dir \
+    "$release_dir/proxy-service" \
+    "src/index.js" \
+    fastify \
+    @fastify/http-proxy \
+    undici \
+    pino \
+    pino-pretty
+}
+
+validate_release() {
+  local release_dir="$1"
+
+  case "$RUNTIME_KIND" in
+    pm2-python|systemd-python)
+      validate_python_release "$release_dir"
+      ;;
+    pm2-node-multi)
+      validate_proxy_gateway_release "$release_dir"
+      ;;
+    *)
+      fail "Unsupported runtime kind for validation: $RUNTIME_KIND"
+      ;;
+  esac
+}
+
 pm2_process_exists() {
   local name="$1"
   pm2 describe "$name" >/dev/null 2>&1
@@ -329,6 +520,7 @@ run_http_smoke_checks() {
   local status
   local attempt
 
+  require_cmd curl
   [[ -n "${SMOKE_URLS:-}" ]] || return 0
 
   while IFS='|' read -r url accepted; do
@@ -362,9 +554,9 @@ run_proxy_gateway_smoke_checks() {
   require_cmd node
 
   ensure_pm2_process_online "proxy-operator"
+  [[ -f "$service_cfg" ]] || fail "Missing proxy-service ecosystem config: $service_cfg"
 
-  if [[ -f "$service_cfg" ]]; then
-    mapfile -t proxy_apps < <(
+  mapfile -t proxy_apps < <(
       node -e '
 const cfg = require(process.argv[1]);
 for (const app of (cfg.apps || [])) {
@@ -375,25 +567,24 @@ for (const app of (cfg.apps || [])) {
 ' "$service_cfg"
     )
 
-    for entry in "${proxy_apps[@]}"; do
-      IFS='|' read -r name port <<<"$entry"
-      [[ -n "$name" ]] || continue
-      ensure_pm2_process_online "$name"
-      [[ -n "$port" ]] || fail "Missing PORT for proxy service app: $name"
-      status=""
-      for attempt in {1..15}; do
-        status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/_internal/health" || true)"
-        case ",200," in
-          *",$status,"*) break ;;
-        esac
-        sleep 1
-      done
+  for entry in "${proxy_apps[@]}"; do
+    IFS='|' read -r name port <<<"$entry"
+    [[ -n "$name" ]] || continue
+    ensure_pm2_process_online "$name"
+    [[ -n "$port" ]] || fail "Missing PORT for proxy service app: $name"
+    status=""
+    for attempt in {1..15}; do
+      status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/_internal/health" || true)"
       case ",200," in
-        *",$status,"*) log "Smoke OK: proxy $name -> $status" ;;
-        *) fail "Smoke FAIL: proxy $name -> $status (expected 200)" ;;
+        *",$status,"*) break ;;
       esac
+      sleep 1
     done
-  fi
+    case ",200," in
+      *",$status,"*) log "Smoke OK: proxy $name -> $status" ;;
+      *) fail "Smoke FAIL: proxy $name -> $status (expected 200)" ;;
+    esac
+  done
 
 }
 
@@ -428,4 +619,100 @@ restart_app_runtime() {
       fail "Unsupported runtime kind: $RUNTIME_KIND"
       ;;
   esac
+}
+
+rollback_to_release() {
+  local target_release="$1"
+  local reason="${2:-rollback requested}"
+  local rollback_started
+  local rollback_duration
+
+  [[ -n "$target_release" ]] || return 1
+  rollback_started="$(now_ms)"
+  append_deploy_audit_record "rollback" "start" 0 "$reason"
+
+  if switch_current_link "$target_release" && restart_app_runtime && run_runtime_smoke_checks; then
+    rollback_duration="$(duration_since "$rollback_started")"
+    append_deploy_audit_record "rollback" "success" "$rollback_duration" "Rollback completed: $target_release"
+    return 0
+  fi
+
+  rollback_duration="$(duration_since "$rollback_started")"
+  append_deploy_audit_record "rollback" "failure" "$rollback_duration" "Rollback failed: $target_release"
+  return 1
+}
+
+deploy_release() {
+  local release_dir="$1"
+  local previous_release="${2:-}"
+  local prepare_function="$3"
+  local phase_started
+  local phase_duration
+
+  append_deploy_audit_record "deploy" "start" 0 "Deploy started"
+
+  if ! extract_release_subtree "$DEPLOY_GIT_REF" "$release_dir"; then
+    append_deploy_audit_record "deploy" "failure" 0 "Release extraction failed"
+    fail "Deploy $APP_ID failed during extract"
+  fi
+
+  phase_started="$(now_ms)"
+  if ! "$prepare_function" "$release_dir"; then
+    phase_duration="$(duration_since "$phase_started")"
+    append_deploy_audit_record "prepare" "failure" "$phase_duration" "Release preparation failed"
+    append_deploy_audit_record "deploy" "failure" "$phase_duration" "Deploy failed during prepare"
+    fail "Deploy $APP_ID failed during prepare"
+  fi
+  phase_duration="$(duration_since "$phase_started")"
+  append_deploy_audit_record "prepare" "success" "$phase_duration" "Release prepared"
+
+  phase_started="$(now_ms)"
+  if ! validate_release "$release_dir"; then
+    phase_duration="$(duration_since "$phase_started")"
+    append_deploy_audit_record "validate" "failure" "$phase_duration" "Release validation failed"
+    append_deploy_audit_record "deploy" "failure" "$phase_duration" "Deploy failed during validate"
+    fail "Deploy $APP_ID failed during validate"
+  fi
+  phase_duration="$(duration_since "$phase_started")"
+  append_deploy_audit_record "validate" "success" "$phase_duration" "Release validation passed"
+
+  phase_started="$(now_ms)"
+  if ! switch_current_link "$release_dir"; then
+    phase_duration="$(duration_since "$phase_started")"
+    append_deploy_audit_record "switch" "failure" "$phase_duration" "Failed to switch current release"
+    append_deploy_audit_record "deploy" "failure" "$phase_duration" "Deploy failed during switch"
+    fail "Deploy $APP_ID failed during release switch"
+  fi
+  phase_duration="$(duration_since "$phase_started")"
+  append_deploy_audit_record "switch" "success" "$phase_duration" "Current release updated"
+
+  phase_started="$(now_ms)"
+  if ! restart_app_runtime; then
+    phase_duration="$(duration_since "$phase_started")"
+    append_deploy_audit_record "restart" "failure" "$phase_duration" "Runtime restart failed"
+    if [[ -n "$previous_release" ]] && ! rollback_to_release "$previous_release" "Restart failed after switching release"; then
+      append_deploy_audit_record "deploy" "failure" "$phase_duration" "Restart failed and rollback did not recover"
+      fail "Deploy $APP_ID failed: restart and rollback both failed"
+    fi
+    append_deploy_audit_record "deploy" "failure" "$phase_duration" "Deploy failed during restart"
+    fail "Deploy $APP_ID failed during restart"
+  fi
+  phase_duration="$(duration_since "$phase_started")"
+  append_deploy_audit_record "restart" "success" "$phase_duration" "Runtime restarted"
+
+  phase_started="$(now_ms)"
+  if ! run_runtime_smoke_checks; then
+    phase_duration="$(duration_since "$phase_started")"
+    append_deploy_audit_record "smoke" "failure" "$phase_duration" "Smoke checks failed"
+    if [[ -n "$previous_release" ]] && ! rollback_to_release "$previous_release" "Smoke checks failed after switching release"; then
+      append_deploy_audit_record "deploy" "failure" "$phase_duration" "Smoke checks failed and rollback did not recover"
+      fail "Deploy $APP_ID failed: smoke checks and rollback both failed"
+    fi
+    append_deploy_audit_record "deploy" "failure" "$phase_duration" "Deploy failed during smoke checks"
+    fail "Deploy $APP_ID failed during smoke checks"
+  fi
+  phase_duration="$(duration_since "$phase_started")"
+  append_deploy_audit_record "smoke" "success" "$phase_duration" "Smoke checks passed"
+
+  append_deploy_audit_record "deploy" "success" 0 "Deploy completed"
 }

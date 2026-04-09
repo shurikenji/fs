@@ -14,6 +14,7 @@ HOST_ROLE_VALUE="$(resolve_host_role "${3:-}")"
 
 load_app_config "$APP"
 ensure_host_role "$HOST_ROLE_VALUE"
+prepare_stack_dirs
 
 PREVIOUS_RELEASE="$(current_target || true)"
 [[ -n "$PREVIOUS_RELEASE" ]] || fail "App $APP does not have a current release"
@@ -34,13 +35,14 @@ fi
 TARGET_RELEASE="$(validate_release_dir "$TARGET_RELEASE")"
 [[ "$TARGET_RELEASE" != "$PREVIOUS_RELEASE" ]] || fail "Target release is already current for $APP"
 
-log "Rollback $APP -> $TARGET_RELEASE"
-switch_current_link "$TARGET_RELEASE"
+set_deploy_context "$HOST_ROLE_VALUE" "manual-rollback" "$TARGET_RELEASE" "$PREVIOUS_RELEASE"
 
-if ! restart_app_runtime || ! run_runtime_smoke_checks; then
-  log "Rollback target failed, restoring previous release: $PREVIOUS_RELEASE"
-  switch_current_link "$PREVIOUS_RELEASE"
-  restart_app_runtime || true
+log "Rollback $APP -> $TARGET_RELEASE"
+if ! rollback_to_release "$TARGET_RELEASE" "Manual rollback requested"; then
+  if [[ -n "$PREVIOUS_RELEASE" ]]; then
+    log "Rollback target failed, restoring previous release: $PREVIOUS_RELEASE"
+    rollback_to_release "$PREVIOUS_RELEASE" "Rollback target failed; restoring previous release" || true
+  fi
   fail "Rollback failed for $APP"
 fi
 

@@ -6,7 +6,7 @@
 - `admin.shupremium.com` is the control-plane entrypoint for infrastructure and linked admin launch.
 - `shopbot` remains isolated on its own VPS and keeps ownership of commerce data and admin writes.
 - `proxy-gateway` remains isolated on the ARM VPS and is still driven by `proxy-operator`.
-- `balance-checker` standalone is deprecated after portal cutover because its logic now lives inside `pricing-hub`, which acts as the portal runtime.
+- archived `balance-checker` is outside the active monorepo stack; any surviving Oracle instance is legacy external runtime only.
 
 ## Runtime Layout
 
@@ -108,7 +108,7 @@ This keeps:
 3. Verify linked launch from `platform-control` to `shopbot`.
 4. Deploy portal changes in `pricing-hub`.
 5. Point `shupremium.com` at the portal runtime.
-6. Keep `balance-checker` old service up only during transition, then remove it from active routing.
+6. Do not route or deploy `balance-checker` from the monorepo anymore; if an old Oracle instance still exists, treat it as external legacy runtime.
 
 ## Required Environment
 

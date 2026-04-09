@@ -17,20 +17,9 @@ RESOLVED_REF="$(fetch_ref "$REF")"
 TS="$(date '+%Y%m%d-%H%M%S')"
 RELEASE_DIR="$(create_release_dir "$TS")"
 PREVIOUS_RELEASE="$(current_target || true)"
+set_deploy_context "$HOST_ROLE_VALUE" "$RESOLVED_REF" "$RELEASE_DIR" "$PREVIOUS_RELEASE"
 
-log "Deploy platform-control từ ref $RESOLVED_REF"
-extract_release_subtree "$RESOLVED_REF" "$RELEASE_DIR"
-prepare_python_release "$RELEASE_DIR"
-switch_current_link "$RELEASE_DIR"
-
-if ! restart_app_runtime || ! run_runtime_smoke_checks; then
-  if [[ -n "$PREVIOUS_RELEASE" ]]; then
-    log "Khôi phục release cũ: $PREVIOUS_RELEASE"
-    switch_current_link "$PREVIOUS_RELEASE"
-    restart_app_runtime || true
-  fi
-  fail "Deploy platform-control thất bại"
-fi
-
-log "Deploy platform-control thành công: $RELEASE_DIR"
+log "Deploy platform-control from ref $RESOLVED_REF"
+deploy_release "$RELEASE_DIR" "$PREVIOUS_RELEASE" prepare_python_release
+log "Deploy platform-control succeeded: $RELEASE_DIR"
 cleanup_old_releases 5

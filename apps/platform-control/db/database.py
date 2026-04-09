@@ -116,7 +116,7 @@ _SEED_PROXY_ENDPOINTS = (
 
 _SEED_PORTAL_MODULES = (
     ("pricing", "Pricing Catalog", "/pricing", "https://shupremium.com/pricing", "table", "Public pricing and model catalog", 1, 1, 10),
-    ("balance", "Balance Checker", "/check-balance", "https://shupremium.com/check-balance", "wallet2", "Secure balance checker for supported servers", 1, 1, 20),
+    ("balance", "Balance Checker", "/check", "https://shupremium.com/check", "wallet2", "Portal balance checker for supported servers", 1, 1, 20),
     ("status", "Service Status", "/status", "https://shupremium.com/status", "activity", "Public proxy and service health surface", 1, 1, 30),
     ("docs", "Docs", "/docs", "", "book", "Operator and customer documentation shell", 1, 0, 40),
 )
@@ -197,6 +197,29 @@ async def _seed_data(db: aiosqlite.Connection) -> None:
             """,
             module,
         )
+
+    await db.execute(
+        """
+        UPDATE portal_modules
+           SET name = ?,
+               path = ?,
+               public_url = ?,
+               description = ?,
+               updated_at = datetime('now')
+         WHERE id = 'balance'
+           AND (
+                path = '/check-balance'
+                OR public_url = 'https://shupremium.com/check-balance'
+                OR description = 'Secure balance checker for supported servers'
+           )
+        """,
+        (
+            "Balance Checker",
+            "/check",
+            "https://shupremium.com/check",
+            "Portal balance checker for supported servers",
+        ),
+    )
 
     runtime_defaults = {
         "ai_provider": "openai",

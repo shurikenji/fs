@@ -1,23 +1,19 @@
-# Hướng Dẫn Deploy Monorepo
+# Deployment Guide
 
-Tài liệu này mô tả cách triển khai `shupremium-stack` một cách an toàn, không chạm vào `.env`, `data`, `venv` và không còn phụ thuộc vào tarball thủ công.
+This document describes the current monorepo deploy model for `shupremium-stack`. The goal is to keep runtime state outside the repo checkout, deploy each app independently by git ref, and prevent bad releases from becoming current.
 
-## 1. Chiến lược khuyến nghị
+## 1. Recommended Strategy
 
-Chiến lược tốt nhất cho stack hiện tại là:
+Use one private Git repository for the whole stack and deploy by `app + git ref`.
 
-- tạo một private GitHub repo cho `shupremium-stack`
-- mỗi VPS clone cùng một repo vào `/srv/shupremium-stack/repo`
-- deploy theo `app + git ref`
-- runtime state nằm ngoài repo checkout
+- each VPS clones the same repo into `/srv/shupremium-stack/repo`
+- each deploy creates a timestamped release under `/srv/shupremium-stack/releases`
+- `current/<app>` is a symlink to the active release
+- `.env`, `data`, `venv`, and operator secrets stay under `/srv/shupremium-stack/shared`
 
-Không dùng Docker ở giai đoạn này vì:
+Docker is intentionally not part of this phase. The main problem being solved here is deploy hygiene and rollback safety, not container orchestration.
 
-- `portal` và `platform-control` đang dùng SQLite cục bộ
-- `shopbot` cũng có state cục bộ
-- vấn đề hiện tại là deploy hygiene, không phải thiếu container
-
-## 2. Layout trên VPS
+## 2. VPS Layout
 
 ```text
 /srv/shupremium-stack/
@@ -49,32 +45,13 @@ Không dùng Docker ở giai đoạn này vì:
     proxy-gateway/
       proxy-operator/
         .env
+    _ops/
+      deploy-audit.jsonl
 ```
 
-## 3. Tạo repo GitHub mới
+## 3. Bootstrap
 
-Tại local:
-
-```bash
-cd shupremium-stack
-git init -b main
-git add .
-git commit -m "Initial monorepo import"
-git remote add origin <PRIVATE_GITHUB_URL>
-git push -u origin main
-```
-
-Sau đó có thể dùng branch và tag như bình thường:
-
-- `main`
-- `feature/...`
-- tag release:
-  - `portal-2026-04-05.1`
-  - `stack-2026-04-05.1`
-
-## 4. Bootstrap VPS
-
-Trên từng VPS:
+On each VPS:
 
 ```bash
 sudo mkdir -p /srv/shupremium-stack
@@ -82,26 +59,28 @@ sudo chown -R $USER:$USER /srv/shupremium-stack
 git clone <PRIVATE_GITHUB_URL> /srv/shupremium-stack/repo
 ```
 
-Tạo file host role:
+Create the host role file:
 
-- ARM VPS:
+- ARM host:
+
 ```bash
 echo arm | sudo tee /etc/shupremium-host-role
 ```
 
-- Shopbot VPS:
+- Shopbot host:
+
 ```bash
 echo shopbot | sudo tee /etc/shupremium-host-role
 ```
 
-Chạy bootstrap:
+Run bootstrap:
 
 ```bash
 cd /srv/shupremium-stack/repo
 bash ops/deploy/bootstrap-host.sh
 ```
 
-## 5. Chuẩn bị shared runtime
+## 4. Shared Runtime Preparation
 
 ### Portal
 
@@ -136,9 +115,9 @@ mkdir -p /srv/shupremium-stack/shared/proxy-gateway/proxy-operator
 cp /path/to/current-proxy-operator/.env /srv/shupremium-stack/shared/proxy-gateway/proxy-operator/.env
 ```
 
-## 6. Deploy theo app
+## 5. Deploy Commands
 
-### ARM VPS
+### ARM host
 
 ```bash
 cd /srv/shupremium-stack/repo
@@ -147,45 +126,193 @@ bash ops/deploy/deploy-platform-control.sh main
 bash ops/deploy/deploy-proxy-gateway.sh main
 ```
 
-### Shopbot VPS
+### Shopbot host
 
 ```bash
 cd /srv/shupremium-stack/repo
 bash ops/deploy/deploy-shopbot.sh main
 ```
 
-## 7. Rollback
+## 6. Deploy Pipeline
 
-Rollback về release trước:
+All deploy scripts now follow the same flow:
+
+1. `extract`
+2. `prepare`
+3. `validate`
+4. `switch`
+5. `restart`
+6. `smoke`
+
+The important change is `validate` before the symlink switch.
+
+### Prepare phase
+
+- Python apps:
+  - symlink shared `.env` and `data`
+  - create or reuse shared `venv`
+  - install `requirements.txt`
+- Proxy gateway:
+  - symlink shared operator `.env`
+  - run `npm ci --omit=dev` for `proxy-operator`
+  - run `npm ci --omit=dev` for `proxy-service`
+
+### Validate phase
+
+- `portal` and `platform-control`
+  - run `pip check` in the shared `venv`
+  - load `.env`
+  - import `app.app:create_app`
+  - instantiate the FastAPI app without starting `uvicorn`
+- `shopbot`
+  - run `pip check` in the shared `venv`
+  - load `.env`
+  - import `bot.main`
+  - instantiate `admin.app:create_admin_app()`
+  - do not start Telegram polling
+- `proxy-gateway`
+  - run `npm ls --omit=dev --depth=0` in `proxy-operator` and `proxy-service`
+  - run `node --check` for `proxy-operator/src/server.js`
+  - run `node --check` for `proxy-service/src/index.js`
+  - run `require.resolve()` checks for key packages in both Node apps
+
+If validation fails, deploy stops before `current/<app>` is changed.
+
+### Restart and smoke phases
+
+- `portal`, `platform-control`: restart PM2 process, then hit manifest-defined smoke URLs
+- `shopbot`: restart and verify the `systemd` unit only
+- `proxy-gateway`: restart `proxy-operator`, reload PM2 ecosystem for `proxy-service`, then probe each discovered proxy port via `/_internal/health`
+
+If restart or smoke fails after the symlink switch, deploy attempts rollback to the previous release and records that result in the audit log.
+
+## 7. Audit Logging
+
+Each deploy appends JSONL records to:
+
+```text
+/srv/shupremium-stack/shared/_ops/deploy-audit.jsonl
+```
+
+Each record includes:
+
+- `timestamp`
+- `app`
+- `host_role`
+- `runtime_kind`
+- `git_ref`
+- `release_dir`
+- `previous_release`
+- `phase`
+- `status`
+- `duration_ms`
+- `message`
+
+Expected phases:
+
+- `deploy`
+- `prepare`
+- `validate`
+- `switch`
+- `restart`
+- `smoke`
+- `rollback`
+
+This log is intended for deploy traceability, not application logging.
+
+## 8. Health Verification
+
+Use the repo script:
+
+```bash
+bash ops/scripts/verify-all-health.sh
+```
+
+Behavior:
+
+- reads the current host role from `/etc/shupremium-host-role` unless one is passed explicitly
+- loads active apps from `ops/deploy/app-manifest.sh`
+- verifies only apps assigned to the current host role
+- reuses runtime smoke logic from the deploy library
+- for `proxy-gateway`, discovers ports from the active `proxy-service/ecosystem.config.js`
+- for `shopbot`, checks the `systemd` unit only
+
+Examples:
+
+```bash
+bash ops/scripts/verify-all-health.sh arm
+bash ops/scripts/verify-all-health.sh shopbot
+```
+
+## 9. Rollback
+
+Rollback to the previous release:
 
 ```bash
 cd /srv/shupremium-stack/repo
 bash ops/deploy/rollback-app.sh portal
 ```
 
-Rollback về release cụ thể:
+Rollback to a specific release:
 
 ```bash
 bash ops/deploy/rollback-app.sh portal /srv/shupremium-stack/releases/20260405-120001/portal
 ```
 
-## 8. Ghi chú runtime
+Manual rollback uses the same restart and smoke checks as deploy. If the target release fails, the script attempts to restore the release that was current before rollback started.
 
-- `portal`, `platform-control`: chạy bằng `PM2`
-- `proxy-gateway`: `proxy-service` dùng PM2 ecosystem, `proxy-operator` là PM2 process đơn
-- `shopbot`: giữ `systemd` làm runtime chính vì app hiện đã có flow này, không ép PM2 chỉ để đồng bộ bề ngoài
+## 10. Runtime Notes
 
-## 9. Vì sao monorepo vẫn dễ trên 2 VPS
+- `portal` and `platform-control` stay on PM2
+- `proxy-gateway` uses PM2 for both the operator and the generated proxy-service apps
+- `shopbot` stays on `systemd` by design
 
-Monorepo chỉ là cách tổ chức code. Việc deploy vẫn tách theo app:
+Do not migrate `shopbot` to PM2 as part of routine deploy work unless a separate runtime migration project is explicitly planned.
 
-- cùng một repo
-- khác host role
-- khác script deploy
+## 11. Troubleshooting
 
-Điều này còn dễ hơn hiện tại vì:
+### Dependency install failures
 
-- một nơi duy nhất để quản lý code
-- script deploy đồng nhất
-- rollback đồng nhất
-- không cần tarball thủ công
+- Python:
+  - check `requirements.txt`
+  - inspect shared `venv`
+  - rerun deploy after fixing the dependency graph
+- Node:
+  - inspect `package-lock.json`
+  - verify `npm ci --omit=dev` works in both `proxy-operator` and `proxy-service`
+
+### Validation failures
+
+- check the deploy audit log for the failing phase
+- verify shared `.env` exists and is readable
+- for Python apps, test the same import path manually inside the shared `venv`
+- for proxy apps, rerun `node --check` and `npm ls --omit=dev --depth=0`
+
+### Restart failures
+
+- verify PM2 or `systemd` is healthy on the target host
+- inspect the active `current/<app>` symlink
+- confirm the release still points to valid shared files and directories
+
+### Smoke-check failures
+
+- run `bash ops/scripts/verify-all-health.sh <host-role>`
+- inspect the app-specific health endpoint or PM2 status
+- for `proxy-gateway`, inspect the current `proxy-service/ecosystem.config.js`
+
+### Rollback behavior
+
+- deploy rollback is only attempted after `switch` when `restart` or `smoke` fails
+- validate failures do not need rollback because the current symlink was never changed
+- manual rollback writes the same audit records as a deploy-triggered rollback
+
+## 12. Why Monorepo Still Works Across Two VPS Hosts
+
+Monorepo is only the code layout. Deploy remains split by app and host role:
+
+- one repository
+- different host roles
+- different deploy scripts
+- shared deploy primitives
+
+That is simpler than the old manual tarball flow because release creation, restart, smoke checks, rollback, and audit logging all now follow one model.

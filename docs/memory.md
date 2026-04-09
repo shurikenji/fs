@@ -11,7 +11,7 @@
   - `sv2`
 - `portal` (`pricing-hub`) is live on the ARM VPS behind `https://shupremium.com`.
 - Old `admin-panel` runtime is stopped and no longer serves public/admin traffic.
-- Legacy standalone `balance-checker` on Oracle free-tier still exists, but public balance now also exists inside `portal`.
+- Legacy standalone `balance-checker` on Oracle free-tier may still exist as an external runtime, but its code is archived and public balance now lives inside `portal`.
 
 ## Live Architecture
 
@@ -513,7 +513,7 @@ Expected sample for `aigc-image-gem` after deploy:
 
 ## Remaining Legacy / Pending Items
 
-- Old Oracle `balance-checker` still exists and is not fully retired.
+- Old Oracle `balance-checker` may still exist externally, but it is no longer part of the active monorepo stack.
 - Old `admin-panel` process is stopped but code still exists.
 - No CDN/asset pipeline cleanup yet; public pages still rely on current static asset strategy.
 - Tailwind CDN warning is still acceptable but not yet production-hardened.
@@ -524,5 +524,5 @@ Expected sample for `aigc-image-gem` after deploy:
 2. If needed, deploy the same patch set to any other environment mirroring ARM VPS.
 3. Decide later whether to:
    - freeze admin metadata until sync/poller
-   - retire Oracle balance-checker
+   - optionally retire Oracle balance-checker runtime
    - remove old admin-panel code/process completely

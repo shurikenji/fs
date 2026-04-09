@@ -44,7 +44,7 @@ From `ops/deploy/app-manifest.sh`:
 - `portal` and `platform-control` are `pm2-python`
 - `shopbot` is `systemd-python`
 - `proxy-gateway` is `pm2-node-multi`
-- `balance-checker` is declared as `manual` and does not have a deploy runtime implementation yet
+- archived `balance-checker` is intentionally excluded from the active deploy manifest
 
 ### Blast radius notes
 
@@ -67,14 +67,14 @@ Changes in `ops/deploy/app-manifest.sh` affect host-role gating, source extracti
 - `ops/deploy/rollback-app.sh` does not have a second-level recovery path if the target rollback release also fails restart or smoke checks. It will stop after changing `current` and attempting restart.
 - `proxy-gateway` is the highest-drift deploy target because it mixes three runtimes inside one release tree: `proxy-operator`, `proxy-service`, and optional `admin-panel`.
 - `shopbot` depends on `systemd` continuing to point at the symlinked `current/shopbot` layout. Any unit file that hardcodes a release path will bypass the monorepo release model.
-- `balance-checker` appears in the manifest but is not wired into the runtime branch in `restart_app_runtime`. That is acceptable only if it is intentionally manual.
+- archived `balance-checker` no longer participates in the active deploy/runtime branch. Any legacy Oracle instance should be treated as external runtime, not as a managed monorepo app.
 
 ### What to verify next in production review
 
 - confirm the `shopbot.service` unit uses the `current/shopbot` path, not a timestamped release path
 - confirm PM2 process names match the manifest assumptions on the VPS
 - add or verify smoke checks for `proxy-service` and optional `admin-panel`, not only `proxy-operator`
-- decide whether `balance-checker` stays manual or gets a first-class deploy script
+- keep any surviving Oracle `balance-checker` runtime outside the active deploy scope
 
 ## 2. Portal and Platform-Control Integration Map
 

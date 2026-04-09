@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+list_manifest_apps() {
+  printf '%s\n' \
+    portal \
+    platform-control \
+    shopbot \
+    proxy-gateway
+}
+
 app_manifest() {
   local app="${1:-}"
 
@@ -62,14 +70,6 @@ app_manifest() {
       SHARED_NAME="proxy-gateway"
       RUNTIME_KIND="pm2-node-multi"
       PROCESS_NAME="proxy-operator"
-      ;;
-    balance-checker)
-      APP_ID="balance-checker"
-      HOST_ROLE="arm"
-      SOURCE_PATH="services/balance-checker"
-      SOURCE_STRIP_COMPONENTS="2"
-      SHARED_NAME="balance-checker"
-      RUNTIME_KIND="manual"
       ;;
     *)
       return 1

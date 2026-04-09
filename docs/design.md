@@ -103,7 +103,7 @@ platform-control sync proxy qua proxy-operator
 platform-control launch sang shopbot khi cần admin commerce
 Phần còn legacy/chuyển tiếp
 
-balance-checker cũ vẫn còn chạy trên VPS Oracle free-tier, chưa thay hoàn toàn.
+balance-checker cũ vẫn có thể còn chạy trên VPS Oracle free-tier như một runtime legacy bên ngoài repo, nhưng code của nó đã được archive và không còn là thành phần active của monorepo.
 admin-panel cũ đã bị loại khỏi runtime và source tree, không còn là admin chính.
 Kiến trúc theo domain/runtime
 

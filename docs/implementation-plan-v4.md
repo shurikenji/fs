@@ -9,7 +9,7 @@
 | **proxy-operator** | ✅ Live | ARM VPS (PM2) | `:8091`, health OK |
 | **proxy-gateway** | ✅ Live | ARM VPS (PM2+Nginx) | 7 proxies serving customers |
 | **pricing-hub** (Portal) | ⏳ Code ready, chưa deploy | — | Cần deploy lên ARM VPS |
-| **balance-checker** (cũ) | ⚠️ Vẫn live | Oracle VPS khác | Chưa thay thế |
+| **balance-checker** (cũ) | ⚠️ Legacy external | Oracle VPS khác | Code đã archive khỏi active monorepo |
 | **admin-panel** (cũ) | ⚠️ Còn trong PM2 | ARM VPS | Traffic đã chuyển sang platform-control |
 | **Wildcard cert** | ❌ Missing | ARM VPS | `/etc/letsencrypt/live/shupremium-wildcard` not found |
 
@@ -176,16 +176,16 @@ sudo ls /etc/letsencrypt/live/shupremium-wildcard/
 
 > Chỉ làm sau khi Portal đã verify ổn định 24-48h.
 
-### 4a. Retire balance-checker standalone
+### 4a. Optional cleanup for legacy balance-checker runtime
 
 ```bash
-# Trên Oracle free-tier VPS (balance-checker)
+# Trên Oracle free-tier VPS (legacy external runtime)
 # Verify portal /check hoạt động tốt trước
 curl -X POST https://shupremium.com/api/check-balance \
   -H "Content-Type: application/json" \
   -d '{"api_key":"sk-test","server":"1"}'
 
-# Nếu OK → stop old balance-checker
+# Nếu OK → có thể stop old balance-checker
 # DNS: xóa record cũ trỏ tới Oracle VPS (nếu có domain riêng)
 ```
 
@@ -259,9 +259,9 @@ crontab -e
 - [ ] Test `Ensure Wildcard Cert` từ platform-control dashboard
 
 ### Phase 4 — Cleanup (sau 24-48h ổn định)
-- [ ] Verify Portal `/check` thay thế hoàn toàn balance-checker cũ
+- [ ] Verify Portal `/check` thay thế hoàn toàn runtime balance checker cũ
 - [ ] `pm2 delete admin-panel`
-- [ ] Stop/release Oracle balance-checker VPS
+- [ ] Optional: stop/release Oracle balance-checker VPS
 
 ### Phase 5 — Backup
 - [ ] Tạo backup script trên Shopbot VPS

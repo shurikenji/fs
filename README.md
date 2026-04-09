@@ -23,7 +23,6 @@ shupremium-stack/
     shopbot/
   services/
     proxy-gateway/
-    balance-checker/
   docs/
   ops/
     deploy/
@@ -31,6 +30,8 @@ shupremium-stack/
     nginx/
     scripts/
   archive/
+    services/
+      balance-checker/
 ```
 
 ## Ánh xạ ứng dụng
@@ -39,7 +40,7 @@ shupremium-stack/
 - `apps/platform-control`: control plane và admin shell
 - `apps/shopbot`: bot + admin panel của shopbot
 - `services/proxy-gateway`: proxy-service và proxy-operator
-- `services/balance-checker`: service legacy giữ riêng
+- `archive/services/balance-checker`: archived legacy service, no longer maintained in the active stack
 
 ## Triển khai trên 2 VPS
 
