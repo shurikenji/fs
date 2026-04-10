@@ -531,12 +531,14 @@ function setupApiType(prefix) {
         if (!apiType) return;
 
         const isOther = apiType.value === 'other';
+        const isNewApi = apiType.value === 'newapi';
+        const showAdvancedBlock = isOther || isNewApi;
 
         if (authTypeWrap) authTypeWrap.style.display = isOther ? '' : 'none';
         if (headerWrap) headerWrap.style.display = isOther ? '' : 'none';
         if (multiGroupWrap) multiGroupWrap.style.display = '';
-        if (advancedBlock) advancedBlock.style.display = isOther ? '' : 'none';
-        if (keyLookupWrap) keyLookupWrap.style.display = apiType.value === 'newapi' ? '' : 'none';
+        if (advancedBlock) advancedBlock.style.display = showAdvancedBlock ? '' : 'none';
+        if (keyLookupWrap) keyLookupWrap.style.display = isNewApi ? '' : 'none';
         if (userValueLabel) userValueLabel.textContent = isOther ? 'Giá trị mã người dùng' : 'Mã người dùng';
         if (tokenLabel) tokenLabel.textContent = isOther ? 'Bearer token' : 'Token truy cập';
         if (!isOther && authType) authType.value = 'header';
