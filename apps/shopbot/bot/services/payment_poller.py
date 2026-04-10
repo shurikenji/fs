@@ -239,16 +239,32 @@ async def _create_key_with_retry(
         if result:
             api_key = _extract_created_key(result)
             token_id = client.extract_created_token_id(result)
+            supports_lookup_by_id = client.supports_key_lookup_by_id(server)
 
             if not api_key:
-                if token_id and client.supports_key_lookup_by_id(server):
+                if token_id and supports_lookup_by_id:
                     api_key = await client.resolve_token_key_by_id(server, token_id)
-                else:
+
+                if not api_key:
+                    if supports_lookup_by_id and not token_id:
+                        logger.warning(
+                            "Token %s created on %s without token_id in create response; falling back to search by name",
+                            token_name,
+                            server["name"],
+                        )
                     await asyncio.sleep(1)
                     found = await client.search_token_by_name(server, token_name)
                     if found:
                         api_key = _extract_created_key(found)
                         token_id = token_id or client.extract_created_token_id(found)
+                        if not api_key and token_id and supports_lookup_by_id:
+                            logger.info(
+                                "Recovered token_id=%s for %s on %s from search results; retrying full key lookup by id",
+                                token_id,
+                                token_name,
+                                server["name"],
+                            )
+                            api_key = await client.resolve_token_key_by_id(server, token_id)
             if api_key:
                 return api_key, token_id
             logger.warning(

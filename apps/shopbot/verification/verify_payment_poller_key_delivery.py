@@ -86,6 +86,37 @@ class _MaskedFallbackClient:
         }
 
 
+class _SearchIdLookupClient:
+    async def create_token(self, **kwargs):
+        _ = kwargs
+        return {"success": True, "data": {"name": "created-token"}}
+
+    def extract_created_token_id(self, payload):
+        if isinstance(payload, dict):
+            if isinstance(payload.get("id"), int):
+                return payload["id"]
+            data = payload.get("data")
+            if isinstance(data, dict) and isinstance(data.get("id"), int):
+                return data["id"]
+        return None
+
+    def supports_key_lookup_by_id(self, server: dict) -> bool:
+        return bool(server.get("supports_key_lookup_by_id"))
+
+    async def resolve_token_key_by_id(self, server: dict, token_id: int):
+        assert server["supports_key_lookup_by_id"] == 1
+        assert token_id == 303
+        return "sk-id-from-search-303"
+
+    async def search_token_by_name(self, server: dict, name: str):
+        _ = server, name
+        return {
+            "id": 303,
+            "key": "masked**********303",
+            "name": "created-token",
+        }
+
+
 async def main() -> None:
     nested_key, nested_token_id = await payment_poller._create_key_with_retry(
         _NestedKeyClient(),
@@ -110,6 +141,18 @@ async def main() -> None:
     assert looked_up_key == "sk-id-lookup-key-202"
     assert looked_up_token_id == 202
     print("[OK] _create_key_with_retry prefers token-id lookup for upgraded NewAPI servers")
+
+    searched_id_key, searched_id_token_id = await payment_poller._create_key_with_retry(
+        _SearchIdLookupClient(),
+        server={"name": "Verify Server", "supports_key_lookup_by_id": 1},
+        quota=1,
+        group_name="default",
+        base_token_name="verify",
+        sequence=4,
+    )
+    assert searched_id_key == "sk-id-from-search-303"
+    assert searched_id_token_id == 303
+    print("[OK] _create_key_with_retry resolves full key by token id recovered from search results")
 
     extracted = payment_poller._extract_created_key(
         {
