@@ -201,10 +201,18 @@ END"""
 _TIMESTAMP_TRIGGER_STATEMENTS = _build_timestamp_trigger_statements()
 
 
-async def _apply_schema(db) -> None:
-    """Create tables and indexes from the current DDL."""
+async def _apply_tables(db) -> None:
+    """Create tables from the current DDL (skip indexes)."""
     for statement in _iter_statements(_CREATE_TABLES):
-        await db.execute(statement)
+        if not statement.lstrip().upper().startswith("CREATE INDEX"):
+            await db.execute(statement)
+
+
+async def _apply_indexes(db) -> None:
+    """Create indexes from the current DDL."""
+    for statement in _iter_statements(_CREATE_TABLES):
+        if statement.lstrip().upper().startswith("CREATE INDEX"):
+            await db.execute(statement)
 
 
 async def _apply_best_effort_migrations(db) -> None:
@@ -252,8 +260,9 @@ async def _backfill_timezone_columns(db) -> None:
 async def init_db() -> None:
     """Initialize schema, migrations, settings, and timezone sync."""
     db = await get_db()
-    await _apply_schema(db)
+    await _apply_tables(db)
     await _apply_best_effort_migrations(db)
+    await _apply_indexes(db)
     await _apply_timestamp_triggers(db)
     await db.executemany(
         "INSERT OR IGNORE INTO settings (key, value, description) VALUES (?, ?, ?)",
