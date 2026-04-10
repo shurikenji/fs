@@ -9,10 +9,22 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from typing import Any, Optional
+from urllib.parse import urljoin
 
 import aiohttp
 
 logger = logging.getLogger(__name__)
+_TOKEN_KEY_FIELDS = (
+    "key",
+    "api_key",
+    "apiKey",
+    "token",
+    "access_token",
+    "accessToken",
+    "secret",
+    "secret_key",
+)
+_TOKEN_ID_FIELDS = ("id", "token_id", "tokenId")
 
 
 def _response_dict_or_none(
@@ -90,6 +102,74 @@ def _match_token_from_items(
     return None
 
 
+def _normalize_full_key(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+
+    normalized = value.strip()
+    if not normalized or "*" in normalized or "..." in normalized:
+        return ""
+    if normalized.startswith("sk-"):
+        return normalized
+    return f"sk-{normalized}"
+
+
+def _extract_token_key_value(payload: Any) -> str:
+    queue: list[Any] = [payload]
+    seen: set[int] = set()
+
+    while queue:
+        current = queue.pop(0)
+        marker = id(current)
+        if marker in seen:
+            continue
+        seen.add(marker)
+
+        if isinstance(current, dict):
+            for field in _TOKEN_KEY_FIELDS:
+                normalized = _normalize_full_key(current.get(field))
+                if normalized:
+                    return normalized
+            for value in current.values():
+                if isinstance(value, (dict, list, tuple)):
+                    queue.append(value)
+        elif isinstance(current, (list, tuple)):
+            for item in current:
+                if isinstance(item, (dict, list, tuple)):
+                    queue.append(item)
+
+    return ""
+
+
+def _extract_token_id_value(payload: Any) -> int | None:
+    queue: list[Any] = [payload]
+    seen: set[int] = set()
+
+    while queue:
+        current = queue.pop(0)
+        marker = id(current)
+        if marker in seen:
+            continue
+        seen.add(marker)
+
+        if isinstance(current, dict):
+            for field in _TOKEN_ID_FIELDS:
+                raw_value = current.get(field)
+                if isinstance(raw_value, int):
+                    return raw_value
+                if isinstance(raw_value, str) and raw_value.strip().isdigit():
+                    return int(raw_value.strip())
+            for value in current.values():
+                if isinstance(value, (dict, list, tuple)):
+                    queue.append(value)
+        elif isinstance(current, (list, tuple)):
+            for item in current:
+                if isinstance(item, (dict, list, tuple)):
+                    queue.append(item)
+
+    return None
+
+
 class BaseAPIClient(ABC):
     """Abstract base class for API clients."""
 
@@ -107,6 +187,28 @@ class BaseAPIClient(ABC):
     def get_supports_multi_group(self, server: dict) -> bool:
         """Check if server supports multi-group."""
         return self.supports_multi_group or bool(server.get("supports_multi_group"))
+
+    def supports_key_lookup_by_id(self, server: dict) -> bool:
+        """Whether a server should resolve full keys via token ID."""
+        return bool(server.get("supports_key_lookup_by_id"))
+
+    def extract_created_token_id(self, payload: Any) -> int | None:
+        """Extract a token ID from create/search payloads."""
+        return _extract_token_id_value(payload)
+
+    def extract_full_token_key(self, payload: Any) -> str:
+        """Extract an unmasked full token key from arbitrary payloads."""
+        return _extract_token_key_value(payload)
+
+    def get_token_key_endpoint(self, server: dict, token_id: int) -> str:
+        """Build the endpoint used to fetch a full token key by ID."""
+        template = str(server.get("token_key_endpoint_template") or "/api/token/{id}/key").strip()
+        endpoint = template.format(id=token_id)
+        if endpoint.startswith("http://") or endpoint.startswith("https://"):
+            return endpoint
+
+        base_url = str(server.get("base_url") or "").rstrip("/") + "/"
+        return urljoin(base_url, endpoint.lstrip("/"))
 
     def extract_ratio_hint(self, *texts: object, default: float = 1.0) -> float:
         """Extract ratio-like numeric hints from descriptive group labels."""
@@ -381,6 +483,58 @@ class BaseAPIClient(ABC):
         except Exception as e:
             logger.error(
                 "search_token_by_name exception on %s: %s", server["name"], e
+            )
+            return None
+
+    async def resolve_token_key_by_id(
+        self,
+        server: dict,
+        token_id: int,
+    ) -> str | None:
+        """Resolve a full token key by token ID on compatible upstream servers."""
+        if not self.supports_key_lookup_by_id(server):
+            return None
+
+        url = self.get_token_key_endpoint(server, token_id)
+        headers = self.get_headers(server)
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=15),
+                ) as resp:
+                    data = _response_dict_or_none(
+                        await resp.json(),
+                        server_name=server["name"],
+                        action="resolve_token_key_by_id",
+                    )
+                    if data is None:
+                        return None
+                    if not data.get("success"):
+                        logger.error(
+                            "resolve_token_key_by_id failed on %s: %s",
+                            server["name"],
+                            data.get("message"),
+                        )
+                        return None
+
+                    full_key = self.extract_full_token_key(data)
+                    if full_key:
+                        return full_key
+
+                    logger.error(
+                        "resolve_token_key_by_id returned no full key on %s for token %s",
+                        server["name"],
+                        token_id,
+                    )
+                    return None
+        except Exception as e:
+            logger.error(
+                "resolve_token_key_by_id exception on %s: %s",
+                server["name"],
+                e,
             )
             return None
 

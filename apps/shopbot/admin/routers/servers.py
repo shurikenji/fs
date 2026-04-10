@@ -362,6 +362,10 @@ def _get_server_form_payload(form) -> dict:
     api_type = _clean_str(form.get("api_type", "newapi"), "newapi").lower()
     legacy_user_id = _clean_str(form.get("auth_user_value") or form.get("user_id_header"))
     legacy_token = _clean_str(form.get("auth_token") or form.get("access_token"))
+    token_key_endpoint_template = _clean_str(
+        form.get("token_key_endpoint_template"),
+        "/api/token/{id}/key",
+    )
 
     payload = {
         "name": _clean_str(form.get("name")),
@@ -375,6 +379,8 @@ def _get_server_form_payload(form) -> dict:
         "import_spend_accrual_enabled": 1 if form.get("import_spend_accrual_enabled") else 0,
         "discount_stack_mode": _clean_str(form.get("discount_stack_mode"), "exclusive"),
         "discount_allowed_stack_types": _clean_str(form.get("discount_allowed_stack_types"), "cashback"),
+        "supports_key_lookup_by_id": 1 if form.get("supports_key_lookup_by_id") else 0,
+        "token_key_endpoint_template": token_key_endpoint_template,
     }
 
     if api_type == "newapi":
@@ -409,6 +415,7 @@ def _get_server_form_payload(form) -> dict:
                 "auth_cookie": "",
                 "custom_headers": "",
                 "groups_endpoint": "",
+                "supports_key_lookup_by_id": 0,
             }
         )
         return payload
@@ -455,6 +462,11 @@ def _normalize_server_for_form(server: dict) -> dict:
     server["discount_allowed_stack_types"] = (
         server.get("discount_allowed_stack_types", "cashback") or "cashback"
     )
+    server["supports_key_lookup_by_id"] = server.get("supports_key_lookup_by_id", 0)
+    server["token_key_endpoint_template"] = (
+        server.get("token_key_endpoint_template", "/api/token/{id}/key")
+        or "/api/token/{id}/key"
+    )
 
     if api_type == "rixapi":
         server["supports_multi_group"] = 1
@@ -462,6 +474,7 @@ def _normalize_server_for_form(server: dict) -> dict:
             server["manual_groups"] = server.get("default_group", "")
         server["auth_type"] = "header"
         server["auth_user_header"] = "rix-api-user"
+        server["supports_key_lookup_by_id"] = 0
     elif api_type == "newapi":
         if not server["manual_groups"] and "," in server.get("default_group", ""):
             server["manual_groups"] = server.get("default_group", "")

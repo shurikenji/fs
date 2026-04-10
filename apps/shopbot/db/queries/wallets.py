@@ -237,9 +237,10 @@ async def complete_wallet_topup_order(order_id: int) -> Optional[int]:
         await db.execute(
             """UPDATE orders
                SET status = 'completed',
+                   completed_at = ?,
                    updated_at = datetime('now', '+7 hours')
                WHERE id = ? AND status IN ('paid', 'processing')""",
-            (order_id,),
+            (to_db_time_string(), order_id),
         )
         await db.commit()
         return new_balance

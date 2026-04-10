@@ -227,7 +227,7 @@ async def _create_key_with_retry(
     group_name: str,
     base_token_name: str,
     sequence: int,
-) -> str | None:
+) -> tuple[str | None, int | None]:
     token_name = f"{base_token_name}_{sequence}"
     for _ in range(3):
         result = await client.create_token(
@@ -238,13 +238,19 @@ async def _create_key_with_retry(
         )
         if result:
             api_key = _extract_created_key(result)
+            token_id = client.extract_created_token_id(result)
+
             if not api_key:
-                await asyncio.sleep(1)
-                found = await client.search_token_by_name(server, token_name)
-                if found:
-                    api_key = _extract_created_key(found)
+                if token_id and client.supports_key_lookup_by_id(server):
+                    api_key = await client.resolve_token_key_by_id(server, token_id)
+                else:
+                    await asyncio.sleep(1)
+                    found = await client.search_token_by_name(server, token_name)
+                    if found:
+                        api_key = _extract_created_key(found)
+                        token_id = token_id or client.extract_created_token_id(found)
             if api_key:
-                return api_key
+                return api_key, token_id
             logger.warning(
                 "Token %s created on %s but upstream returned only masked/incomplete key data",
                 token_name,
@@ -252,7 +258,7 @@ async def _create_key_with_retry(
             )
             raise _MaskedDeliveryDataError(token_name)
         await asyncio.sleep(1)
-    return None
+    return None, None
 
 async def _process_key_new(bot: Bot, order: Order) -> None:
     """Tạo API key mới trên server được chọn."""
@@ -276,9 +282,10 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
 
     client = get_api_client(server)
     created_keys: list[str] = []
+    created_token_ids: list[int] = []
     for sequence in range(1, quantity + 1):
         try:
-            full_key = await _create_key_with_retry(
+            full_key, token_id = await _create_key_with_retry(
                 client,
                 server=server,
                 quota=quota,
@@ -292,6 +299,7 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
                 order["id"],
                 "processing",
                 api_key=created_keys[0] if created_keys else None,
+                api_token_id=created_token_ids[0] if created_token_ids else None,
                 quota_after=quota,
                 delivery_info=partial_delivery,
             )
@@ -325,6 +333,7 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
                 order["id"],
                 "processing",
                 api_key=created_keys[0],
+                api_token_id=created_token_ids[0] if created_token_ids else None,
                 quota_after=quota,
                 delivery_info=partial_delivery,
             )
@@ -347,10 +356,13 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
             return
 
         created_keys.append(full_key)
+        if token_id is not None:
+            created_token_ids.append(token_id)
         await create_user_key(
             user_id=order["user_id"],
             server_id=server["id"],
             api_key=full_key,
+            api_token_id=token_id,
             label=mask_api_key(full_key),
         )
         try:
@@ -381,6 +393,7 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
         order["id"],
         "completed",
         api_key=created_keys[0],
+        api_token_id=created_token_ids[0] if created_token_ids else None,
         quota_after=quota,
         delivery_info=delivery_info,
     )

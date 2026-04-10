@@ -1,5 +1,6 @@
 from admin.routers.account_stock import router as account_stock_router
 from admin.routers.admin_launch import router as admin_launch_router
+from admin.routers.analytics import router as analytics_router
 from admin.routers.auth import router as auth_router
 from admin.routers.broadcast import router as broadcast_router
 from admin.routers.categories import router as categories_router
@@ -16,6 +17,7 @@ PUBLIC_ROUTERS = [auth_router, admin_launch_router, internal_portal_router]
 
 PROTECTED_ROUTERS = [
     dashboard_router,
+    analytics_router,
     servers_router,
     categories_router,
     products_router,

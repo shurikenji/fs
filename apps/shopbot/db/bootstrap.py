@@ -38,6 +38,8 @@ _BEST_EFFORT_MIGRATIONS = [
     "ALTER TABLE api_servers ADD COLUMN import_spend_accrual_enabled INTEGER DEFAULT 0",
     "ALTER TABLE api_servers ADD COLUMN discount_stack_mode TEXT DEFAULT 'exclusive'",
     "ALTER TABLE api_servers ADD COLUMN discount_allowed_stack_types TEXT DEFAULT 'cashback'",
+    "ALTER TABLE api_servers ADD COLUMN supports_key_lookup_by_id INTEGER DEFAULT 0",
+    "ALTER TABLE api_servers ADD COLUMN token_key_endpoint_template TEXT DEFAULT '/api/token/{id}/key'",
     "ALTER TABLE orders ADD COLUMN base_amount INTEGER",
     "ALTER TABLE orders ADD COLUMN discount_amount INTEGER DEFAULT 0",
     "ALTER TABLE orders ADD COLUMN cashback_amount INTEGER DEFAULT 0",
@@ -46,6 +48,13 @@ _BEST_EFFORT_MIGRATIONS = [
     "ALTER TABLE orders ADD COLUMN applied_tier_id INTEGER",
     "ALTER TABLE orders ADD COLUMN pricing_snapshot TEXT",
     "ALTER TABLE orders ADD COLUMN promotion_snapshot TEXT",
+    "ALTER TABLE orders ADD COLUMN completed_at TEXT",
+    """UPDATE orders
+       SET completed_at = COALESCE(NULLIF(paid_at, ''), NULLIF(updated_at, ''))
+       WHERE status = 'completed'
+         AND (completed_at IS NULL OR completed_at = '')""",
+    "CREATE INDEX IF NOT EXISTS idx_ord_completed_at ON orders(completed_at)",
+    "CREATE INDEX IF NOT EXISTS idx_ord_refunded_at ON orders(refunded_at)",
     """UPDATE orders
        SET payment_method = 'wallet',
            updated_at = datetime('now', '+7 hours')
@@ -119,6 +128,7 @@ _TIMEZONE_BACKFILL_STATEMENTS = [
     "UPDATE orders SET created_at = datetime(created_at, '+7 hours') WHERE created_at IS NOT NULL",
     "UPDATE orders SET updated_at = datetime(updated_at, '+7 hours') WHERE updated_at IS NOT NULL",
     "UPDATE orders SET paid_at = datetime(paid_at, '+7 hours') WHERE paid_at IS NOT NULL AND paid_at != ''",
+    "UPDATE orders SET completed_at = datetime(completed_at, '+7 hours') WHERE completed_at IS NOT NULL AND completed_at != ''",
     "UPDATE orders SET refunded_at = datetime(refunded_at, '+7 hours') WHERE refunded_at IS NOT NULL AND refunded_at != ''",
     "UPDATE orders SET expired_at = datetime(expired_at, '+7 hours') WHERE expired_at IS NOT NULL AND expired_at != ''",
     "UPDATE server_pricing_versions SET created_at = datetime(created_at, '+7 hours') WHERE created_at IS NOT NULL",

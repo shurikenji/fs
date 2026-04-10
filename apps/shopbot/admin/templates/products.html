@@ -46,7 +46,7 @@
         </div>
         <div class="stat-content">
             <div class="stat-value">{{ servers|selectattr('is_active')|list|length }}</div>
-            <div class="stat-label">Máy chủ bật</div>
+            <div class="stat-label">Máy chủ đang bật</div>
         </div>
     </div>
     <div class="stat-card">
@@ -171,13 +171,13 @@
                 </td>
                 <td data-label="Kho">
                     {% if p.stock == -1 %}
-                    <span style="font-size: 0.85rem; color: var(--primary); font-weight: 500;">♾ Vô hạn</span>
+                    <span style="font-size: 0.85rem; color: var(--primary); font-weight: 500;">♾ Không giới hạn</span>
                     {% elif p.product_type == 'account_stocked' %}
                     <span style="font-weight: 700; font-size: 0.95rem; {% if p.stock < 5 %}color: var(--danger);{% elif p.stock < 20 %}color: var(--warning);{% endif %}">{{ p.stock }}</span>
-                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Tài khoản</div>
+                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Tài khoản khả dụng</div>
                     {% else %}
                     <span style="font-weight: 700; font-size: 0.95rem;">{{ p.stock }}</span>
-                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Sẵn sàng</div>
+                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Sẵn sàng bán</div>
                     {% endif %}
                 </td>
                 <td data-label="Thao tác">

@@ -1,4 +1,4 @@
-"""Verification for key delivery extraction and masked fallback handling."""
+"""Verification for key delivery extraction, key-by-id lookup, and masked fallback handling."""
 from __future__ import annotations
 
 import asyncio
@@ -17,15 +17,58 @@ class _NestedKeyClient:
         _ = kwargs
         return {"success": True, "data": {"token": {"key": "abc123456789"}}}
 
+    def extract_created_token_id(self, payload):
+        _ = payload
+        return None
+
+    def supports_key_lookup_by_id(self, server: dict) -> bool:
+        _ = server
+        return False
+
+    async def resolve_token_key_by_id(self, server: dict, token_id: int):
+        _ = server, token_id
+        raise AssertionError("resolve_token_key_by_id should not run when create_token already returns full key")
+
     async def search_token_by_name(self, server: dict, name: str):
         _ = server, name
         raise AssertionError("search_token_by_name should not be used when create_token returns a full key")
+
+
+class _IdLookupClient:
+    async def create_token(self, **kwargs):
+        _ = kwargs
+        return {"success": True, "data": {"id": 202, "name": "created-token"}}
+
+    def extract_created_token_id(self, payload):
+        return payload["data"]["id"]
+
+    def supports_key_lookup_by_id(self, server: dict) -> bool:
+        return bool(server.get("supports_key_lookup_by_id"))
+
+    async def resolve_token_key_by_id(self, server: dict, token_id: int):
+        assert server["supports_key_lookup_by_id"] == 1
+        assert token_id == 202
+        return "sk-id-lookup-key-202"
+
+    async def search_token_by_name(self, server: dict, name: str):
+        _ = server, name
+        raise AssertionError("legacy search fallback should not run when key lookup by id is enabled")
 
 
 class _MaskedFallbackClient:
     async def create_token(self, **kwargs):
         _ = kwargs
         return {"success": True, "data": {"id": 101, "name": "created-token"}}
+
+    def extract_created_token_id(self, payload):
+        return payload["data"]["id"]
+
+    def supports_key_lookup_by_id(self, server: dict) -> bool:
+        return bool(server.get("supports_key_lookup_by_id"))
+
+    async def resolve_token_key_by_id(self, server: dict, token_id: int):
+        _ = server, token_id
+        return None
 
     async def search_token_by_name(self, server: dict, name: str):
         _ = server, name
@@ -44,7 +87,7 @@ class _MaskedFallbackClient:
 
 
 async def main() -> None:
-    nested_key = await payment_poller._create_key_with_retry(
+    nested_key, nested_token_id = await payment_poller._create_key_with_retry(
         _NestedKeyClient(),
         server={"name": "Verify Server"},
         quota=1,
@@ -53,7 +96,20 @@ async def main() -> None:
         sequence=1,
     )
     assert nested_key == "sk-abc123456789"
+    assert nested_token_id is None
     print("[OK] _create_key_with_retry returns full keys from nested create responses")
+
+    looked_up_key, looked_up_token_id = await payment_poller._create_key_with_retry(
+        _IdLookupClient(),
+        server={"name": "Verify Server", "supports_key_lookup_by_id": 1},
+        quota=1,
+        group_name="default",
+        base_token_name="verify",
+        sequence=2,
+    )
+    assert looked_up_key == "sk-id-lookup-key-202"
+    assert looked_up_token_id == 202
+    print("[OK] _create_key_with_retry prefers token-id lookup for upgraded NewAPI servers")
 
     extracted = payment_poller._extract_created_key(
         {
@@ -84,11 +140,11 @@ async def main() -> None:
     try:
         await payment_poller._create_key_with_retry(
             _MaskedFallbackClient(),
-            server={"name": "Verify Server"},
+            server={"name": "Verify Server", "supports_key_lookup_by_id": 0},
             quota=1,
             group_name="default",
             base_token_name="verify",
-            sequence=2,
+            sequence=3,
         )
     except payment_poller._MaskedDeliveryDataError:
         print("[OK] _create_key_with_retry refuses masked fallback key data after a successful create")

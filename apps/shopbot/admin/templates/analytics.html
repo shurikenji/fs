@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Analytics{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Analytics</h1>
+        <p class="page-subtitle">Doanh thu va don hang theo ngay/thang, tinh theo GMT+7.</p>
+    </div>
+    <div class="page-actions">
+        <a href="/" class="btn btn-outline-secondary">Dashboard</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" action="/analytics" class="row g-3 align-items-end">
+            <div class="col-12 col-lg-3">
+                <label class="form-label">Khoang thoi gian</label>
+                <select name="range_key" class="form-select">
+                    {% for option in range_options %}
+                    <option value="{{ option.key }}" {% if summary.range.key == option.key %}selected{% endif %}>{{ option.label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-lg-2">
+                <label class="form-label">Tu ngay</label>
+                <input type="date" name="date_from" class="form-control" value="{{ summary.range.date_from }}">
+            </div>
+            <div class="col-6 col-lg-2">
+                <label class="form-label">Den ngay</label>
+                <input type="date" name="date_to" class="form-control" value="{{ summary.range.date_to }}">
+            </div>
+            <div class="col-6 col-lg-2">
+                <label class="form-label">Bucket</label>
+                <select name="bucket" class="form-select">
+                    <option value="day" {% if summary.range.bucket == 'day' %}selected{% endif %}>Theo ngay</option>
+                    <option value="month" {% if summary.range.bucket == 'month' %}selected{% endif %}>Theo thang</option>
+                </select>
+            </div>
+            <div class="col-6 col-lg-3">
+                <button type="submit" class="btn btn-primary w-100">Cap nhat analytics</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="stat-card">
+            <div class="stat-content">
+                <div class="stat-value">{{ summary.created_orders }}</div>
+                <div class="stat-label">Don tao moi</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="stat-card">
+            <div class="stat-content">
+                <div class="stat-value">{{ summary.completed_orders }}</div>
+                <div class="stat-label">Don hoan thanh</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="stat-card">
+            <div class="stat-content">
+                <div class="stat-value">{{ format_vnd(summary.gross_revenue) }}</div>
+                <div class="stat-label">Doanh thu gop</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="stat-card">
+            <div class="stat-content">
+                <div class="stat-value">{{ format_vnd(summary.refunded_amount) }}</div>
+                <div class="stat-label">Hoan tien</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="stat-card">
+            <div class="stat-content">
+                <div class="stat-value">{{ format_vnd(summary.net_revenue) }}</div>
+                <div class="stat-label">Doanh thu thuan</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-2">
+        <div class="stat-card">
+            <div class="stat-content">
+                <div class="stat-value">{{ summary.completion_rate }}%</div>
+                <div class="stat-label">Ty le hoan thanh</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-12 col-xl-7">
+        <div class="card h-100">
+            <div class="card-header">
+                <h3>Chuoi thoi gian - {{ summary.range.label }}</h3>
+                <span class="text-secondary small">{{ summary.range.bucket|upper }}</span>
+            </div>
+            <div class="card-body">
+                {% if series %}
+                <div class="d-flex flex-column gap-3">
+                    {% for point in series %}
+                    <div style="border:1px solid var(--border-light); border-radius:16px; padding:0.9rem 1rem;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>{{ point.label }}</strong>
+                            <small class="text-secondary">{{ point.bucket }}</small>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>Don tao moi</span>
+                                <strong>{{ point.created_orders }}</strong>
+                            </div>
+                            <div style="height:8px; border-radius:999px; background:rgba(14,165,233,0.12); overflow:hidden;">
+                                <div style="height:100%; width:{{ point.created_width }}%; background:linear-gradient(90deg,#0ea5e9,#38bdf8);"></div>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>Doanh thu hoan thanh</span>
+                                <strong>{{ format_vnd(point.gross_revenue) }}</strong>
+                            </div>
+                            <div style="height:8px; border-radius:999px; background:rgba(16,185,129,0.12); overflow:hidden;">
+                                <div style="height:100%; width:{{ point.revenue_width }}%; background:linear-gradient(90deg,#10b981,#34d399);"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>Hoan tien</span>
+                                <strong>{{ format_vnd(point.refunded_amount) }}</strong>
+                            </div>
+                            <div style="height:8px; border-radius:999px; background:rgba(239,68,68,0.10); overflow:hidden;">
+                                <div style="height:100%; width:{{ point.refund_width }}%; background:linear-gradient(90deg,#ef4444,#f87171);"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state">Chua co du lieu trong ky da chon.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-xl-5">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3>Breakdown trang thai</h3>
+            </div>
+            <div class="card-body">
+                {% if breakdowns.status_counts %}
+                <div class="d-flex flex-column gap-2">
+                    {% for item in breakdowns.status_counts %}
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span>{{ status_text_vi(item.label) if item.label in ['pending', 'paid', 'processing', 'completed', 'expired', 'cancelled', 'refunded'] else item.label }}</span>
+                        <strong>{{ item.count }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-secondary">Khong co du lieu.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3>Top san pham</h3>
+            </div>
+            <div class="card-body">
+                {% if breakdowns.top_products %}
+                <div class="d-flex flex-column gap-3">
+                    {% for item in breakdowns.top_products %}
+                    <div>
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <strong>{{ item.label }}</strong>
+                            <span class="badge badge-info">{{ item.order_count }} don</span>
+                        </div>
+                        <div class="text-secondary small">{{ format_vnd(item.revenue) }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-secondary">Khong co doanh thu hoan thanh.</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>Top server</h3>
+            </div>
+            <div class="card-body">
+                {% if breakdowns.top_servers %}
+                <div class="d-flex flex-column gap-3">
+                    {% for item in breakdowns.top_servers %}
+                    <div>
+                        <div class="d-flex justify-content-between align-items-start gap-3">
+                            <strong>{{ item.label }}</strong>
+                            <span class="badge badge-info">{{ item.order_count }} don</span>
+                        </div>
+                        <div class="text-secondary small">{{ format_vnd(item.revenue) }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-secondary">Khong co doanh thu hoan thanh.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

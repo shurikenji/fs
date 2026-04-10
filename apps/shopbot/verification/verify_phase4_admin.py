@@ -22,6 +22,7 @@ async def main() -> None:
     print(f"[OK] admin app - {len(routes)} routes registered")
 
     from admin.routers.account_stock import router as account_stock_router
+    from admin.routers.analytics import router as analytics_router
     from admin.routers.auth import router as auth_router
     from admin.routers.broadcast import router as broadcast_router
     from admin.routers.categories import router as categories_router
@@ -36,6 +37,7 @@ async def main() -> None:
     _ = (
         auth_router,
         dashboard_router,
+        analytics_router,
         servers_router,
         categories_router,
         products_router,

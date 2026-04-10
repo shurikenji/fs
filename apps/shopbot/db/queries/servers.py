@@ -64,6 +64,8 @@ async def create_server(
     import_spend_accrual_enabled: int = 0,
     discount_stack_mode: str = "exclusive",
     discount_allowed_stack_types: str = "cashback",
+    supports_key_lookup_by_id: int = 0,
+    token_key_endpoint_template: str = "/api/token/{id}/key",
 ) -> int:
     """Tạo API server mới, trả về ID."""
     cursor = await execute_commit(
@@ -73,8 +75,9 @@ async def create_server(
             default_group, sort_order, api_type, supports_multi_group,
             manual_groups, auth_type, auth_user_header, auth_user_value,
             auth_token, auth_cookie, custom_headers, groups_endpoint,
-            import_spend_accrual_enabled, discount_stack_mode, discount_allowed_stack_types)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            import_spend_accrual_enabled, discount_stack_mode, discount_allowed_stack_types,
+            supports_key_lookup_by_id, token_key_endpoint_template)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             name, base_url, user_id_header, access_token,
             price_per_unit, dollar_per_unit, quota_multiple, quota_per_unit,
@@ -82,6 +85,7 @@ async def create_server(
             manual_groups, auth_type, auth_user_header, auth_user_value,
             auth_token, auth_cookie, custom_headers, groups_endpoint,
             import_spend_accrual_enabled, discount_stack_mode, discount_allowed_stack_types,
+            supports_key_lookup_by_id, token_key_endpoint_template,
         ),
     )
     return cursor.lastrowid  # type: ignore[return-value]
@@ -101,6 +105,7 @@ async def update_server(server_id: int, **kwargs) -> None:
         "manual_groups", "auth_type", "auth_user_header", "auth_user_value",
         "auth_token", "auth_cookie", "custom_headers", "groups_endpoint",
         "import_spend_accrual_enabled", "discount_stack_mode", "discount_allowed_stack_types",
+        "supports_key_lookup_by_id", "token_key_endpoint_template",
     }
 
     fields = []

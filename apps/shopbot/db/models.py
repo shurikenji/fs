@@ -76,6 +76,8 @@ CREATE TABLE IF NOT EXISTS api_servers (
     import_spend_accrual_enabled INTEGER DEFAULT 0,
     discount_stack_mode    TEXT DEFAULT 'exclusive',
     discount_allowed_stack_types TEXT DEFAULT 'cashback',
+    supports_key_lookup_by_id INTEGER DEFAULT 0,
+    token_key_endpoint_template TEXT DEFAULT '/api/token/{id}/key',
     created_at      TEXT DEFAULT (datetime('now', '+7 hours')),
     updated_at      TEXT DEFAULT (datetime('now', '+7 hours'))
 );
@@ -177,6 +179,7 @@ CREATE TABLE IF NOT EXISTS orders (
     mb_transaction_id TEXT,
     qr_content      TEXT,
     paid_at         TEXT,
+    completed_at    TEXT,
     is_refunded     INTEGER DEFAULT 0,
     refund_reason   TEXT,
     refunded_at     TEXT,
@@ -187,6 +190,8 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_ord_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_ord_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_ord_code ON orders(order_code);
+CREATE INDEX IF NOT EXISTS idx_ord_completed_at ON orders(completed_at);
+CREATE INDEX IF NOT EXISTS idx_ord_refunded_at ON orders(refunded_at);
 
 -- SERVER PRICING VERSIONS
 CREATE TABLE IF NOT EXISTS server_pricing_versions (

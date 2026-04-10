@@ -73,6 +73,7 @@
                 <th style="width: 130px;">Giá/$</th>
                 <th style="width: 100px;">Multi-group</th>
                 <th style="width: 110px;">Trạng thái</th>
+                <th style="width: 100px;">Key theo ID</th>
                 <th style="width: 170px;">Thao tác</th>
             </tr>
         </thead>
@@ -113,6 +114,13 @@
                     {% endif %}
                 </td>
                 <td data-label="Trạng thái">{{ entity_state_badge(s.is_active) }}</td>
+                <td data-label="Key theo ID">
+                    {% if s.supports_key_lookup_by_id %}
+                    <span class="badge badge-success">Bật</span>
+                    {% else %}
+                    <span class="badge badge-secondary">Tắt</span>
+                    {% endif %}
+                </td>
                 <td>
                     <div class="actions">
                         {{ entity_toggle_form('/servers/' ~ s.id ~ '/toggle-active', s.is_active, next_url) }}
@@ -197,6 +205,17 @@
 
                     <hr>
                     <div id="add_advanced_block">
+                        <div id="add_key_lookup_wrap">
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="supports_key_lookup_by_id" id="add_supports_key_lookup_by_id" value="1">
+                                <label class="form-check-label" for="add_supports_key_lookup_by_id">Server hỗ trợ lấy full key bằng token ID</label>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label">Endpoint lấy key theo ID</label>
+                                <input name="token_key_endpoint_template" class="form-control" value="/api/token/{id}/key" placeholder="/api/token/{id}/key">
+                                <div class="form-text">Bật cho NewAPI bản mới. Hệ thống sẽ thay <code>{id}</code> bằng token ID và gọi <code>POST</code>.</div>
+                            </div>
+                        </div>
                         <h6 class="text-muted mb-2">Nâng cao (Optional)</h6>
                         <div class="mb-2"><label class="form-label">Đường dẫn lấy nhóm</label><input name="groups_endpoint" class="form-control" placeholder="/api/user/self/groups"></div>
                         <div class="mb-2"><label class="form-label">Danh sách nhóm nhập tay</label><input name="manual_groups" class="form-control" placeholder="default,azure,gemini,claude"></div>
@@ -504,6 +523,7 @@ function setupApiType(prefix) {
     const headerWrap = document.getElementById(prefix + '_header_wrap');
     const multiGroupWrap = document.getElementById(prefix + '_multi_group_wrap');
     const advancedBlock = document.getElementById(prefix + '_advanced_block');
+    const keyLookupWrap = document.getElementById(prefix + '_key_lookup_wrap');
     const userValueLabel = document.getElementById(prefix + '_user_value_label');
     const tokenLabel = document.getElementById(prefix + '_token_label');
 
@@ -516,6 +536,7 @@ function setupApiType(prefix) {
         if (headerWrap) headerWrap.style.display = isOther ? '' : 'none';
         if (multiGroupWrap) multiGroupWrap.style.display = '';
         if (advancedBlock) advancedBlock.style.display = isOther ? '' : 'none';
+        if (keyLookupWrap) keyLookupWrap.style.display = apiType.value === 'newapi' ? '' : 'none';
         if (userValueLabel) userValueLabel.textContent = isOther ? 'Giá trị mã người dùng' : 'Mã người dùng';
         if (tokenLabel) tokenLabel.textContent = isOther ? 'Bearer token' : 'Token truy cập';
         if (!isOther && authType) authType.value = 'header';
