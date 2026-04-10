@@ -299,7 +299,9 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
     client = get_api_client(server)
     created_keys: list[str] = []
     created_token_ids: list[int] = []
+    created_token_names: list[str] = []
     for sequence in range(1, quantity + 1):
+        current_token_name = f"{token_batch_name}_{sequence}"
         try:
             full_key, token_id = await _create_key_with_retry(
                 client,
@@ -309,15 +311,19 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
                 base_token_name=token_batch_name,
                 sequence=sequence,
             )
-        except _MaskedDeliveryDataError:
+        except _MaskedDeliveryDataError as exc:
+            failed_token_name = str(exc) if exc.args else current_token_name
+            partial_token_names = [*created_token_names, failed_token_name]
             partial_delivery = "\n".join(created_keys) if created_keys else None
             await update_order_status(
                 order["id"],
                 "processing",
                 api_key=created_keys[0] if created_keys else None,
                 api_token_id=created_token_ids[0] if created_token_ids else None,
+                api_token_name=created_token_names[0] if created_token_names else failed_token_name,
                 quota_after=quota,
                 delivery_info=partial_delivery,
+                delivery_token_names="\n".join(partial_token_names) if len(partial_token_names) > 1 else None,
             )
             await add_log(
                 (
@@ -350,8 +356,10 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
                 "processing",
                 api_key=created_keys[0],
                 api_token_id=created_token_ids[0] if created_token_ids else None,
+                api_token_name=created_token_names[0] if created_token_names else None,
                 quota_after=quota,
                 delivery_info=partial_delivery,
+                delivery_token_names="\n".join(created_token_names) if len(created_token_names) > 1 else None,
             )
             await add_log(
                 f"Partial key batch for order {order['order_code']}: delivered {len(created_keys)}/{quantity}",
@@ -372,6 +380,7 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
             return
 
         created_keys.append(full_key)
+        created_token_names.append(current_token_name)
         if token_id is not None:
             created_token_ids.append(token_id)
         await create_user_key(
@@ -410,8 +419,10 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
         "completed",
         api_key=created_keys[0],
         api_token_id=created_token_ids[0] if created_token_ids else None,
+        api_token_name=created_token_names[0] if created_token_names else None,
         quota_after=quota,
         delivery_info=delivery_info,
+        delivery_token_names="\n".join(created_token_names) if len(created_token_names) > 1 else None,
     )
     await SpendLedgerService.record_order_completion(order)
     await add_log(

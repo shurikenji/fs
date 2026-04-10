@@ -49,6 +49,8 @@ _BEST_EFFORT_MIGRATIONS = [
     "ALTER TABLE orders ADD COLUMN pricing_snapshot TEXT",
     "ALTER TABLE orders ADD COLUMN promotion_snapshot TEXT",
     "ALTER TABLE orders ADD COLUMN completed_at TEXT",
+    "ALTER TABLE orders ADD COLUMN api_token_name TEXT",
+    "ALTER TABLE orders ADD COLUMN delivery_token_names TEXT",
     """UPDATE orders
        SET completed_at = COALESCE(NULLIF(paid_at, ''), NULLIF(updated_at, ''))
        WHERE status = 'completed'

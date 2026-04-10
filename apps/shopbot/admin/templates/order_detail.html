@@ -116,6 +116,12 @@
                         <td><code>{{ order.api_key }}</code></td>
                     </tr>
                     {% endif %}
+                    {% if order.api_token_name %}
+                    <tr>
+                        <th>Token Name</th>
+                        <td><code>{{ order.api_token_name }}</code></td>
+                    </tr>
+                    {% endif %}
                     {% if order.quota_before is not none %}
                     <tr>
                         <th>Quota</th>
@@ -126,6 +132,12 @@
                     <tr>
                         <th>Delivery</th>
                         <td><pre class="mb-0" style="background: var(--background-subtle); padding: 0.5rem; border-radius: 6px;">{{ order.delivery_info }}</pre></td>
+                    </tr>
+                    {% endif %}
+                    {% if order.delivery_token_names %}
+                    <tr>
+                        <th>Delivery Token Names</th>
+                        <td><pre class="mb-0" style="background: var(--background-subtle); padding: 0.5rem; border-radius: 6px;">{{ order.delivery_token_names }}</pre></td>
                     </tr>
                     {% endif %}
                     {% if order.mb_transaction_id %}

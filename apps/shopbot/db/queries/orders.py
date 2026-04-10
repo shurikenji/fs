@@ -14,8 +14,10 @@ _ORDER_UPDATEABLE_FIELDS = frozenset(
     {
         "api_key",
         "api_token_id",
+        "api_token_name",
         "completed_at",
         "delivery_info",
+        "delivery_token_names",
         "expired_at",
         "is_refunded",
         "mb_transaction_id",
