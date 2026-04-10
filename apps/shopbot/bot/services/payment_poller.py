@@ -43,6 +43,20 @@ logger = logging.getLogger(__name__)
 
 Order = dict[str, Any]
 Processor = Callable[[Bot, Order], Awaitable[None]]
+_CREATED_KEY_FIELDS = (
+    "key",
+    "api_key",
+    "apiKey",
+    "token",
+    "access_token",
+    "accessToken",
+    "secret",
+    "secret_key",
+)
+
+
+class _MaskedDeliveryDataError(RuntimeError):
+    """Raised when upstream creates a token but only returns masked key data."""
 
 
 async def start_payment_poller(bot: Bot) -> None:
@@ -228,9 +242,15 @@ async def _create_key_with_retry(
                 await asyncio.sleep(1)
                 found = await client.search_token_by_name(server, token_name)
                 if found:
-                    api_key = found.get("key", "")
+                    api_key = _extract_created_key(found)
             if api_key:
-                return api_key if api_key.startswith("sk-") else f"sk-{api_key}"
+                return api_key
+            logger.warning(
+                "Token %s created on %s but upstream returned only masked/incomplete key data",
+                token_name,
+                server["name"],
+            )
+            raise _MaskedDeliveryDataError(token_name)
         await asyncio.sleep(1)
     return None
 
@@ -257,14 +277,44 @@ async def _process_key_new(bot: Bot, order: Order) -> None:
     client = get_api_client(server)
     created_keys: list[str] = []
     for sequence in range(1, quantity + 1):
-        full_key = await _create_key_with_retry(
-            client,
-            server=server,
-            quota=quota,
-            group_name=group_name,
-            base_token_name=token_batch_name,
-            sequence=sequence,
-        )
+        try:
+            full_key = await _create_key_with_retry(
+                client,
+                server=server,
+                quota=quota,
+                group_name=group_name,
+                base_token_name=token_batch_name,
+                sequence=sequence,
+            )
+        except _MaskedDeliveryDataError:
+            partial_delivery = "\n".join(created_keys) if created_keys else None
+            await update_order_status(
+                order["id"],
+                "processing",
+                api_key=created_keys[0] if created_keys else None,
+                quota_after=quota,
+                delivery_info=partial_delivery,
+            )
+            await add_log(
+                (
+                    f"Order {order['order_code']} created token on {server['name']} "
+                    "but upstream only returned masked key data; manual delivery required"
+                ),
+                level="error",
+                module="poller",
+            )
+            support_url = await get_setting("support_url", "https://t.me/admin")
+            await notify_user(
+                order["user_id"],
+                (
+                    f"⚠️ Đơn <b>{order['order_code']}</b> đã thanh toán nhưng hệ thống chưa lấy được "
+                    "API key đầy đủ từ server để giao tự động.\n"
+                    "Admin sẽ kiểm tra và bàn giao thủ công sớm nhất có thể.\n\n"
+                    f"💬 Hỗ trợ: {support_url}"
+                ),
+                bot=bot,
+            )
+            return
         if not full_key:
             if not created_keys:
                 await _refund_order(bot, order, "Không thể tạo key trên server")
@@ -653,15 +703,43 @@ async def _load_key_order_context(order: Order) -> tuple[Order | None, Order | N
 
 
 def _extract_created_key(result: dict[str, Any]) -> str:
-    """Lấy API key vừa tạo từ response trực tiếp hoặc nested."""
-    api_key = result.get("key", "")
-    if api_key:
-        return api_key
+    """Lấy API key chưa bị mask từ response trực tiếp hoặc nested."""
+    queue: list[Any] = [result]
+    seen: set[int] = set()
 
-    nested = result.get("data")
-    if isinstance(nested, dict):
-        return nested.get("key", "")
+    while queue:
+        current = queue.pop(0)
+        marker = id(current)
+        if marker in seen:
+            continue
+        seen.add(marker)
+
+        if isinstance(current, dict):
+            for field in _CREATED_KEY_FIELDS:
+                normalized = _normalize_created_key(current.get(field))
+                if normalized:
+                    return normalized
+            for value in current.values():
+                if isinstance(value, (dict, list, tuple)):
+                    queue.append(value)
+        elif isinstance(current, (list, tuple)):
+            for item in current:
+                if isinstance(item, (dict, list, tuple)):
+                    queue.append(item)
     return ""
+
+
+def _normalize_created_key(value: Any) -> str:
+    """Normalize created-key payloads and reject masked/truncated variants."""
+    if not isinstance(value, str):
+        return ""
+
+    normalized = value.strip()
+    if not normalized or "*" in normalized or "..." in normalized:
+        return ""
+    if normalized.startswith("sk-"):
+        return normalized
+    return f"sk-{normalized}"
 
 
 def _format_account_delivery(raw_data: str, format_template: str | None) -> str:
