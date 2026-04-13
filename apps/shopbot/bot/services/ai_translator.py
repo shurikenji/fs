@@ -63,6 +63,9 @@ class AITranslator:
         return bool(text and CJK_RE.search(str(text)))
 
     def _group_source_text(self, group: dict) -> str:
+        return str(group.get("name") or "").strip()
+
+    def _group_context_text(self, group: dict) -> str:
         return str(
             group.get("translation_source")
             or group.get("desc")
@@ -72,12 +75,16 @@ class AITranslator:
 
     def _needs_translation_refresh(self, group: dict, cached: dict | None = None) -> bool:
         current = cached or group
-        return (
-            not current.get("name_en")
+        name_en = str(current.get("name_en") or "").strip()
+        desc_en = str(current.get("desc_en") or "").strip()
+        if (
+            not name_en
             or not current.get("name_vi")
-            or self._contains_cjk(current.get("name_en"))
-            or self._contains_cjk(current.get("desc_en"))
-        )
+            or self._contains_cjk(name_en)
+            or self._contains_cjk(desc_en)
+        ):
+            return True
+        return self._looks_context_derived_name(group, name_en)
 
     def _fallback_english_text(self, text: object) -> str:
         if not text:
@@ -129,14 +136,15 @@ class AITranslator:
     def _build_translation_fields(self, group: dict, translation: dict) -> dict[str, str]:
         original_name = str(group.get("name") or "")
         source_text = self._group_source_text(group) or original_name
+        context_text = self._group_context_text(group) or source_text
         name_en = self._resolve_english_name(
-            preferred=translation.get("name_en") or group.get("name_en"),
+            preferred=translation.get("name_en"),
             original_name=original_name,
             source_text=source_text,
         )
         desc_en = self._resolve_english_description(
             preferred=translation.get("desc_en") or group.get("desc_en") or group.get("desc"),
-            source_text=source_text,
+            source_text=context_text,
             fallback_name=name_en,
         )
         return {
@@ -160,6 +168,25 @@ class AITranslator:
                 **normalized,
             }
         return cleaned
+
+    def _looks_context_derived_name(self, group: dict, name_en: str) -> bool:
+        current_name = str(name_en or "").strip()
+        original_name = str(group.get("name") or "").strip()
+        if not current_name or not self._contains_cjk(original_name):
+            return False
+
+        original_fallback = self._resolve_english_name(
+            preferred="",
+            original_name=original_name,
+            source_text=original_name,
+        )
+        context_fallback = self._fallback_english_text(self._group_context_text(group))
+        return bool(
+            original_fallback
+            and context_fallback
+            and current_name == context_fallback
+            and current_name != original_fallback
+        )
 
     async def translate_groups(
         self, groups: list[dict], api_type: str
@@ -287,9 +314,9 @@ class AITranslator:
 
         group_lines = []
         for group in groups:
-            source_text = self._group_source_text(group) or group["name"]
+            source_text = self._group_context_text(group) or group["name"]
             group_lines.append(
-                f"- original_name: {group['name']} | source_text: {source_text}"
+                f"- original_name: {group['name']} | context_text: {source_text}"
             )
         group_list = "\n".join(group_lines)
         
@@ -301,10 +328,12 @@ For each group name, provide:
 4. Brief English description (desc_en)
 5. Brief Vietnamese description (desc_vi)
 
-Use `source_text` as the richer context when it contains Chinese text, pricing hints, route labels, or quality notes.
+Translate `name_en` and `name_vi` directly from `original_name`.
+Use `context_text` only as supporting context for desc_en, desc_vi, category, and meaning disambiguation.
 Keep `name_en` concise and admin-friendly. Preserve well-known model or provider names like Azure, Claude Code, Gemini, Kimi, Grok.
 `name_en` and `desc_en` must be fully English. Do not leave any Chinese characters, untranslated fragments, or mixed Chinese-English output.
 If the original label mixes English brands with Chinese qualifiers, keep the brand and translate the qualifier into natural English.
+Do not copy route notes or descriptive sentences into `name_en` unless they are part of the actual original_name.
 Do not include numeric ratios inside `name_en` unless the ratio is essential to distinguish the group.
 
 Respond in JSON format:

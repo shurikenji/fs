@@ -47,7 +47,8 @@ class TranslationGroupsTests(unittest.TestCase):
                     "original_name": "azure",
                     "display_name": "Azure 路线",
                     "description": "官方稳定线路",
-                    "source_text": "官方稳定线路",
+                    "source_text": "azure",
+                    "context_text": "官方稳定线路",
                 }
             ],
         )
@@ -58,7 +59,8 @@ class TranslationGroupsTests(unittest.TestCase):
                 "original_name": "azure",
                 "display_name": "Azure 路线",
                 "description": "官方稳定线路",
-                "source_text": "官方稳定线路",
+                "source_text": "azure",
+                "context_text": "官方稳定线路",
             },
             {
                 "name_en": "",
@@ -132,5 +134,24 @@ class TranslationGroupsTests(unittest.TestCase):
         self.assertFalse(needs_group_translation_refresh(payload, sanitized["aws-claude1"]))
         self.assertEqual(
             build_fallback_group_translations([payload])["aws-claude1"]["name_en"],
-            "AWS Claude1 - Low Concurrency",
+            "aws-claude1",
+        )
+
+    def test_refresh_rejects_cached_name_derived_from_context(self) -> None:
+        payload = group_row_payload(
+            {
+                "name": "官方高并发",
+                "translation_source": "官方 高并发 渠道",
+            }
+        )
+
+        self.assertTrue(
+            needs_group_translation_refresh(
+                payload,
+                {
+                    "name_en": "Official High Concurrency Route",
+                    "desc_en": "Official high-concurrency route",
+                    "category": "Official",
+                },
+            )
         )

@@ -39,6 +39,19 @@ async def main() -> None:
     assert sanitized["\u5b98\u65b9\u9ad8\u5e76\u53d1"]["desc_en"] == "Official High Concurrency Route"
     print("[OK] _sanitize_translation_payload removes CJK from fallback English fields")
 
+    assert translator._needs_translation_refresh(
+        {
+            "name": "\u5b98\u65b9\u9ad8\u5e76\u53d1",
+            "translation_source": "\u5b98\u65b9 \u9ad8\u5e76\u53d1 \u6e20\u9053",
+        },
+        {
+            "name_en": "Official High Concurrency Route",
+            "name_vi": "Tuyen chinh thuc tai cao",
+            "desc_en": "Official high concurrency route",
+        },
+    )
+    print("[OK] _needs_translation_refresh invalidates old context-derived group names")
+
     async def _fake_get_cached_translations(group_names: list[str], api_type: str) -> dict[str, dict]:
         _ = (group_names, api_type)
         return {

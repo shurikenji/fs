@@ -34,12 +34,14 @@ def group_payload(group: Any) -> dict[str, str]:
     original_name = str(group.name or "").strip()
     display_name = str(group.display_name or original_name).strip()
     description = str(group.description or "").strip()
-    source_text = description or display_name or original_name
+    source_text = strip_group_price_notes(original_name)
+    context_text = strip_group_price_notes(description or display_name or original_name)
     return {
         "original_name": original_name,
         "display_name": display_name,
         "description": description,
         "source_text": source_text,
+        "context_text": context_text,
     }
 
 
@@ -52,7 +54,8 @@ def group_row_payload(group: dict[str, Any]) -> dict[str, str]:
         or original_name
     ).strip())
     description = str(group.get("desc") or group.get("description") or "").strip()
-    source_text = strip_group_price_notes(str(
+    source_text = strip_group_price_notes(original_name)
+    context_text = strip_group_price_notes(str(
         group.get("translation_source")
         or description
         or display_name
@@ -63,6 +66,7 @@ def group_row_payload(group: dict[str, Any]) -> dict[str, str]:
         "display_name": display_name,
         "description": description,
         "source_text": source_text,
+        "context_text": context_text,
     }
 
 
@@ -75,7 +79,13 @@ def needs_group_translation_refresh(
     desc_en = str(current.get("desc_en") or "").strip()
     if not name_en or contains_cjk(name_en):
         return True
-    if not desc_en and contains_cjk(group.get("source_text") or ""):
+    if _looks_context_derived_group_name(
+        name_en,
+        original_name=str(group.get("original_name") or ""),
+        context_text=str(group.get("context_text") or group.get("source_text") or ""),
+    ):
+        return True
+    if not desc_en and contains_cjk(str(group.get("context_text") or group.get("source_text") or "")):
         return True
     return contains_cjk(desc_en)
 
@@ -86,14 +96,15 @@ def build_group_translation_fields(
 ) -> dict[str, str]:
     original_name = str(group.get("original_name") or "")
     source_text = str(group.get("source_text") or original_name)
+    context_text = str(group.get("context_text") or source_text or original_name)
     name_en = _resolve_english_name(
-        preferred=translation.get("name_en") or group.get("display_name"),
+        preferred=translation.get("name_en"),
         original_name=original_name,
         source_text=source_text,
     )
     desc_en = _resolve_english_description(
         preferred=translation.get("desc_en") or group.get("description"),
-        source_text=source_text,
+        source_text=context_text,
         fallback_name=name_en,
     )
     category = str(translation.get("category") or "Other").strip() or "Other"
@@ -202,4 +213,23 @@ def _resolve_english_description(*, preferred: object, source_text: str, fallbac
         fallback_english(desc_en)
         or fallback_english(source_text)
         or fallback_name
+    )
+
+
+def _looks_context_derived_group_name(name_en: str, *, original_name: str, context_text: str) -> bool:
+    current_name = strip_group_price_notes(str(name_en or "").strip())
+    if not current_name or not contains_cjk(original_name):
+        return False
+
+    original_fallback = _resolve_english_name(
+        preferred="",
+        original_name=original_name,
+        source_text=original_name,
+    )
+    context_fallback = strip_group_price_notes(fallback_english(context_text))
+    return bool(
+        original_fallback
+        and context_fallback
+        and current_name == context_fallback
+        and current_name != original_fallback
     )

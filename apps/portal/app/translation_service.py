@@ -81,10 +81,7 @@ async def translate_group_rows(groups: list[dict[str, Any]], server_type: str) -
     ]
 
     if missing:
-        generated = build_fallback_group_translations(missing)
-        ai_generated = await _translate_groups_with_ai(missing)
-        if ai_generated:
-            generated.update(sanitize_group_translation_payload(ai_generated, missing))
+        generated = await _generate_group_translations(missing)
         if generated:
             cached.update(generated)
             await save_translations(generated, server_type)
@@ -98,10 +95,7 @@ async def apply_group_translations(pricing: NormalizedPricing, server_type: str)
     missing = [item for item in group_payloads if needs_group_translation_refresh(item, cached.get(item["original_name"]))]
 
     if missing:
-        generated = build_fallback_group_translations(missing)
-        ai_generated = await _translate_groups_with_ai(missing)
-        if ai_generated:
-            generated.update(sanitize_group_translation_payload(ai_generated, missing))
+        generated = await _generate_group_translations(missing)
         if generated:
             cached.update(generated)
             await save_translations(generated, server_type)
@@ -117,10 +111,7 @@ async def warm_translation_cache(pricing: NormalizedPricing, server_type: str) -
     if not missing:
         return 0
 
-    generated = build_fallback_group_translations(missing)
-    ai_generated = await _translate_groups_with_ai(missing)
-    if ai_generated:
-        generated.update(sanitize_group_translation_payload(ai_generated, missing))
+    generated = await _generate_group_translations(missing)
     if generated:
         await save_translations(generated, server_type)
     group_count = len(generated)
@@ -232,7 +223,8 @@ async def _translate_groups_with_ai(groups: list[dict[str, str]]) -> dict[str, d
 
     system_prompt = (
         "You translate API token-group labels and descriptions into concise English for a pricing dashboard. "
-        "Use source_text as the richer context when it contains Chinese notes, route hints, or quality markers. "
+        "Translate name_en directly from original_name. Never derive the group name from context_text, description text, or route notes alone. "
+        "Use context_text only to disambiguate the meaning and to write desc_en/category. "
         "Preserve well-known brand names like Azure, OpenAI, Claude, Gemini, Grok, Kimi, DeepSeek, and Anthropic. "
         "Return English only. No Chinese characters, no mixed Chinese-English output, no markdown. "
         "Return JSON with key 'items'. Each item must include original_name, name_en, desc_en, and category. "
@@ -255,6 +247,18 @@ async def _translate_groups_with_ai(groups: list[dict[str, str]]) -> dict[str, d
         return {}
 
     return normalize_ai_group_response(parse_ai_json(content))
+
+
+async def _generate_group_translations(groups: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    generated: dict[str, dict[str, str]] = {}
+    ai_generated = await _translate_groups_with_ai(groups)
+    if ai_generated:
+        generated.update(sanitize_group_translation_payload(ai_generated, groups))
+
+    unresolved = [item for item in groups if item["original_name"] not in generated]
+    if unresolved:
+        generated.update(build_fallback_group_translations(unresolved))
+    return generated
 
 
 async def _translate_model_descriptions_with_ai(
