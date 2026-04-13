@@ -5,6 +5,7 @@ from app.public_pricing_presenter import (
     catalog_matches_pricing_groups,
     prepare_public_pricing_presentation,
 )
+from app.sanitizer import sanitize_pricing
 from app.schemas import NormalizedGroup, NormalizedPricing
 
 
@@ -51,3 +52,27 @@ class PublicPricingPresenterTests(unittest.IsolatedAsyncioTestCase):
         pricing = _sample_pricing()
         self.assertTrue(catalog_matches_pricing_groups([{"name": "g1"}], pricing))
         self.assertFalse(catalog_matches_pricing_groups([{"name": "g2"}], pricing))
+
+    def test_sanitize_pricing_prefers_original_ascii_name_when_catalog_label_is_description_based(self) -> None:
+        pricing = NormalizedPricing(
+            server_id="server-1",
+            server_name="Server 1",
+            models=[],
+            groups=[NormalizedGroup(name="Gemini-Vertex", display_name="Gemini - Vertex Ai Channel", ratio=1.0)],
+            fetched_at="2026-04-05T00:00:00Z",
+        )
+
+        sanitized = sanitize_pricing(
+            pricing,
+            group_catalog={
+                "Gemini-Vertex": {
+                    "name": "Gemini-Vertex",
+                    "label_en": "Gemini - Vertex Ai Channel",
+                    "ratio": 1.0,
+                    "desc": "",
+                    "category": "General",
+                }
+            },
+        )
+
+        self.assertEqual(sanitized.groups[0].display_name, "Gemini-Vertex")

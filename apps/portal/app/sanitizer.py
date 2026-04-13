@@ -205,6 +205,11 @@ def sanitize_group_name(name: str, display_name: str = "") -> str:
             return canonical_preferred
         return canonical_original
 
+    # For non-CJK group IDs, prefer the actual upstream name over any cached
+    # display label that may have been derived from descriptions or route notes.
+    if original and not contains_cjk(original):
+        return original
+
     if preferred and preferred != original:
         if not contains_cjk(preferred):
             return preferred

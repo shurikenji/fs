@@ -15,13 +15,19 @@ class GroupLabelSanitizationTests(unittest.TestCase):
     def test_sanitize_group_name_cleans_cached_catalog_label(self) -> None:
         self.assertEqual(
             sanitize_group_name("aws-claude1", "AWS Claude1 - Low Concurrency (2 CNY/Token)"),
-            "AWS Claude1 - Low Concurrency",
+            "aws-claude1",
         )
 
     def test_sanitize_group_name_preserves_readable_canonical_name(self) -> None:
         self.assertEqual(
             sanitize_group_name("Azure", "OpenAI Route"),
             "Azure",
+        )
+
+    def test_sanitize_group_name_prefers_original_ascii_name_over_description_label(self) -> None:
+        self.assertEqual(
+            sanitize_group_name("Gemini-Vertex", "Gemini - Vertex Ai Channel"),
+            "Gemini-Vertex",
         )
 
     def test_rixapi_parse_groups_cleans_name_en_and_translation_source(self) -> None:

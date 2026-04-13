@@ -6,7 +6,7 @@ from typing import Any
 
 from app.adapters import get_adapter
 from app.adapters.base import extract_ratio_hint
-from app.sanitizer import canonical_group_label
+from app.sanitizer import canonical_group_label, contains_cjk
 from db.queries.servers import update_server_cache
 
 
@@ -71,12 +71,16 @@ def _normalize_group_rows(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
         normalized_rows.append(
             {
                 "name": name,
-                "label_en": canonical_group_label(name) or str(
-                    group.get("label_en")
-                    or group.get("name_en")
-                    or group.get("name")
-                    or ""
-                ).strip(),
+                "label_en": canonical_group_label(name) or (
+                    name
+                    if not contains_cjk(name)
+                    else str(
+                        group.get("label_en")
+                        or group.get("name_en")
+                        or group.get("name")
+                        or ""
+                    ).strip()
+                ),
                 "ratio": numeric_ratio,
                 "desc": str(group.get("desc_en") or group.get("desc") or "").strip(),
                 "category": str(group.get("category") or "Other").strip() or "Other",
