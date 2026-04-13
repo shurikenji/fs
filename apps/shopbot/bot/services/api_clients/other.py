@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base import BaseAPIClient
+from bot.utils.group_name_policy import extract_ratio_hint_from_texts, strip_group_price_notes
 
 
 class OtherAPIClient(BaseAPIClient):
@@ -97,16 +98,21 @@ class OtherAPIClient(BaseAPIClient):
         if isinstance(data, dict):
             for name, info in data.items():
                 if isinstance(info, dict):
+                    raw_desc = str(info.get("desc") or "")
                     groups.append({
                         "name": name,
                         "ratio": info.get("ratio", 1.0),
-                        "desc": info.get("desc", ""),
+                        "desc": raw_desc,
+                        "translation_source": strip_group_price_notes(raw_desc or name),
+                        "ratio_source": raw_desc or name,
                     })
                 else:
                     groups.append({
                         "name": name,
                         "ratio": 1.0,
                         "desc": "",
+                        "translation_source": name,
+                        "ratio_source": name,
                     })
         
         # Try RixAPI/Array format
@@ -114,12 +120,18 @@ class OtherAPIClient(BaseAPIClient):
             for item in data:
                 if isinstance(item, dict):
                     raw_label = item.get("key") or item.get("label") or item.get("description") or ""
+                    raw_desc = item.get("desc") or item.get("description") or raw_label
+                    name = item.get("value") or item.get("group") or item.get("name") or item.get("key") or "unknown"
+                    explicit_ratio = item.get("ratio")
+                    if explicit_ratio in (None, ""):
+                        explicit_ratio = item.get("multiplier")
                     groups.append({
-                        "name": item.get("value") or item.get("group") or item.get("name") or item.get("key") or "unknown",
+                        "name": name,
                         "name_en": item.get("name_en"),
-                        "ratio": item.get("ratio") or item.get("multiplier") or self.extract_ratio_hint(raw_label),
-                        "desc": item.get("desc") or item.get("description") or raw_label,
-                        "translation_source": raw_label or item.get("value") or item.get("group") or item.get("name") or item.get("key") or "unknown",
+                        "ratio": explicit_ratio if explicit_ratio not in (None, "") else extract_ratio_hint_from_texts(raw_label, raw_desc, name),
+                        "desc": raw_desc,
+                        "translation_source": strip_group_price_notes(raw_label or raw_desc or name),
+                        "ratio_source": str(raw_label or raw_desc or name),
                     })
         
         return groups

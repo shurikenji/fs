@@ -52,6 +52,33 @@ async def main() -> None:
     )
     print("[OK] _needs_translation_refresh invalidates old context-derived group names")
 
+    normalized_name = translator._build_translation_fields(
+        {
+            "name": "Claude\u4e13\u7528",
+            "translation_source": "Dedicated Route 2.0",
+            "desc": "Dedicated Route 2.0",
+        },
+        {
+            "name_en": "Dedicated Route",
+            "desc_en": "Dedicated Route 2.0",
+        },
+    )
+    assert normalized_name["name_en"] == "Claude Dedicated"
+    print("[OK] _build_translation_fields falls back to original-name translation when AI name is context-derived")
+
+    assert translator._needs_translation_refresh(
+        {
+            "name": "Claude Code\u4e13\u5c5e",
+            "translation_source": "Claude Code Exclusive",
+        },
+        {
+            "name_en": "Claude Code Exclusive",
+            "name_vi": "Claude Code doc quyen",
+            "desc_en": "Claude Code Exclusive",
+        },
+    )
+    print("[OK] _needs_translation_refresh invalidates stale generic translations such as Exclusive")
+
     async def _fake_get_cached_translations(group_names: list[str], api_type: str) -> dict[str, dict]:
         _ = (group_names, api_type)
         return {
@@ -97,7 +124,8 @@ async def main() -> None:
     translated_map = {group["name"]: group for group in translated}
 
     assert translated_map["cached-group"]["label_vi"] == "Nh\u00f3m cache"
-    assert translated_map["fresh-group"]["label_en"] == "Fresh Group"
+    assert translated_map["cached-group"]["label_en"] == "cached-group"
+    assert translated_map["fresh-group"]["label_en"] == "fresh-group"
     assert saved_translations["fresh-group"]["name_vi"] == "Nh\u00f3m m\u1edbi"
     print("[OK] translate_groups merges cached and fresh translations without external API calls")
 
@@ -106,7 +134,7 @@ async def main() -> None:
         [{"name": "cached-group", "desc": "cached desc"}],
         "newapi",
     )
-    assert cached_only[0]["label_en"] == "Cached Group"
+    assert cached_only[0]["label_en"] == "cached-group"
     print("[OK] translate_groups still applies cached translations when AI is disabled")
 
     print("\n=== AI TRANSLATOR VERIFICATION PASSED ===")

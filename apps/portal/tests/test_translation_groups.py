@@ -48,6 +48,7 @@ class TranslationGroupsTests(unittest.TestCase):
                     "display_name": "Azure 路线",
                     "description": "官方稳定线路",
                     "source_text": "azure",
+                    "ratio_source": "azure",
                     "context_text": "官方稳定线路",
                 }
             ],
@@ -60,6 +61,7 @@ class TranslationGroupsTests(unittest.TestCase):
                 "display_name": "Azure 路线",
                 "description": "官方稳定线路",
                 "source_text": "azure",
+                "ratio_source": "azure",
                 "context_text": "官方稳定线路",
             },
             {
@@ -136,6 +138,26 @@ class TranslationGroupsTests(unittest.TestCase):
             build_fallback_group_translations([payload])["aws-claude1"]["name_en"],
             "aws-claude1",
         )
+        self.assertEqual(payload["ratio_source"], "AWS Claude1 - Low Concurrency (2 CNY/Token)")
+
+    def test_build_fields_rejects_generic_context_derived_name(self) -> None:
+        normalized = build_group_translation_fields(
+            {
+                "original_name": "Claude专用",
+                "display_name": "Claude专用",
+                "description": "Dedicated Route 2.0",
+                "source_text": "Claude专用",
+                "context_text": "Dedicated Route 2.0",
+                "ratio_source": "Dedicated Route 2.0",
+            },
+            {
+                "name_en": "Dedicated Route",
+                "desc_en": "Dedicated route 2.0",
+                "category": "Official",
+            },
+        )
+
+        self.assertEqual(normalized["name_en"], "Claude Dedicated")
 
     def test_refresh_rejects_cached_name_derived_from_context(self) -> None:
         payload = group_row_payload(
@@ -151,6 +173,25 @@ class TranslationGroupsTests(unittest.TestCase):
                 {
                     "name_en": "Official High Concurrency Route",
                     "desc_en": "Official high-concurrency route",
+                    "category": "Official",
+                },
+            )
+        )
+
+    def test_refresh_rejects_context_name_with_trailing_ratio(self) -> None:
+        payload = group_row_payload(
+            {
+                "name": "Claude官转",
+                "translation_source": "Official Relay Route 2.0",
+            }
+        )
+
+        self.assertTrue(
+            needs_group_translation_refresh(
+                payload,
+                {
+                    "name_en": "Official Relay Route",
+                    "desc_en": "Official relay route 2.0",
                     "category": "Official",
                 },
             )

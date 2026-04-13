@@ -28,6 +28,7 @@ from app.adapters.base import (
     normalize_tags,
     _TIMEOUT,
 )
+from app.sanitizer import strip_group_price_notes
 from app.server_profiles import resolve_server_profile
 from app.schemas import (
     EndpointAlias,
@@ -948,12 +949,14 @@ class NewApiAdapter(BaseAdapter):
             descriptions = data.get("data", {})
             ratios = data.get("ratios", {})
             for name, desc in descriptions.items():
+                raw_desc = desc if isinstance(desc, str) else ""
                 groups.append(
                     {
                         "name": name,
                         "ratio": ratios.get(name, 1.0),
-                        "desc": desc if isinstance(desc, str) else "",
-                        "translation_source": desc if isinstance(desc, str) else name,
+                        "desc": raw_desc,
+                        "translation_source": strip_group_price_notes(raw_desc or name),
+                        "ratio_source": raw_desc or name,
                     }
                 )
             return groups
@@ -961,12 +964,14 @@ class NewApiAdapter(BaseAdapter):
         if isinstance(data, dict):
             for name, info in data.items():
                 if isinstance(info, dict):
+                    raw_desc = str(info.get("desc") or "")
                     groups.append(
                         {
                             "name": name,
                             "ratio": info.get("ratio", 1.0),
-                            "desc": info.get("desc", ""),
-                            "translation_source": info.get("desc", "") or name,
+                            "desc": raw_desc,
+                            "translation_source": strip_group_price_notes(raw_desc or name),
+                            "ratio_source": raw_desc or name,
                         }
                     )
                 else:
@@ -976,6 +981,7 @@ class NewApiAdapter(BaseAdapter):
                             "ratio": 1.0,
                             "desc": "",
                             "translation_source": name,
+                            "ratio_source": name,
                         }
                     )
         elif isinstance(data, list):
@@ -989,12 +995,19 @@ class NewApiAdapter(BaseAdapter):
                         or "unknown"
                     )
                     raw_label = item.get("key") or item.get("label") or item.get("description") or ""
+                    raw_desc = item.get("desc") or item.get("description") or raw_label
+                    explicit_ratio = item.get("ratio")
+                    if explicit_ratio in (None, ""):
+                        explicit_ratio = item.get("multiplier")
                     groups.append(
                         {
                             "name": name,
-                            "ratio": item.get("ratio") or item.get("multiplier") or extract_ratio_hint(raw_label, name),
-                            "desc": item.get("desc") or item.get("description") or raw_label,
-                            "translation_source": raw_label or item.get("description") or item.get("desc") or name,
+                            "ratio": explicit_ratio if explicit_ratio not in (None, "") else extract_ratio_hint(raw_label, raw_desc, name),
+                            "desc": raw_desc,
+                            "translation_source": strip_group_price_notes(
+                                str(raw_label or raw_desc or name)
+                            ),
+                            "ratio_source": str(raw_label or raw_desc or name),
                         }
                     )
 

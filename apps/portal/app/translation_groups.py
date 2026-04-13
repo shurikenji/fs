@@ -6,7 +6,10 @@ from typing import Any
 from app.sanitizer import (
     canonical_group_label,
     contains_cjk,
+    extract_ascii_name_tokens,
     fallback_english,
+    is_context_derived_group_name,
+    normalize_group_name_for_compare,
     strip_group_price_notes,
 )
 from app.schemas import NormalizedPricing
@@ -42,6 +45,7 @@ def group_payload(group: Any) -> dict[str, str]:
         "description": description,
         "source_text": source_text,
         "context_text": context_text,
+        "ratio_source": source_text,
     }
 
 
@@ -55,6 +59,13 @@ def group_row_payload(group: dict[str, Any]) -> dict[str, str]:
     ).strip())
     description = str(group.get("desc") or group.get("description") or "").strip()
     source_text = strip_group_price_notes(original_name)
+    ratio_source = str(
+        group.get("ratio_source")
+        or group.get("raw_label")
+        or group.get("translation_source")
+        or description
+        or original_name
+    ).strip()
     context_text = strip_group_price_notes(str(
         group.get("translation_source")
         or description
@@ -67,6 +78,7 @@ def group_row_payload(group: dict[str, Any]) -> dict[str, str]:
         "description": description,
         "source_text": source_text,
         "context_text": context_text,
+        "ratio_source": ratio_source,
     }
 
 
@@ -101,6 +113,7 @@ def build_group_translation_fields(
         preferred=translation.get("name_en"),
         original_name=original_name,
         source_text=source_text,
+        context_text=context_text,
     )
     desc_en = _resolve_english_description(
         preferred=translation.get("desc_en") or group.get("description"),
@@ -183,21 +196,36 @@ def translate_group_rows_from_map(
                 "desc": normalized["desc_en"] or str(group.get("desc") or ""),
                 "desc_en": normalized["desc_en"],
                 "category": normalized["category"] or str(group.get("category") or "Other"),
+                "translation_source": str(
+                    group.get("translation_source")
+                    or payload.get("context_text")
+                    or original_name
+                ).strip(),
+                "ratio_source": str(
+                    group.get("ratio_source")
+                    or payload.get("ratio_source")
+                    or original_name
+                ).strip(),
             }
         )
     return translated_rows
 
 
-def _resolve_english_name(*, preferred: object, original_name: str, source_text: str) -> str:
+def _resolve_english_name(*, preferred: object, original_name: str, source_text: str, context_text: str) -> str:
     name_en = strip_group_price_notes(str(preferred or "").strip())
     cleaned_original_name = strip_group_price_notes(original_name)
     canonical_original = canonical_group_label(cleaned_original_name)
     if canonical_original:
         return canonical_original
-    if name_en and not contains_cjk(name_en):
+    rejected_translated_name = name_en and not contains_cjk(name_en) and _should_reject_translated_group_name(
+        name_en,
+        original_name=cleaned_original_name,
+        context_text=context_text,
+    )
+    if name_en and not contains_cjk(name_en) and not rejected_translated_name:
         return name_en
     return (
-        fallback_english(name_en)
+        ("" if rejected_translated_name else fallback_english(name_en))
         or fallback_english(cleaned_original_name)
         or fallback_english(source_text)
         or cleaned_original_name
@@ -217,19 +245,26 @@ def _resolve_english_description(*, preferred: object, source_text: str, fallbac
 
 
 def _looks_context_derived_group_name(name_en: str, *, original_name: str, context_text: str) -> bool:
-    current_name = strip_group_price_notes(str(name_en or "").strip())
-    if not current_name or not contains_cjk(original_name):
+    return is_context_derived_group_name(
+        name_en,
+        original_name=original_name,
+        context_text=context_text,
+    )
+
+
+def _should_reject_translated_group_name(name_en: str, *, original_name: str, context_text: str) -> bool:
+    if _looks_context_derived_group_name(
+        name_en,
+        original_name=original_name,
+        context_text=context_text,
+    ):
+        return True
+
+    fallback_name = normalize_group_name_for_compare(fallback_english(original_name))
+    current_name = normalize_group_name_for_compare(name_en)
+    if not current_name or current_name == fallback_name:
         return False
 
-    original_fallback = _resolve_english_name(
-        preferred="",
-        original_name=original_name,
-        source_text=original_name,
-    )
-    context_fallback = strip_group_price_notes(fallback_english(context_text))
-    return bool(
-        original_fallback
-        and context_fallback
-        and current_name == context_fallback
-        and current_name != original_fallback
-    )
+    current_tokens = set(extract_ascii_name_tokens(name_en))
+    original_tokens = extract_ascii_name_tokens(original_name)
+    return bool(original_tokens and not set(original_tokens).issubset(current_tokens))

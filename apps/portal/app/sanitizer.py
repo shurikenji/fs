@@ -10,6 +10,38 @@ URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 SPACED_URL_RE = re.compile(r"\bhttps?\s+(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?:/\S*)?\b", re.IGNORECASE)
 DOMAIN_RE = re.compile(r"\b(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?:/\S*)?\b", re.IGNORECASE)
 READABLE_ASCII_GROUP_RE = re.compile(r"^[A-Za-z0-9]+(?: [A-Za-z0-9]+)*$")
+ASCII_NAME_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:[-_.][A-Za-z0-9]+)*")
+GROUP_PRICE_NOTE_PATTERNS = (
+    re.compile(
+        r"\s*(?:\(|\[|（)\s*[^)\]）]*"
+        r"(?:\d+(?:\.\d+)?\s*(?:x|倍(?:率)?|cny|usd|rmb|yuan|token|1m|quota|request|次|刀次)"
+        r"|(?:cny|usd|rmb|yuan|token|1m|quota|request|次|刀次|\$|¥)\s*\d+(?:\.\d+)?)"
+        r"[^)\]）]*(?:\)|\]|）)\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\s*(?:[-–:|/]\s*)?(?:x\s*)?\d+(?:\.\d+)?\s*"
+        r"(?:x|倍(?:率)?|cny|usd|rmb|yuan|token|1m|quota|request|次|刀次)"
+        r"(?:\s*/\s*(?:token|1m|request|quota|次|刀次))?\s*$",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\s*(?:[-–:|/]\s*)?(?:ratio|multiplier|倍率)\s*[:=]?\s*(?:x\s*)?\d+(?:\.\d+)?\s*$",
+        re.IGNORECASE,
+    ),
+)
+TRAILING_COMPARE_NUMBER_RE = re.compile(r"\s+\d+(?:\.\d+)?\s*$")
+GENERIC_CONTEXT_LABELS = {
+    "route",
+    "channel",
+    "exclusive",
+    "official relay route",
+    "discount route",
+    "dedicated route",
+    "premium channel",
+    "official route",
+    "reverse channel",
+}
 GROUP_PRICE_NOTE_RE = re.compile(
     r"\s*(?:\(|\[|ï¼ˆ)\s*[^)\]]*"
     r"(?:cny|usd|rmb|yuan|token|1m|quota|\$|¥|ï¿¥|å…ƒ|ç¾Žå…ƒ)"
@@ -145,11 +177,50 @@ def strip_group_price_notes(text: str) -> str:
     previous = None
     while value and value != previous:
         previous = value
-        value = GROUP_PRICE_NOTE_RE.sub("", value).strip()
-        value = GROUP_PRICE_SUFFIX_RE.sub("", value).strip()
+        for pattern in GROUP_PRICE_NOTE_PATTERNS:
+            value = pattern.sub("", value).strip()
 
     value = re.sub(r"\s+", " ", value).strip(" -_,.")
     return value or str(text or "").strip()
+
+
+def normalize_group_name_for_compare(text: str) -> str:
+    value = strip_group_price_notes(str(text or "").strip())
+    if not value:
+        return ""
+    value = _strip_links(value)
+    value = TRAILING_COMPARE_NUMBER_RE.sub("", value)
+    value = re.sub(r"\s+", " ", value).strip(" -_,.")
+    return value.lower()
+
+
+def extract_ascii_name_tokens(text: str) -> list[str]:
+    tokens: list[str] = []
+    for match in ASCII_NAME_TOKEN_RE.findall(strip_group_price_notes(str(text or ""))):
+        for part in re.split(r"[-_.]+", match):
+            normalized = part.strip().lower()
+            if normalized:
+                tokens.append(normalized)
+    return tokens
+
+
+def is_context_derived_group_name(name_en: str, *, original_name: str, context_text: str) -> bool:
+    current_name = normalize_group_name_for_compare(name_en)
+    if not current_name or not contains_cjk(original_name):
+        return False
+
+    original_fallback = normalize_group_name_for_compare(fallback_english(original_name))
+    context_fallback = normalize_group_name_for_compare(fallback_english(context_text))
+    original_tokens = extract_ascii_name_tokens(original_name)
+    current_tokens = set(extract_ascii_name_tokens(name_en))
+
+    if original_fallback and context_fallback and current_name == context_fallback and current_name != original_fallback:
+        return True
+
+    if original_tokens and not set(original_tokens).issubset(current_tokens):
+        return True
+
+    return current_name in GENERIC_CONTEXT_LABELS and current_name != original_fallback
 
 
 def canonical_group_label(name: str) -> str:
@@ -211,10 +282,18 @@ def sanitize_group_name(name: str, display_name: str = "") -> str:
         return original
 
     if preferred and preferred != original:
-        if not contains_cjk(preferred):
+        if not contains_cjk(preferred) and not is_context_derived_group_name(
+            preferred,
+            original_name=original,
+            context_text=display_name or preferred,
+        ):
             return preferred
         translated_preferred = fallback_english(preferred)
-        if translated_preferred and not contains_cjk(translated_preferred):
+        if translated_preferred and not contains_cjk(translated_preferred) and not is_context_derived_group_name(
+            translated_preferred,
+            original_name=original,
+            context_text=display_name or preferred,
+        ):
             return translated_preferred
 
     if original and re.search(r"[A-Za-z0-9]", original):

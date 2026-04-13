@@ -8,6 +8,13 @@ import json
 import logging
 import re
 
+from bot.utils.group_name_policy import (
+    contains_cjk,
+    fallback_english_group_name,
+    is_context_derived_group_name,
+    sanitize_group_display_name,
+    strip_group_price_notes,
+)
 from db.database import get_db
 from db.queries import settings
 
@@ -60,18 +67,20 @@ class AITranslator:
         return bool(self.enabled and self.api_key)
 
     def _contains_cjk(self, text: object) -> bool:
-        return bool(text and CJK_RE.search(str(text)))
+        return contains_cjk(text)
 
     def _group_source_text(self, group: dict) -> str:
-        return str(group.get("name") or "").strip()
+        return strip_group_price_notes(group.get("name") or "")
 
     def _group_context_text(self, group: dict) -> str:
-        return str(
-            group.get("translation_source")
-            or group.get("desc")
-            or group.get("name")
-            or ""
-        ).strip()
+        return strip_group_price_notes(
+            str(
+                group.get("translation_source")
+                or group.get("desc")
+                or group.get("name")
+                or ""
+            ).strip()
+        )
 
     def _needs_translation_refresh(self, group: dict, cached: dict | None = None) -> bool:
         current = cached or group
@@ -87,6 +96,7 @@ class AITranslator:
         return self._looks_context_derived_name(group, name_en)
 
     def _fallback_english_text(self, text: object) -> str:
+        return fallback_english_group_name(text)
         if not text:
             return ""
         value = str(text)
@@ -106,15 +116,22 @@ class AITranslator:
         preferred: object,
         original_name: str,
         source_text: str,
+        context_text: str,
     ) -> str:
-        name_en = str(preferred or "").strip()
-        if name_en and not self._contains_cjk(name_en):
-            return name_en
+        name_en = strip_group_price_notes(preferred or "")
+        if name_en and not self._contains_cjk(name_en) and not self._looks_context_derived_name(
+            {
+                "name": original_name,
+                "translation_source": context_text,
+            },
+            name_en,
+        ):
+            return sanitize_group_display_name(original_name, name_en)
         return (
-            self._fallback_english_text(name_en)
+            ("" if name_en and not self._contains_cjk(name_en) else self._fallback_english_text(name_en))
             or self._fallback_english_text(original_name)
             or self._fallback_english_text(source_text)
-            or original_name
+            or strip_group_price_notes(original_name)
         )
 
     def _resolve_english_description(
@@ -141,6 +158,7 @@ class AITranslator:
             preferred=translation.get("name_en"),
             original_name=original_name,
             source_text=source_text,
+            context_text=context_text,
         )
         desc_en = self._resolve_english_description(
             preferred=translation.get("desc_en") or group.get("desc_en") or group.get("desc"),
@@ -170,6 +188,11 @@ class AITranslator:
         return cleaned
 
     def _looks_context_derived_name(self, group: dict, name_en: str) -> bool:
+        return is_context_derived_group_name(
+            name_en,
+            original_name=str(group.get("name") or "").strip(),
+            context_text=self._group_context_text(group),
+        )
         current_name = str(name_en or "").strip()
         original_name = str(group.get("name") or "").strip()
         if not current_name or not self._contains_cjk(original_name):

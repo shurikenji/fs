@@ -95,12 +95,21 @@ _RATIO_PATTERNS = (
 )
 
 
+_GROUP_RATIO_PATTERNS = (
+    re.compile(r"(\d+(?:\.\d+)?)\s*(?:cny|usd|rmb|yuan)\s*/\s*(?:token|request|quota|1m|次|刀次)", re.IGNORECASE),
+    re.compile(r"(?:倍率|ratio|multiplier)\s*[:=]?\s*(\d+(?:\.\d+)?)", re.IGNORECASE),
+    re.compile(r"(?:^|[^\w])x\s*(\d+(?:\.\d+)?)(?:$|[^\w])", re.IGNORECASE),
+    re.compile(r"(?:^|[^\w])(\d+(?:\.\d+)?)\s*x(?:$|[^\w])", re.IGNORECASE),
+    re.compile(r"\((\d+(?:\.\d+)?)[^)]*(?:cny|usd|rmb|yuan|token|request|quota|1m|x|倍)", re.IGNORECASE),
+)
+
+
 def extract_ratio_hint(*texts: object, default: float = 1.0) -> float:
     for text in texts:
         if not text:
             continue
         value = str(text)
-        for pattern in _RATIO_PATTERNS:
+        for pattern in _GROUP_RATIO_PATTERNS:
             m = pattern.search(value)
             if m:
                 try:

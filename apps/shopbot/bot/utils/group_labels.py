@@ -4,6 +4,11 @@ import json
 import re
 
 from bot.services.ai_translator import get_translator
+from bot.utils.group_name_policy import (
+    contains_cjk,
+    fallback_english_group_name,
+    sanitize_group_display_name,
+)
 from db.database import get_db
 
 
@@ -39,10 +44,11 @@ def _split_group_names(group_value: str | None) -> list[str]:
 
 
 def _contains_cjk(text: object) -> bool:
-    return bool(text and CJK_RE.search(str(text)))
+    return contains_cjk(text)
 
 
 def _fallback_group_label(label: object, original_name: str) -> str:
+    return sanitize_group_display_name(original_name, label) or fallback_english_group_name(original_name)
     value = str(label or original_name or "").strip()
     if not value:
         return ""
@@ -86,7 +92,7 @@ def _group_labels_from_cache(server: dict | None) -> dict[str, str]:
             row.get("label_en") or row.get("name_en") or row.get("name") or ""
         ).strip()
         if name:
-            label_map[name] = label_en or name
+            label_map[name] = sanitize_group_display_name(name, label_en or name)
     return label_map
 
 
@@ -106,7 +112,7 @@ async def _get_cached_group_labels(
     )
     rows = await cursor.fetchall()
     return {
-        str(row[0]): str(row[1] or row[0]).strip()
+        str(row[0]): sanitize_group_display_name(row[0], str(row[1] or row[0]).strip())
         for row in rows
         if row and row[0]
     }

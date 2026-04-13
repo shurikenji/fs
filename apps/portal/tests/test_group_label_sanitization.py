@@ -1,5 +1,6 @@
 import unittest
 
+from app.adapters.newapi import NewApiAdapter
 from app.adapters.rixapi import RixApiAdapter
 from app.sanitizer import sanitize_group_name, sanitize_pricing, strip_group_price_notes
 from app.schemas import NormalizedGroup, NormalizedPricing
@@ -11,6 +12,11 @@ class GroupLabelSanitizationTests(unittest.TestCase):
             strip_group_price_notes("AWS Claude1 - Low Concurrency (2 CNY/Token)"),
             "AWS Claude1 - Low Concurrency",
         )
+
+    def test_strip_group_price_notes_keeps_hyphenated_identity_tokens(self) -> None:
+        self.assertEqual(strip_group_price_notes("az-12"), "az-12")
+        self.assertEqual(strip_group_price_notes("sora-vip-1"), "sora-vip-1")
+        self.assertEqual(strip_group_price_notes("Premium Gemini - 0.8x"), "Premium Gemini")
 
     def test_sanitize_group_name_cleans_cached_catalog_label(self) -> None:
         self.assertEqual(
@@ -30,6 +36,12 @@ class GroupLabelSanitizationTests(unittest.TestCase):
             "Gemini-Vertex",
         )
 
+    def test_sanitize_group_name_rejects_context_derived_cjk_label(self) -> None:
+        self.assertEqual(
+            sanitize_group_name("Claude专用", "Dedicated Route"),
+            "Claude Dedicated",
+        )
+
     def test_rixapi_parse_groups_cleans_name_en_and_translation_source(self) -> None:
         adapter = RixApiAdapter()
         groups = adapter.parse_groups(
@@ -45,6 +57,24 @@ class GroupLabelSanitizationTests(unittest.TestCase):
 
         self.assertEqual(groups[0]["name_en"], "AWS Claude1 - Low Concurrency")
         self.assertEqual(groups[0]["translation_source"], "AWS Claude1 - Low Concurrency")
+        self.assertEqual(groups[0]["ratio_source"], "AWS Claude1 - Low Concurrency (2 CNY/Token)")
+
+    def test_newapi_parse_groups_keeps_name_and_parses_ratio_from_ratio_source(self) -> None:
+        adapter = NewApiAdapter()
+        groups = adapter.parse_groups(
+            [
+                {
+                    "value": "gemini-cli",
+                    "key": "Premium Gemini - 0.8x",
+                    "description": "Premium Gemini - 0.8x",
+                }
+            ]
+        )
+
+        self.assertEqual(groups[0]["name"], "gemini-cli")
+        self.assertEqual(groups[0]["ratio"], 0.8)
+        self.assertEqual(groups[0]["translation_source"], "Premium Gemini")
+        self.assertEqual(groups[0]["ratio_source"], "Premium Gemini - 0.8x")
 
     def test_sanitize_pricing_hides_group_descriptions_in_public_payload(self) -> None:
         pricing = NormalizedPricing(

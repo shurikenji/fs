@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base import BaseAPIClient
+from bot.utils.group_name_policy import extract_ratio_hint_from_texts, strip_group_price_notes
 
 
 class NewAPIClient(BaseAPIClient):
@@ -55,35 +56,51 @@ class NewAPIClient(BaseAPIClient):
             descriptions = data.get("data", {})
             ratios = data.get("ratios", {})
             for name, desc in descriptions.items():
+                raw_desc = desc if isinstance(desc, str) else ""
                 groups.append({
                     "name": name,
                     "ratio": ratios.get(name, 1.0),
-                    "desc": desc if isinstance(desc, str) else "",
+                    "desc": raw_desc,
+                    "translation_source": strip_group_price_notes(raw_desc or name),
+                    "ratio_source": raw_desc or name,
                 })
             return groups
         
         if isinstance(data, dict):
             for name, info in data.items():
                 if isinstance(info, dict):
+                    raw_desc = str(info.get("desc") or "")
                     groups.append({
                         "name": name,
                         "ratio": info.get("ratio", 1.0),
-                        "desc": info.get("desc", ""),
+                        "desc": raw_desc,
+                        "translation_source": strip_group_price_notes(raw_desc or name),
+                        "ratio_source": raw_desc or name,
                     })
                 else:
                     groups.append({
                         "name": name,
                         "ratio": 1.0,
                         "desc": "",
+                        "translation_source": name,
+                        "ratio_source": name,
                     })
         elif isinstance(data, list):
             # Some servers return array format
             for item in data:
                 if isinstance(item, dict):
+                    name = item.get("name") or item.get("group") or item.get("value") or item.get("key") or "unknown"
+                    raw_label = item.get("key") or item.get("label") or item.get("description") or ""
+                    raw_desc = item.get("desc") or item.get("description") or raw_label
+                    explicit_ratio = item.get("ratio")
+                    if explicit_ratio in (None, ""):
+                        explicit_ratio = item.get("multiplier")
                     groups.append({
-                        "name": item.get("name") or item.get("group") or "unknown",
-                        "ratio": item.get("ratio") or item.get("multiplier") or 1.0,
-                        "desc": item.get("desc") or item.get("description") or "",
+                        "name": name,
+                        "ratio": explicit_ratio if explicit_ratio not in (None, "") else extract_ratio_hint_from_texts(raw_label, raw_desc, name),
+                        "desc": raw_desc,
+                        "translation_source": strip_group_price_notes(str(raw_label or raw_desc or name)),
+                        "ratio_source": str(raw_label or raw_desc or name),
                     })
         
         return groups

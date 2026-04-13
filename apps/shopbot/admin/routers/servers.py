@@ -11,6 +11,7 @@ from fastapi import Path, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from admin.deps import get_templates, protected_router
+from bot.utils.group_name_policy import sanitize_group_display_name
 from bot.services.ai_translator import get_translator
 from bot.services.api_clients import get_api_client
 from bot.utils.time_utils import get_now_vn
@@ -216,6 +217,8 @@ def _build_manual_group_rows(manual_groups: str) -> list[dict]:
             "ratio": 1.0,
             "desc": "",
             "category": "Other",
+            "translation_source": name.strip(),
+            "ratio_source": name.strip(),
         }
         for name in _split_group_names(manual_groups)
     ]
@@ -513,11 +516,16 @@ def _normalize_group_rows(groups: list[dict]) -> list[dict]:
     return [
         {
             "name": group.get("name", ""),
-            "label_en": group.get("label_en") or group.get("name_en") or group.get("name", ""),
+            "label_en": sanitize_group_display_name(
+                group.get("name", ""),
+                group.get("label_en") or group.get("name_en") or group.get("name", ""),
+            ),
             "label_vi": group.get("label_vi") or group.get("name_vi") or group.get("name", ""),
             "ratio": group.get("ratio", 1.0),
             "desc": group.get("desc_en") or group.get("desc", ""),
             "category": group.get("category", "Other"),
+            "translation_source": group.get("translation_source") or group.get("desc_en") or group.get("desc") or group.get("name", ""),
+            "ratio_source": group.get("ratio_source") or group.get("translation_source") or group.get("name", ""),
         }
         for group in groups
     ]

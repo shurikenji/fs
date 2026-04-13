@@ -197,7 +197,7 @@ async def main() -> None:
                     )
                     assert manual_preview_response.status_code == 200
                     manual_preview_payload = manual_preview_response.json()
-                    assert manual_preview_payload["data"][0]["label_en"] == "EN \u4f01\u4e1a\u7ea7\u9ad8\u53ef\u7528"
+                    assert manual_preview_payload["data"][0]["label_en"] == "Enterprise High Availability"
                     assert manual_preview_payload["data"][1]["label_vi"] == "VI \u9006\u5411"
                     print("[OK] preview_groups translates manual groups through the translator/cache path")
 

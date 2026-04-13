@@ -6,7 +6,7 @@ from typing import Any
 
 from app.adapters import get_adapter
 from app.adapters.base import extract_ratio_hint
-from app.sanitizer import canonical_group_label, contains_cjk
+from app.sanitizer import sanitize_group_name
 from db.queries.servers import update_server_cache
 
 
@@ -44,6 +44,8 @@ def _build_manual_group_rows(manual_groups: str) -> list[dict[str, Any]]:
             "ratio": 1.0,
             "desc": "",
             "category": "Other",
+            "translation_source": name.strip(),
+            "ratio_source": name.strip(),
         }
         for name in _split_group_names(manual_groups)
     ]
@@ -61,8 +63,7 @@ def _normalize_group_rows(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
             numeric_ratio = float(ratio or 1.0)
         except (TypeError, ValueError):
             numeric_ratio = extract_ratio_hint(
-                group.get("desc"),
-                group.get("label_en"),
+                group.get("ratio_source"),
                 group.get("translation_source"),
                 name,
                 default=1.0,
@@ -71,19 +72,25 @@ def _normalize_group_rows(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
         normalized_rows.append(
             {
                 "name": name,
-                "label_en": canonical_group_label(name) or (
-                    name
-                    if not contains_cjk(name)
-                    else str(
-                        group.get("label_en")
-                        or group.get("name_en")
-                        or group.get("name")
-                        or ""
-                    ).strip()
+                "label_en": sanitize_group_name(
+                    name,
+                    str(group.get("label_en") or group.get("name_en") or name).strip(),
                 ),
                 "ratio": numeric_ratio,
                 "desc": str(group.get("desc_en") or group.get("desc") or "").strip(),
                 "category": str(group.get("category") or "Other").strip() or "Other",
+                "translation_source": str(
+                    group.get("translation_source")
+                    or group.get("desc_en")
+                    or group.get("desc")
+                    or name
+                ).strip(),
+                "ratio_source": str(
+                    group.get("ratio_source")
+                    or group.get("translation_source")
+                    or group.get("desc")
+                    or name
+                ).strip(),
             }
         )
     return normalized_rows

@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from .base import BaseAPIClient
+from bot.utils.group_name_policy import extract_ratio_hint_from_texts, strip_group_price_notes
 
 
 class RixAPIClient(BaseAPIClient):
@@ -68,23 +69,30 @@ class RixAPIClient(BaseAPIClient):
                         or "unknown"
                     )
                     raw_label = item.get("key") or item.get("label") or ""
+                    raw_desc = item.get("desc") or item.get("description") or raw_label
+                    explicit_ratio = item.get("ratio")
+                    if explicit_ratio in (None, ""):
+                        explicit_ratio = item.get("multiplier")
                     groups.append({
                         "name": name,
-                        "name_en": item.get("name_en"),
-                        "ratio": item.get("ratio") or item.get("multiplier") or self.extract_ratio_hint(raw_label, name),
-                        "desc": item.get("desc") or item.get("description") or raw_label,
-                        "translation_source": raw_label or name,
+                        "name_en": strip_group_price_notes(item.get("name_en")),
+                        "ratio": explicit_ratio if explicit_ratio not in (None, "") else extract_ratio_hint_from_texts(raw_label, raw_desc, name),
+                        "desc": raw_desc,
+                        "translation_source": strip_group_price_notes(raw_label or raw_desc or name),
+                        "ratio_source": str(raw_label or raw_desc or name),
                     })
         elif isinstance(data, dict):
             # Sometimes RixAPI returns object with group names as keys
             for name, info in data.items():
                 if isinstance(info, dict):
+                    raw_desc = str(info.get("desc") or "")
                     groups.append({
                         "name": name,
-                        "name_en": info.get("name_en"),
-                        "ratio": info.get("ratio") or self.extract_ratio_hint(info.get("desc"), name),
-                        "desc": info.get("desc", ""),
-                        "translation_source": info.get("desc") or name,
+                        "name_en": strip_group_price_notes(info.get("name_en")),
+                        "ratio": info.get("ratio") if info.get("ratio") not in (None, "") else extract_ratio_hint_from_texts(raw_desc, name),
+                        "desc": raw_desc,
+                        "translation_source": strip_group_price_notes(raw_desc or name),
+                        "ratio_source": raw_desc or name,
                     })
                 else:
                     groups.append({
@@ -93,6 +101,7 @@ class RixAPIClient(BaseAPIClient):
                         "ratio": 1.0,
                         "desc": "",
                         "translation_source": name,
+                        "ratio_source": name,
                     })
         
         return groups
