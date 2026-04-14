@@ -39,16 +39,22 @@
                                 </select>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="form-group">
                                 <label class="form-label">Giá (VND)</label>
                                 <input name="price_vnd" type="number" class="form-control" value="{{ editing.price_vnd }}" required>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <div class="form-group">
                                 <label class="form-label">Tồn kho (-1 = vô hạn)</label>
                                 <input name="stock" type="number" class="form-control" value="{{ editing.stock }}">
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-group">
+                                <label class="form-label">Thứ tự</label>
+                                <input name="sort_order" type="number" class="form-control" value="{{ editing.sort_order or 0 }}">
                             </div>
                         </div>
                     </div>

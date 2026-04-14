@@ -73,35 +73,55 @@ class AutoSyncPoller:
             self._task = None
 
     async def _run_loop(self) -> None:
+        logger.info("Auto-sync poller started (heartbeat=%.0fs)", self._heartbeat_seconds)
         while True:
-            settings = await load_auto_sync_settings()
-            now = time.monotonic()
+            try:
+                settings = await self._safe_load_settings()
+                now = time.monotonic()
 
-            if not settings.enabled:
-                self._enabled_since = None
-                self._last_run_at = None
-                await asyncio.sleep(self._heartbeat_seconds)
-                continue
+                if not settings.enabled:
+                    self._enabled_since = None
+                    self._last_run_at = None
+                    await asyncio.sleep(self._heartbeat_seconds)
+                    continue
 
-            if self._enabled_since is None:
-                self._enabled_since = now
-
-            should_run = False
-            if self._last_run_at is None:
-                should_run = (now - self._enabled_since) >= self._initial_delay_seconds
-            else:
-                should_run = (now - self._last_run_at) >= (settings.interval_minutes * 60)
-
-            if should_run and not self._cycle_lock.locked():
-                async with self._cycle_lock:
-                    self._last_run_at = time.monotonic()
+                if self._enabled_since is None:
+                    self._enabled_since = now
                     logger.info(
-                        "Starting auto sync cycle for enabled servers (interval=%sm)",
+                        "Auto-sync enabled (interval=%sm, initial_delay=%.0fs)",
                         settings.interval_minutes,
+                        self._initial_delay_seconds,
                     )
-                    try:
-                        await refresh_enabled_server_snapshots(trigger="auto")
-                    except Exception:
-                        logger.exception("Auto sync cycle failed")
+
+                should_run = False
+                if self._last_run_at is None:
+                    should_run = (now - self._enabled_since) >= self._initial_delay_seconds
+                else:
+                    should_run = (now - self._last_run_at) >= (settings.interval_minutes * 60)
+
+                if should_run and not self._cycle_lock.locked():
+                    async with self._cycle_lock:
+                        self._last_run_at = time.monotonic()
+                        logger.info(
+                            "Starting auto sync cycle for enabled servers (interval=%sm)",
+                            settings.interval_minutes,
+                        )
+                        try:
+                            await refresh_enabled_server_snapshots(trigger="auto")
+                        except Exception:
+                            logger.exception("Auto sync cycle failed")
+
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("Auto-sync poller iteration error (will retry)")
 
             await asyncio.sleep(self._heartbeat_seconds)
+
+    async def _safe_load_settings(self) -> AutoSyncSettings:
+        """Load settings with fallback to defaults on DB errors."""
+        try:
+            return await load_auto_sync_settings()
+        except Exception:
+            logger.exception("Failed to load auto-sync settings, using defaults")
+            return AutoSyncSettings()

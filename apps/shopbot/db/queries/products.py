@@ -14,6 +14,15 @@ _PRODUCT_WITH_REAL_STOCK_QUERY = """
     FROM products p
 """
 
+_PRODUCT_WITH_CATEGORY_QUERY = """
+    SELECT p.*,
+           (SELECT COUNT(id) FROM account_stocks WHERE product_id = p.id AND is_sold = 0) as real_stock,
+           COALESCE(c.sort_order, 0) as cat_sort_order,
+           COALESCE(c.name, '') as cat_sort_name
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+"""
+
 
 def _hydrate_product_stock(product: dict) -> dict:
     if product.get("product_type") == "account_stocked":
@@ -71,7 +80,7 @@ async def get_all_products(
     """Lấy tất cả sản phẩm (admin, phân trang)."""
     db = await get_db()
     query = f"""
-        {_PRODUCT_WITH_REAL_STOCK_QUERY}
+        {_PRODUCT_WITH_CATEGORY_QUERY}
         WHERE 1=1
     """
     params: list = []
@@ -83,7 +92,7 @@ async def get_all_products(
         query += " AND p.server_id = ?"
         params.append(server_id)
 
-    query += " ORDER BY p.sort_order ASC, p.id DESC LIMIT ? OFFSET ?"
+    query += " ORDER BY cat_sort_order ASC, cat_sort_name ASC, p.sort_order ASC, p.id ASC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
     return await _fetch_products_with_real_stock(query, params)

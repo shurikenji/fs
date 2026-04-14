@@ -60,8 +60,8 @@
         <div class="metric-grid">
             <article class="metric-card" style="text-align: center;">
                 <div class="metric-label">Balance</div>
-                <div class="metric-value" style="color: var(--success);" x-text="'$' + result.data.balance_usd"></div>
-                <p class="metric-copy">Remaining credit</p>
+                <div class="metric-value" :style="'color: ' + (parseFloat(result.data.balance_usd) < 0 ? 'var(--danger)' : 'var(--success)')" x-text="'$' + result.data.balance_usd"></div>
+                <p class="metric-copy" x-text="parseFloat(result.data.balance_usd) < 0 ? 'Over limit' : 'Remaining credit'"></p>
             </article>
             <article class="metric-card" style="text-align: center;">
                 <div class="metric-label">Limit</div>
