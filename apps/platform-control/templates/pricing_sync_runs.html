@@ -8,9 +8,16 @@
     <section class="page-head">
         <div>
             <h1 class="page-title">Pricing Sync Runs</h1>
-            <p class="page-subtitle">Local audit trail for runtime sync calls triggered by platform-control.</p>
+            <p class="page-subtitle">Unified sync history from portal runtime execution and control-plane audit actions.</p>
         </div>
     </section>
+
+    {% if runtime_sync_warning %}
+    <section class="shell-card" style="border-color: rgba(245, 158, 11, 0.35);">
+        <div style="color: var(--warning); font-weight: 600; margin-bottom: 6px;">Runtime sync history unavailable</div>
+        <div style="color: var(--text-secondary); font-size: 13px;">Showing local control-plane audit only. Runtime pricing-hub error: {{ runtime_sync_warning }}</div>
+    </section>
+    {% endif %}
 
     <section class="shell-card">
         <div class="panel-heading">
@@ -19,7 +26,7 @@
                 <p class="panel-copy">Review the latest sync attempts by source, trigger, and status.</p>
             </div>
         </div>
-        <form method="GET" action="/control/pricing/sync-runs" style="display:grid; gap:16px; grid-template-columns: repeat(4, minmax(0, 1fr)) auto;">
+        <form method="GET" action="/control/pricing/sync-runs" style="display:grid; gap:16px; grid-template-columns: repeat(5, minmax(0, 1fr)) auto;">
             <div>
                 <label class="field-label">Source</label>
                 <select class="control select-control" name="source_id">
@@ -45,6 +52,14 @@
                     <option value="auto" {% if trigger == 'auto' %}selected{% endif %}>auto</option>
                 </select>
             </div>
+            <div>
+                <label class="field-label">Origin</label>
+                <select class="control select-control" name="origin">
+                    <option value="">All origins</option>
+                    <option value="runtime" {% if origin == 'runtime' %}selected{% endif %}>runtime</option>
+                    <option value="control-plane" {% if origin == 'control-plane' %}selected{% endif %}>control-plane</option>
+                </select>
+            </div>
             <div></div>
             <div style="align-self:end; display:flex; gap:10px;">
                 <a class="button-secondary" href="/control/pricing/sync-runs">Reset</a>
@@ -66,6 +81,7 @@
                     <tr>
                         <th>ID</th>
                         <th>Source</th>
+                        <th>Origin</th>
                         <th>Status</th>
                         <th>Trigger</th>
                         <th>Models</th>
@@ -80,7 +96,17 @@
                     {% for run in runs %}
                     <tr>
                         <td>{{ run.id }}</td>
-                        <td class="code-text">{{ run.source_id }}</td>
+                        <td>
+                            <div><strong>{{ run.source_name or run.source_id }}</strong></div>
+                            <div class="code-text" style="font-size: 12px;">{{ run.source_id }}</div>
+                        </td>
+                        <td>
+                            {% if run.origin == 'runtime' %}
+                            <span class="tag is-accent">runtime</span>
+                            {% else %}
+                            <span class="tag">control-plane</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if run.status == 'success' %}
                             <span class="tag is-accent">success</span>
@@ -88,10 +114,16 @@
                             <span class="tag is-warm">{{ run.status }}</span>
                             {% endif %}
                         </td>
-                        <td>{{ run.trigger }}</td>
+                        <td>
+                            {% if run.trigger == 'auto' %}
+                            <span class="tag is-accent">auto</span>
+                            {% else %}
+                            <span class="tag">{{ run.trigger }}</span>
+                            {% endif %}
+                        </td>
                         <td>{{ run.model_count }}</td>
                         <td>{{ run.group_count }}</td>
-                        <td>{{ run.translated_count }}</td>
+                        <td>{{ run.translated_count if run.translated_count is not none else '-' }}</td>
                         <td>{{ run.duration_ms }} ms</td>
                         <td style="max-width:280px; color:var(--text-secondary);">{{ run.error_message or '-' }}</td>
                         <td>{{ run.created_at }}</td>

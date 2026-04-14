@@ -11,8 +11,10 @@ from app.config import get_settings
 from app.deps import get_templates, verify_csrf
 from app.pricing_hub_client import (
     pricing_get_groups,
+    pricing_get_latest_sync_runs,
     pricing_get_models,
     pricing_get_settings,
+    pricing_get_sync_runs,
     pricing_import_control_plane,
     pricing_refresh_groups,
     pricing_sync_source,
@@ -128,6 +130,91 @@ def _parse_names(raw: Any) -> list[str]:
     return cleaned
 
 
+def _source_name_map(sources: list[dict[str, Any]]) -> dict[str, str]:
+    return {
+        str(source.get("id") or "").strip(): str(source.get("name") or source.get("id") or "").strip()
+        for source in sources
+        if str(source.get("id") or "").strip()
+    }
+
+
+def _normalize_runtime_run(row: dict[str, Any], source_names: dict[str, str]) -> dict[str, Any]:
+    source_id = str(row.get("source_id") or "").strip()
+    return {
+        "id": row.get("id"),
+        "source_id": source_id,
+        "source_name": source_names.get(source_id, source_id),
+        "origin": "runtime",
+        "status": str(row.get("status") or "").strip(),
+        "trigger": str(row.get("trigger") or "manual").strip(),
+        "model_count": int(row.get("model_count") or 0),
+        "group_count": int(row.get("group_count") or 0),
+        "translated_count": None,
+        "duration_ms": int(row.get("duration_ms") or 0),
+        "error_message": str(row.get("error_message") or "").strip(),
+        "created_at": str(row.get("created_at") or "").strip(),
+    }
+
+
+def _normalize_control_run(row: dict[str, Any], source_names: dict[str, str]) -> dict[str, Any]:
+    source_id = str(row.get("source_id") or "").strip()
+    return {
+        "id": row.get("id"),
+        "source_id": source_id,
+        "source_name": source_names.get(source_id, source_id),
+        "origin": "control-plane",
+        "status": str(row.get("status") or "").strip(),
+        "trigger": str(row.get("trigger") or "manual").strip(),
+        "model_count": int(row.get("model_count") or 0),
+        "group_count": int(row.get("group_count") or 0),
+        "translated_count": int(row.get("translated_count")) if row.get("translated_count") is not None else None,
+        "duration_ms": int(row.get("duration_ms") or 0),
+        "error_message": str(row.get("error_message") or "").strip(),
+        "created_at": str(row.get("created_at") or "").strip(),
+    }
+
+
+def _sort_sync_runs(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        rows,
+        key=lambda item: (
+            str(item.get("created_at") or ""),
+            int(item.get("id") or 0),
+            str(item.get("source_id") or ""),
+        ),
+        reverse=True,
+    )
+
+
+async def _load_runtime_sync_state(
+    *,
+    source_id: str | None = None,
+    status: str | None = None,
+    trigger: str | None = None,
+    limit: int = 200,
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], str]:
+    try:
+        runs_payload = await pricing_get_sync_runs(
+            source_id=source_id,
+            status=status,
+            trigger=trigger,
+            limit=limit,
+        )
+        latest_payload = await pricing_get_latest_sync_runs()
+    except Exception as exc:
+        return [], {}, str(exc)
+
+    runs = runs_payload.get("runs", []) if isinstance(runs_payload, dict) else []
+    latest = latest_payload.get("latest", {}) if isinstance(latest_payload, dict) else {}
+    runtime_runs = [row for row in runs if isinstance(row, dict)]
+    runtime_latest = {
+        str(source_key): value
+        for source_key, value in latest.items()
+        if isinstance(value, dict)
+    }
+    return runtime_runs, runtime_latest, ""
+
+
 async def _import_runtime_registry(*, request: Request | None = None) -> dict[str, Any]:
     result = await pricing_import_control_plane()
     if request is not None:
@@ -168,7 +255,18 @@ def register_pricing_admin_routes(app: FastAPI) -> None:
         templates = get_templates()
         sources = await get_service_sources(enabled_only=False)
         source_form = await get_service_source(edit) if edit else None
-        latest_sync_map = await get_latest_pricing_sync_map()
+        local_latest_sync_map = await get_latest_pricing_sync_map()
+        _, runtime_latest_sync_map, runtime_error = await _load_runtime_sync_state(limit=200)
+        source_names = _source_name_map(sources)
+        latest_sync_map: dict[str, dict[str, Any]] = {}
+        for source in sources:
+            source_id = str(source.get("id") or "").strip()
+            runtime_row = runtime_latest_sync_map.get(source_id)
+            local_row = local_latest_sync_map.get(source_id)
+            if runtime_row:
+                latest_sync_map[source_id] = _normalize_runtime_run(runtime_row, source_names)
+            elif local_row:
+                latest_sync_map[source_id] = _normalize_control_run(local_row, source_names)
         return templates.TemplateResponse(
             "pricing_sources.html",
             {
@@ -178,6 +276,7 @@ def register_pricing_admin_routes(app: FastAPI) -> None:
                 "latest_sync_map": latest_sync_map,
                 "server_types": _SERVER_TYPES,
                 "auth_modes": _AUTH_MODES,
+                "runtime_sync_warning": runtime_error,
                 "flash_message": request.session.pop("flash_message", ""),
                 "flash_error": request.session.pop("flash_error", ""),
             },
@@ -525,18 +624,33 @@ def register_pricing_admin_routes(app: FastAPI) -> None:
         source_id: str = Query(default=""),
         status: str = Query(default=""),
         trigger: str = Query(default=""),
+        origin: str = Query(default=""),
     ):
         redirect = _require_admin(request)
         if redirect:
             return redirect
         templates = get_templates()
-        runs = await get_pricing_sync_runs(
+        sources = await get_service_sources(enabled_only=False)
+        source_names = _source_name_map(sources)
+        local_runs = await get_pricing_sync_runs(
             source_id=source_id or None,
             status=status or None,
             trigger=trigger or None,
             limit=200,
         )
-        sources = await get_service_sources(enabled_only=False)
+        runtime_runs, _, runtime_error = await _load_runtime_sync_state(
+            source_id=source_id or None,
+            status=status or None,
+            trigger=trigger or None,
+            limit=200,
+        )
+        unified_runs = [
+            *[_normalize_runtime_run(row, source_names) for row in runtime_runs],
+            *[_normalize_control_run(row, source_names) for row in local_runs],
+        ]
+        if origin:
+            unified_runs = [row for row in unified_runs if row["origin"] == origin]
+        runs = _sort_sync_runs(unified_runs)[:200]
         return templates.TemplateResponse(
             "pricing_sync_runs.html",
             {
@@ -546,6 +660,8 @@ def register_pricing_admin_routes(app: FastAPI) -> None:
                 "source_id": source_id,
                 "status": status,
                 "trigger": trigger,
+                "origin": origin,
+                "runtime_sync_warning": runtime_error,
                 "flash_message": request.session.pop("flash_message", ""),
                 "flash_error": request.session.pop("flash_error", ""),
             },

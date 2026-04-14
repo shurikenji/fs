@@ -142,35 +142,45 @@ async def create_sync_log(
     await db.commit()
 
 
-async def get_latest_sync_map() -> dict[str, dict]:
+async def get_sync_runs(
+    *,
+    source_id: str | None = None,
+    status: str | None = None,
+    trigger: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
     db = await get_db()
-    cursor = await db.execute(
-        """
+    clauses: list[str] = []
+    params: list[Any] = []
+    if source_id:
+        clauses.append("server_id = ?")
+        params.append(source_id)
+    if status:
+        clauses.append("status = ?")
+        params.append(status)
+    if trigger:
+        clauses.append("trigger = ?")
+        params.append(trigger)
+    query = """
         SELECT id, server_id, trigger, status, model_count, group_count, duration_ms,
                error_message, created_at
         FROM sync_log
-        ORDER BY created_at DESC, id DESC
-        """
-    )
-    rows = await cursor.fetchall()
+    """
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+    query += " ORDER BY created_at DESC, id DESC LIMIT ?"
+    params.append(limit)
+    cursor = await db.execute(query, tuple(params))
+    return [_row_to_dict(row) for row in await cursor.fetchall()]
+
+
+async def get_latest_sync_map() -> dict[str, dict]:
     latest: dict[str, dict] = {}
-    for row in rows:
-        item = _row_to_dict(row)
+    for item in await get_sync_runs(limit=500):
         if item and item["server_id"] not in latest:
             latest[item["server_id"]] = item
     return latest
 
 
 async def get_recent_sync_logs(limit: int = 10) -> list[dict]:
-    db = await get_db()
-    cursor = await db.execute(
-        """
-        SELECT id, server_id, trigger, status, model_count, group_count, duration_ms,
-               error_message, created_at
-        FROM sync_log
-        ORDER BY created_at DESC, id DESC
-        LIMIT ?
-        """,
-        (limit,),
-    )
-    return [_row_to_dict(row) for row in await cursor.fetchall()]
+    return await get_sync_runs(limit=limit)

@@ -22,6 +22,13 @@
         </div>
     </section>
 
+    {% if runtime_sync_warning %}
+    <section class="shell-card" style="border-color: rgba(245, 158, 11, 0.35);">
+        <div style="color: var(--warning); font-weight: 600; margin-bottom: 6px;">Runtime sync history unavailable</div>
+        <div style="color: var(--text-secondary); font-size: 13px;">Latest sync is currently falling back to control-plane audit only. Runtime pricing-hub error: {{ runtime_sync_warning }}</div>
+    </section>
+    {% endif %}
+
     <section class="shell-card">
         <div class="panel-heading">
             <div>
@@ -63,9 +70,19 @@
                         </td>
                         <td style="font-size:12px;">
                             {% if latest_sync %}
-                            <div><strong>{{ latest_sync.status }}</strong></div>
+                            <div>
+                                <strong>{{ latest_sync.status }}</strong>
+                                {% if latest_sync.origin == 'runtime' %}
+                                <span class="tag is-accent" style="margin-left:6px;">runtime</span>
+                                {% else %}
+                                <span class="tag" style="margin-left:6px;">control-plane</span>
+                                {% endif %}
+                            </div>
+                            <div>{{ latest_sync.created_at or '-' }}</div>
+                            <div>{{ latest_sync.trigger or '-' }}</div>
                             <div>{{ latest_sync.model_count }} models / {{ latest_sync.group_count }} groups</div>
                             <div>{{ latest_sync.duration_ms }} ms</div>
+                            <div><a href="/control/pricing/sync-runs?source_id={{ source.id }}" style="font-size:12px;">View history</a></div>
                             {% else %}
                             <span style="color:var(--text-tertiary);">No sync yet</span>
                             {% endif %}

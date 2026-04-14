@@ -99,6 +99,40 @@ async def pricing_get_settings() -> dict[str, Any]:
         return response.json()
 
 
+async def pricing_get_sync_runs(
+    *,
+    source_id: str | None = None,
+    status: str | None = None,
+    trigger: str | None = None,
+    limit: int = 200,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {"limit": limit}
+    if source_id:
+        params["source_id"] = source_id
+    if status:
+        params["status"] = status
+    if trigger:
+        params["trigger"] = trigger
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            f"{_base_url()}/api/internal/admin/pricing/sync-runs",
+            headers=_headers(),
+            params=params,
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+async def pricing_get_latest_sync_runs() -> dict[str, Any]:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.get(
+            f"{_base_url()}/api/internal/admin/pricing/sync-runs/latest",
+            headers=_headers(),
+        )
+        response.raise_for_status()
+        return response.json()
+
+
 async def pricing_save_settings(payload: dict[str, Any]) -> dict[str, Any]:
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(

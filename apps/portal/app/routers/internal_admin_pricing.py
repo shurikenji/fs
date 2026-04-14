@@ -14,7 +14,13 @@ from app.server_profiles import describe_server_profile
 from app.sync_service import refresh_enabled_server_snapshots, refresh_server_snapshot
 from app.translation_service import test_ai_connection
 from app.visibility import dump_visibility_names, excluded_model_names, hidden_group_names, parse_visibility_names
-from db.queries.servers import get_enabled_servers, get_latest_sync_map, get_server, upsert_server
+from db.queries.servers import (
+    get_enabled_servers,
+    get_latest_sync_map,
+    get_server,
+    get_sync_runs,
+    upsert_server,
+)
 from db.queries.settings import get_settings_dict, set_setting
 from app.schemas import NormalizedPricing
 
@@ -67,6 +73,22 @@ def _load_cached_pricing(server: dict[str, Any]) -> NormalizedPricing | None:
         return NormalizedPricing.model_validate_json(raw)
     except Exception:
         return None
+
+
+def _serialize_sync_run(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "source_id": str(row.get("server_id") or "").strip(),
+        "status": str(row.get("status") or "").strip(),
+        "trigger": str(row.get("trigger") or "manual").strip(),
+        "model_count": int(row.get("model_count") or 0),
+        "group_count": int(row.get("group_count") or 0),
+        "translated_count": None,
+        "duration_ms": int(row.get("duration_ms") or 0),
+        "error_message": str(row.get("error_message") or "").strip(),
+        "created_at": str(row.get("created_at") or "").strip(),
+        "origin": "runtime",
+    }
 
 
 def _serialize_model_rows(server: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
@@ -141,6 +163,41 @@ async def sync_source(
         "duration_ms": int(latest_sync.get("duration_ms") or int((time.perf_counter() - started_at) * 1000)),
         "status": latest_sync.get("status") or ("success" if result.pricing else "failed"),
         "error": latest_sync.get("error_message") or "",
+    }
+
+
+@router.get("/sync-runs")
+async def sync_runs(
+    x_pricing_admin_token: str | None = Header(default=None),
+    source_id: str = Query(default=""),
+    status: str = Query(default=""),
+    trigger: str = Query(default=""),
+    limit: int = Query(default=200, ge=1, le=500),
+):
+    _require_admin_token(x_pricing_admin_token)
+    runs = await get_sync_runs(
+        source_id=source_id or None,
+        status=status or None,
+        trigger=trigger or None,
+        limit=limit,
+    )
+    return {
+        "success": True,
+        "runs": [_serialize_sync_run(row) for row in runs if row],
+    }
+
+
+@router.get("/sync-runs/latest")
+async def latest_sync_runs(x_pricing_admin_token: str | None = Header(default=None)):
+    _require_admin_token(x_pricing_admin_token)
+    latest_map = await get_latest_sync_map()
+    return {
+        "success": True,
+        "latest": {
+            source_id: _serialize_sync_run(row)
+            for source_id, row in latest_map.items()
+            if row
+        },
     }
 
 
