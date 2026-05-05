@@ -15,8 +15,6 @@ router = protected_router(prefix="/settings", tags=["settings"])
 _EDITABLE_KEYS = [
     "mb_api_url",
     "mb_api_key",
-    "mb_username",
-    "mb_password",
     "mb_account_no",
     "mb_account_name",
     "mb_bank_id",

@@ -49,12 +49,19 @@
                         </h3>
                     </div>
                     <div class="card-body">
-                        <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.25rem;">Thông tin kết nối ngân hàng MB và tài khoản nhận tiền thanh toán.</p>
+                        <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.25rem;">Cấu hình API quét giao dịch MB và thông tin nhận tiền để tạo VietQR.</p>
                         <div class="row g-3">
+                            <div class="col-12">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);">API quét giao dịch</h4>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--background-subtle); border: 1px solid var(--border-light); border-radius: 999px; padding: 0.2rem 0.6rem;">MBBank v3 mới</span>
+                                </div>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.84rem;">Bot sẽ gọi endpoint theo dạng <code>{base_url}/{ApiKey}/?version=3</code>.</p>
+                            </div>
                             <div class="col-12">
                                 <div class="form-group">
                                     <label class="form-label">Địa chỉ API MBBank</label>
-                                    <input name="mb_api_url" class="form-control" value="{{ all_settings.get('mb_api_url', '') }}" placeholder="https://api.mbbank.com.vn">
+                                    <input name="mb_api_url" class="form-control" value="{{ all_settings.get('mb_api_url', '') }}" placeholder="https://api.apicanhan.com/transactions/MB">
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -63,17 +70,15 @@
                                     <input name="mb_api_key" type="password" class="form-control" value="{{ all_settings.get('mb_api_key', '') }}" placeholder="••••••••">
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label class="form-label">Tên đăng nhập MBBank</label>
-                                    <input name="mb_username" class="form-control" value="{{ all_settings.get('mb_username', '') }}">
-                                </div>
+                            <div class="col-12">
+                                <div style="height: 1px; background: var(--border-light); margin: 0.35rem 0;"></div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label class="form-label">Mật khẩu MBBank</label>
-                                    <input name="mb_password" type="password" class="form-control" value="{{ all_settings.get('mb_password', '') }}" placeholder="••••••••">
+                            <div class="col-12">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);">Thông tin VietQR nhận tiền</h4>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--background-subtle); border: 1px solid var(--border-light); border-radius: 999px; padding: 0.2rem 0.6rem;">Hiển thị cho khách</span>
                                 </div>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.84rem;">Các giá trị dưới đây dùng để dựng mã QR và caption chuyển khoản.</p>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">

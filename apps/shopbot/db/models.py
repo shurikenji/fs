@@ -430,10 +430,10 @@ CREATE TABLE IF NOT EXISTS group_translations (
 # ── Default settings ────────────────────────────────────────────────────────
 
 _DEFAULT_SETTINGS = [
-    ("mb_api_url", "https://apicanhan.com/api/mbbankv3", "MBBank API URL"),
-    ("mb_api_key", "", "API key apicanhan.com"),
-    ("mb_username", "", "SĐT đăng nhập MB"),
-    ("mb_password", "", "Mật khẩu MB"),
+    ("mb_api_url", "https://api.apicanhan.com/transactions/MB", "MBBank scanner base URL"),
+    ("mb_api_key", "", "API key cho endpoint quet giao dich apicanhan.com"),
+    ("mb_username", "", "Deprecated: SĐT đăng nhập MB"),
+    ("mb_password", "", "Deprecated: Mật khẩu MB"),
     ("mb_account_no", "", "STK nhận tiền"),
     ("mb_account_name", "", "Tên chủ TK"),
     ("mb_bank_id", "MB", "Bank ID cho VietQR"),

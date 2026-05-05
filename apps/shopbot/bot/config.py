@@ -42,13 +42,15 @@ class Settings:
         default_factory=lambda: _env("ADMIN_LOGIN_PATH", "/login-shopbot-admin")
     )
 
-    # MBBank defaults (DB settings override these)
+    # MBBank scanner defaults (DB settings override these)
     mb_api_url: str = field(
-        default_factory=lambda: _env("MB_API_URL", "https://apicanhan.com/api/mbbankv3")
+        default_factory=lambda: _env("MB_API_URL", "https://api.apicanhan.com/transactions/MB")
     )
     mb_api_key: str = field(default_factory=lambda: _env("MB_API_KEY"))
+    # Deprecated for transaction scanning; retained as soft-compat env fields.
     mb_username: str = field(default_factory=lambda: _env("MB_USERNAME"))
     mb_password: str = field(default_factory=lambda: _env("MB_PASSWORD"))
+    # Still used by VietQR rendering.
     mb_account_no: str = field(default_factory=lambda: _env("MB_ACCOUNT_NO"))
     mb_account_name: str = field(default_factory=lambda: _env("MB_ACCOUNT_NAME"))
     mb_bank_id: str = field(default_factory=lambda: _env("MB_BANK_ID", "MB"))
