@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Analytics{% endblock %}
+{% block title %}Revenue Analytics{% endblock %}
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Analytics</h1>
-        <p class="page-subtitle">Doanh thu va don hang theo ngay/thang, tinh theo GMT+7.</p>
+        <h1>Revenue Analytics</h1>
+        <p class="page-subtitle">Revenue and order trends by day or month, calculated in GMT+7.</p>
     </div>
     <div class="page-actions">
         <a href="/" class="btn btn-outline-secondary">Dashboard</a>
@@ -15,7 +15,7 @@
     <div class="card-body">
         <form method="GET" action="/analytics" class="row g-3 align-items-end">
             <div class="col-12 col-lg-3">
-                <label class="form-label">Khoang thoi gian</label>
+                <label class="form-label">Range preset</label>
                 <select name="range_key" class="form-select">
                     {% for option in range_options %}
                     <option value="{{ option.key }}" {% if summary.range.key == option.key %}selected{% endif %}>{{ option.label }}</option>
@@ -23,22 +23,22 @@
                 </select>
             </div>
             <div class="col-6 col-lg-2">
-                <label class="form-label">Tu ngay</label>
+                <label class="form-label">From</label>
                 <input type="date" name="date_from" class="form-control" value="{{ summary.range.date_from }}">
             </div>
             <div class="col-6 col-lg-2">
-                <label class="form-label">Den ngay</label>
+                <label class="form-label">To</label>
                 <input type="date" name="date_to" class="form-control" value="{{ summary.range.date_to }}">
             </div>
             <div class="col-6 col-lg-2">
                 <label class="form-label">Bucket</label>
                 <select name="bucket" class="form-select">
-                    <option value="day" {% if summary.range.bucket == 'day' %}selected{% endif %}>Theo ngay</option>
-                    <option value="month" {% if summary.range.bucket == 'month' %}selected{% endif %}>Theo thang</option>
+                    <option value="day" {% if summary.range.bucket == 'day' %}selected{% endif %}>Daily</option>
+                    <option value="month" {% if summary.range.bucket == 'month' %}selected{% endif %}>Monthly</option>
                 </select>
             </div>
             <div class="col-6 col-lg-3">
-                <button type="submit" class="btn btn-primary w-100">Cap nhat analytics</button>
+                <button type="submit" class="btn btn-primary w-100">Refresh Analytics</button>
             </div>
         </form>
     </div>
@@ -49,7 +49,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ summary.created_orders }}</div>
-                <div class="stat-label">Don tao moi</div>
+                <div class="stat-label">Orders created</div>
             </div>
         </div>
     </div>
@@ -57,7 +57,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ summary.completed_orders }}</div>
-                <div class="stat-label">Don hoan thanh</div>
+                <div class="stat-label">Orders completed</div>
             </div>
         </div>
     </div>
@@ -65,7 +65,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ format_vnd(summary.gross_revenue) }}</div>
-                <div class="stat-label">Doanh thu gop</div>
+                <div class="stat-label">Gross revenue</div>
             </div>
         </div>
     </div>
@@ -73,7 +73,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ format_vnd(summary.refunded_amount) }}</div>
-                <div class="stat-label">Hoan tien</div>
+                <div class="stat-label">Refunded</div>
             </div>
         </div>
     </div>
@@ -81,7 +81,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ format_vnd(summary.net_revenue) }}</div>
-                <div class="stat-label">Doanh thu thuan</div>
+                <div class="stat-label">Net revenue</div>
             </div>
         </div>
     </div>
@@ -89,7 +89,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ summary.completion_rate }}%</div>
-                <div class="stat-label">Ty le hoan thanh</div>
+                <div class="stat-label">Completion rate</div>
             </div>
         </div>
     </div>
@@ -99,7 +99,7 @@
     <div class="col-12 col-xl-7">
         <div class="card h-100">
             <div class="card-header">
-                <h3>Chuoi thoi gian - {{ summary.range.label }}</h3>
+                <h3>Time Series - {{ summary.range.label }}</h3>
                 <span class="text-secondary small">{{ summary.range.bucket|upper }}</span>
             </div>
             <div class="card-body">
@@ -113,7 +113,7 @@
                         </div>
                         <div class="mb-2">
                             <div class="d-flex justify-content-between small mb-1">
-                                <span>Don tao moi</span>
+                                <span>Orders created</span>
                                 <strong>{{ point.created_orders }}</strong>
                             </div>
                             <div style="height:8px; border-radius:999px; background:rgba(14,165,233,0.12); overflow:hidden;">
@@ -122,7 +122,7 @@
                         </div>
                         <div class="mb-2">
                             <div class="d-flex justify-content-between small mb-1">
-                                <span>Doanh thu hoan thanh</span>
+                                <span>Completed revenue</span>
                                 <strong>{{ format_vnd(point.gross_revenue) }}</strong>
                             </div>
                             <div style="height:8px; border-radius:999px; background:rgba(16,185,129,0.12); overflow:hidden;">
@@ -131,7 +131,7 @@
                         </div>
                         <div>
                             <div class="d-flex justify-content-between small mb-1">
-                                <span>Hoan tien</span>
+                                <span>Refunds</span>
                                 <strong>{{ format_vnd(point.refunded_amount) }}</strong>
                             </div>
                             <div style="height:8px; border-radius:999px; background:rgba(239,68,68,0.10); overflow:hidden;">
@@ -142,7 +142,7 @@
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="empty-state">Chua co du lieu trong ky da chon.</div>
+                <div class="empty-state">No analytics data is available for the selected range.</div>
                 {% endif %}
             </div>
         </div>
@@ -151,27 +151,27 @@
     <div class="col-12 col-xl-5">
         <div class="card mb-3">
             <div class="card-header">
-                <h3>Breakdown trang thai</h3>
+                <h3>Status Breakdown</h3>
             </div>
             <div class="card-body">
                 {% if breakdowns.status_counts %}
                 <div class="d-flex flex-column gap-2">
                     {% for item in breakdowns.status_counts %}
                     <div class="d-flex justify-content-between align-items-center">
-                        <span>{{ status_text_vi(item.label) if item.label in ['pending', 'paid', 'processing', 'completed', 'expired', 'cancelled', 'refunded'] else item.label }}</span>
+                        <span>{{ item.label|replace('_', ' ')|title }}</span>
                         <strong>{{ item.count }}</strong>
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="text-secondary">Khong co du lieu.</div>
+                <div class="text-secondary">No data available.</div>
                 {% endif %}
             </div>
         </div>
 
         <div class="card mb-3">
             <div class="card-header">
-                <h3>Top san pham</h3>
+                <h3>Top Products</h3>
             </div>
             <div class="card-body">
                 {% if breakdowns.top_products %}
@@ -180,21 +180,21 @@
                     <div>
                         <div class="d-flex justify-content-between align-items-start gap-3">
                             <strong>{{ item.label }}</strong>
-                            <span class="badge badge-info">{{ item.order_count }} don</span>
+                            <span class="badge badge-info">{{ item.order_count }} orders</span>
                         </div>
                         <div class="text-secondary small">{{ format_vnd(item.revenue) }}</div>
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="text-secondary">Khong co doanh thu hoan thanh.</div>
+                <div class="text-secondary">No completed revenue yet.</div>
                 {% endif %}
             </div>
         </div>
 
         <div class="card">
             <div class="card-header">
-                <h3>Top server</h3>
+                <h3>Top API Sources</h3>
             </div>
             <div class="card-body">
                 {% if breakdowns.top_servers %}
@@ -203,14 +203,14 @@
                     <div>
                         <div class="d-flex justify-content-between align-items-start gap-3">
                             <strong>{{ item.label }}</strong>
-                            <span class="badge badge-info">{{ item.order_count }} don</span>
+                            <span class="badge badge-info">{{ item.order_count }} orders</span>
                         </div>
                         <div class="text-secondary small">{{ format_vnd(item.revenue) }}</div>
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="text-secondary">Khong co doanh thu hoan thanh.</div>
+                <div class="text-secondary">No completed revenue yet.</div>
                 {% endif %}
             </div>
         </div>

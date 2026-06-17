@@ -1,29 +1,29 @@
 {% extends "admin_base.html" %}
 {% set active_page = "pricing-sync-runs" %}
-{% block title %}Pricing Sync Runs{% endblock %}
-{% block page_title %}Pricing Sync Runs{% endblock %}
+{% block title %}Sync History{% endblock %}
+{% block page_title %}Sync History{% endblock %}
 
 {% block content %}
 <div class="page-stack">
     <section class="page-head">
         <div>
-            <h1 class="page-title">Pricing Sync Runs</h1>
-            <p class="page-subtitle">Unified sync history from portal runtime execution and control-plane audit actions.</p>
+            <h1 class="page-title">Sync History</h1>
+            <p class="page-subtitle">Unified pricing sync history from runtime execution and control-plane audit actions.</p>
         </div>
     </section>
 
     {% if runtime_sync_warning %}
     <section class="shell-card" style="border-color: rgba(245, 158, 11, 0.35);">
         <div style="color: var(--warning); font-weight: 600; margin-bottom: 6px;">Runtime sync history unavailable</div>
-        <div style="color: var(--text-secondary); font-size: 13px;">Showing local control-plane audit only. Runtime pricing-hub error: {{ runtime_sync_warning }}</div>
+        <div style="color: var(--text-secondary); font-size: 13px;">Showing local control-plane audit only. Runtime admin bridge error: {{ runtime_sync_warning }}</div>
     </section>
     {% endif %}
 
     <section class="shell-card">
         <div class="panel-heading">
             <div>
-                <h2 class="panel-title">Filter runs</h2>
-                <p class="panel-copy">Review the latest sync attempts by source, trigger, and status.</p>
+                <h2 class="panel-title">Filter Runs</h2>
+                <p class="panel-copy">Review recent sync attempts by source, status, trigger, and execution origin.</p>
             </div>
         </div>
         <form method="GET" action="/control/pricing/sync-runs" style="display:grid; gap:16px; grid-template-columns: repeat(5, minmax(0, 1fr)) auto;">
@@ -63,7 +63,7 @@
             <div></div>
             <div style="align-self:end; display:flex; gap:10px;">
                 <a class="button-secondary" href="/control/pricing/sync-runs">Reset</a>
-                <button type="submit" class="button">Apply</button>
+                <button type="submit" class="button">Apply Filters</button>
             </div>
         </form>
     </section>
@@ -71,7 +71,7 @@
     <section class="shell-card">
         <div class="panel-heading">
             <div>
-                <h2 class="panel-title">Recent runs</h2>
+                <h2 class="panel-title">Recent Runs</h2>
                 <p class="panel-copy">{{ runs|length }} entries currently loaded.</p>
             </div>
         </div>

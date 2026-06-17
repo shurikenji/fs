@@ -36,13 +36,13 @@
             </a>
 
             <nav class="site-nav" :class="{ 'is-open': mobileNav }">
-                <a href="/" class="site-nav__link {% if request.url.path == '/' %}is-active{% endif %}">Home</a>
+                <a href="/" class="site-nav__link {% if request.url.path == '/' %}is-active{% endif %}">Overview</a>
                 <a href="/pricing"
-                    class="site-nav__link {% if request.url.path == '/pricing' %}is-active{% endif %}">Pricing</a>
+                    class="site-nav__link {% if request.url.path == '/pricing' %}is-active{% endif %}">Pricing Explorer</a>
                 <a href="/check"
-                    class="site-nav__link {% if request.url.path == '/check' %}is-active{% endif %}">Balance</a>
-                <a href="/keys" class="site-nav__link {% if request.url.path == '/keys' %}is-active{% endif %}">Keys</a>
-                <a href="/logs" class="site-nav__link {% if request.url.path == '/logs' %}is-active{% endif %}">Logs</a>
+                    class="site-nav__link {% if request.url.path == '/check' %}is-active{% endif %}">Balance Check</a>
+                <a href="/keys" class="site-nav__link {% if request.url.path == '/keys' %}is-active{% endif %}">Key Tools</a>
+                <a href="/logs" class="site-nav__link {% if request.url.path == '/logs' %}is-active{% endif %}">Usage Logs</a>
             </nav>
 
             <button type="button" class="nav-toggle" @click="mobileNav = !mobileNav"
@@ -70,7 +70,7 @@
         <div class="site-container">
             <div class="site-footer__inner">
                 <span class="site-footer__brand">Shupremium</span>
-                <span class="site-footer__copy">AI pricing, balance, and key tools for customers.</span>
+                <span class="site-footer__copy">AI pricing, balance checks, and key operations in one workspace.</span>
             </div>
         </div>
     </footer>

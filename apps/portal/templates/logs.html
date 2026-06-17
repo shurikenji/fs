@@ -1,12 +1,12 @@
 {% extends "portal_base.html" %}
-{% block title %}Usage Logs — Shupremium{% endblock %}
+{% block title %}Usage Logs - Shupremium{% endblock %}
 
 {% block content %}
 <div x-data="logsApp()" x-cloak class="page-stack">
     <section class="page-head fade-up">
         <div>
             <h1 class="page-title">Usage Logs</h1>
-            <p class="page-subtitle">Review your usage history and export cost estimates.</p>
+            <p class="page-subtitle">Search request history, inspect model usage, and export estimated cost data.</p>
         </div>
         <div class="page-actions">
             <button class="button-secondary" @click="exportCsv()" :disabled="!logs.length">Export CSV</button>
@@ -17,7 +17,7 @@
         <div class="panel-heading">
             <div>
                 <h2 class="panel-title">Search usage</h2>
-                <p class="panel-copy">Pick a source, paste your API key, then filter logs by model or group if needed.</p>
+                <p class="panel-copy">Pick a source, resolve your key, then filter runtime logs by model or group.</p>
             </div>
             <div class="controls-row">
                 <button class="button-ghost" :disabled="page <= 1" @click="page--; fetchLogs()">
@@ -28,7 +28,7 @@
                     Prev
                 </button>
                 <button class="button" @click="fetchLogs()" :disabled="loading || !serverId || !apiKey">
-                    <span x-text="loading ? 'Searching…' : 'Search'"></span>
+                    <span x-text="loading ? 'Searching...' : 'Search logs'"></span>
                 </button>
                 <button class="button-ghost" @click="page++; fetchLogs()" :disabled="loading || !serverId">
                     Next
@@ -42,7 +42,7 @@
 
         <div class="toolbar-grid">
             <div>
-                <label class="field-label">Source</label>
+                <label class="field-label">Runtime source</label>
                 <select class="select-control" x-model="serverId" @change="onServerChanged()">
                     <option value="">Choose a source</option>
                     {% for s in servers %}
@@ -52,10 +52,10 @@
             </div>
             <div>
                 <label class="field-label">API key</label>
-                <input type="text" placeholder="Paste your API key (e.g. sk-...)" class="control code-text" x-model="apiKey">
+                <input type="text" placeholder="Paste the key used for these requests" class="control code-text" x-model="apiKey">
             </div>
             <div>
-                <label class="field-label">Model (optional)</label>
+                <label class="field-label">Model filter</label>
                 <input type="text" placeholder="Filter by model name" class="control code-text" x-model="modelName">
             </div>
             <div>
@@ -74,7 +74,7 @@
     <div x-show="error" class="status-banner is-error fade-up">
         <span class="status-banner__dot"></span>
         <div>
-            <strong>Search failed.</strong>
+            <strong>Usage search failed.</strong>
             <div class="panel-copy mt-1" x-text="error"></div>
         </div>
     </div>
@@ -91,7 +91,7 @@
         <div class="panel-heading">
             <div>
                 <h2 class="panel-title">Results</h2>
-                <p class="panel-copy">Cost estimates are calculated when pricing data is available.</p>
+                <p class="panel-copy">Estimated cost is shown when pricing data is available for the matched model.</p>
             </div>
             <div class="controls-row">
                 <span class="tag">Page <span x-text="page"></span></span>
@@ -138,8 +138,8 @@
                         <polyline points="14 2 14 8 20 8" />
                     </svg>
                 </div>
-                <h3 class="panel-title">No logs found</h3>
-                <p class="panel-copy mt-2">Try adjusting your filters or selecting a different source.</p>
+                <h3 class="panel-title">No logs matched the current query</h3>
+                <p class="panel-copy mt-2">Try another source, model filter, group, or page.</p>
             </div>
         </div>
     </div>

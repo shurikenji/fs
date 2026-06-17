@@ -132,11 +132,11 @@ def _describe_proxy_endpoint_error(exc: Exception) -> str:
     message = str(exc).strip()
     lowered = message.lower()
     if "proxy_endpoints.domain" in lowered or "unique constraint failed: proxy_endpoints.domain" in lowered:
-        return "Domain proxy da ton tai. Hay doi domain khac hoac sua proxy hien co."
+        return "This proxy domain already exists. Use another domain or update the existing endpoint."
     if "proxy_endpoints.port" in lowered or "unique constraint failed: proxy_endpoints.port" in lowered:
-        return "Port noi bo da duoc su dung. Hay chon port khac."
+        return "This internal port is already in use. Choose a different port."
     if "foreign key constraint failed" in lowered:
-        return "Source ID khong hop le hoac khong ton tai."
+        return "The linked source ID is invalid or no longer exists."
     if message:
         return message
     return exc.__class__.__name__
@@ -323,11 +323,11 @@ def create_app() -> FastAPI:
         await verify_csrf(request)
         ip = _client_ip(request)
         if password != settings.admin_password:
-            await create_activity_log("LOGIN_FAILED", "Sai mat khau admin", ip)
-            request.session["flash_error"] = "Sai mật khẩu quản trị."
+            await create_activity_log("LOGIN_FAILED", "Admin sign-in failed", ip)
+            request.session["flash_error"] = "Incorrect admin password."
             return _redirect("/control/login")
         request.session["is_admin"] = True
-        await create_activity_log("LOGIN", "Dang nhap thanh cong", ip)
+        await create_activity_log("LOGIN", "Admin sign-in succeeded", ip)
         return _redirect("/control")
 
     @app.post("/control/logout")
@@ -336,7 +336,7 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
         ip = _client_ip(request)
-        await create_activity_log("LOGOUT", "Dang xuat", ip)
+        await create_activity_log("LOGOUT", "Admin signed out", ip)
         request.session.clear()
         return _redirect("/control/login")
 
@@ -349,13 +349,13 @@ def create_app() -> FastAPI:
             return redirect
 
         ip = _client_ip(request)
-        await create_activity_log("LAUNCH_SHOPBOT", "Mo Shopbot admin qua SSO", ip)
+        await create_activity_log("LAUNCH_SHOPBOT", "Opened Shopbot Admin via SSO", ip)
 
         action_url = f"{settings.shopbot_admin_url.rstrip('/')}/sso/consume"
         token = _issue_shopbot_launch_token()
         html = f"""
         <!DOCTYPE html>
-        <html lang="vi">
+        <html lang="en">
         <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -395,13 +395,13 @@ def create_app() -> FastAPI:
         <body>
             <div class="card">
                 <h1>Launching Shopbot Admin</h1>
-                <p>Phiên quản trị đang được chuyển sang runtime commerce riêng của Shopbot.</p>
-                <p>Nếu trình duyệt không tự chuyển, bấm nút bên dưới.</p>
+                <p>Your admin session is being forwarded to the dedicated Shopbot commerce runtime.</p>
+                <p>If the browser does not redirect automatically, use the button below.</p>
                 <form id="launch-form" method="post" action="{escape(action_url)}">
                     <input type="hidden" name="token" value="{escape(token)}">
                     <button type="submit">Open Shopbot Admin</button>
                 </form>
-                <p style="margin-top:16px; font-size:13px;">Token có thời hạn ngắn và không chia sẻ cookie với control plane.</p>
+                <p style="margin-top:16px; font-size:13px;">This launch token is short-lived and does not reuse control-plane cookies.</p>
             </div>
             <script>document.getElementById('launch-form').submit();</script>
         </body>
@@ -484,17 +484,17 @@ def create_app() -> FastAPI:
             return redirect
         ip = _client_ip(request)
         if current != settings.admin_password:
-            request.session["flash_error"] = "Mật khẩu hiện tại không đúng."
+            request.session["flash_error"] = "Current password is incorrect."
             return _redirect("/control/settings")
         if newpass != confirm:
-            request.session["flash_error"] = "Mật khẩu mới không khớp."
+            request.session["flash_error"] = "New passwords do not match."
             return _redirect("/control/settings")
         if len(newpass) < 6:
-            request.session["flash_error"] = "Mật khẩu phải ít nhất 6 ký tự."
+            request.session["flash_error"] = "New password must be at least 6 characters."
             return _redirect("/control/settings")
         # Note: password change requires updating .env file on disk
-        await create_activity_log("CHANGE_PASSWORD", "Doi mat khau admin (can cap nhat .env)", ip)
-        request.session["flash_message"] = "Yêu cầu đổi mật khẩu đã ghi nhận. Cập nhật ADMIN_PASSWORD trong .env và restart service."
+        await create_activity_log("CHANGE_PASSWORD", "Admin password rotation requested (.env update required)", ip)
+        request.session["flash_message"] = "Password change request recorded. Update `ADMIN_PASSWORD` in `.env` and restart the service."
         return _redirect("/control/settings")
 
     # ── Service Sources CRUD ─────────────────────────────────────
@@ -547,16 +547,16 @@ def create_app() -> FastAPI:
             token_search_path=token_search_path.strip(),
             notes=notes.strip(),
         )
-        await create_activity_log("SAVE_SOURCE", f"Luu service source: {source_id.strip()}", ip)
+        await create_activity_log("SAVE_SOURCE", f"Saved upstream source: {source_id.strip()}", ip)
         try:
             result = await pricing_import_control_plane()
             request.session["flash_message"] = (
-                f"Đã lưu service source {source_id.strip()} và đồng bộ pricing runtime "
-                f"({result.get('sources_imported', 0)} sources)."
+                f"Saved upstream source `{source_id.strip()}` and synced pricing runtime "
+                f"({result.get('sources_imported', 0)} sources imported)."
             )
         except Exception as exc:
             request.session["flash_error"] = (
-                f"Service source đã lưu nhưng pricing runtime chưa đồng bộ được: {exc}"
+                f"Source was saved, but pricing runtime sync failed: {exc}"
             )
         return _redirect("/control")
 
@@ -567,16 +567,16 @@ def create_app() -> FastAPI:
             return redirect
         ip = _client_ip(request)
         await delete_service_source(source_id)
-        await create_activity_log("DELETE_SOURCE", f"Xoa service source: {source_id}", ip)
+        await create_activity_log("DELETE_SOURCE", f"Deleted upstream source: {source_id}", ip)
         try:
             result = await pricing_import_control_plane()
             request.session["flash_message"] = (
-                f"Đã xóa service source {source_id} và đồng bộ pricing runtime "
-                f"({result.get('sources_imported', 0)} sources)."
+                f"Deleted upstream source `{source_id}` and synced pricing runtime "
+                f"({result.get('sources_imported', 0)} sources imported)."
             )
         except Exception as exc:
             request.session["flash_error"] = (
-                f"Service source đã xóa nhưng pricing runtime chưa đồng bộ được: {exc}"
+                f"Source was deleted, but pricing runtime sync failed: {exc}"
             )
         return _redirect("/control")
 
@@ -620,17 +620,16 @@ def create_app() -> FastAPI:
             )
             await create_activity_log(
                 "SAVE_PROXY",
-                f"Luu proxy endpoint: {endpoint_id} ({fields['domain']}) va apply runtime thanh cong",
+                f"Saved proxy endpoint `{endpoint_id}` ({fields['domain']}) and applied runtime successfully",
                 ip,
             )
-            request.session["flash_message"] = f"Đã lưu proxy endpoint {endpoint_id.strip()}."
             request.session["flash_message"] = (
-                f"Da luu proxy endpoint {endpoint_id} va apply runtime thanh cong "
-                f"({outcome['active_count']} proxy dang active)."
+                f"Saved proxy endpoint `{endpoint_id}` and applied runtime successfully "
+                f"({outcome['active_count']} active endpoints)."
             )
         except Exception as exc:
-            await create_activity_log("SAVE_PROXY_FAIL", f"Luu proxy that bai: {endpoint_id} - {exc}", ip)
-            request.session["flash_error"] = f"Luu proxy loi: {_describe_proxy_endpoint_error(exc)}"
+            await create_activity_log("SAVE_PROXY_FAIL", f"Proxy save failed: {endpoint_id} - {exc}", ip)
+            request.session["flash_error"] = f"Could not save proxy endpoint: {_describe_proxy_endpoint_error(exc)}"
         return _redirect("/control")
 
     @app.post("/control/proxy-endpoints/delete")
@@ -642,7 +641,7 @@ def create_app() -> FastAPI:
         endpoint_id = endpoint_id.strip()
         previous = await _get_proxy_endpoint_snapshot(endpoint_id)
         if previous is None:
-            request.session["flash_error"] = f"Xoa proxy loi: Proxy endpoint {endpoint_id} khong ton tai."
+            request.session["flash_error"] = f"Cannot delete proxy endpoint `{endpoint_id}` because it does not exist."
             return _redirect("/control")
         try:
             outcome = await _run_proxy_runtime_transaction(
@@ -651,15 +650,14 @@ def create_app() -> FastAPI:
                 mutate=lambda: delete_proxy_endpoint(endpoint_id),
                 rollback=lambda: _restore_proxy_endpoint_snapshot(endpoint_id, previous),
             )
-            await create_activity_log("DELETE_PROXY", f"Xoa proxy endpoint: {endpoint_id} va apply runtime thanh cong", ip)
-            request.session["flash_message"] = f"Đã xóa proxy endpoint {endpoint_id}."
+            await create_activity_log("DELETE_PROXY", f"Deleted proxy endpoint `{endpoint_id}` and applied runtime successfully", ip)
             request.session["flash_message"] = (
-                f"Da xoa proxy endpoint {endpoint_id} va apply runtime thanh cong "
-                f"({outcome['active_count']} proxy dang active)."
+                f"Deleted proxy endpoint `{endpoint_id}` and applied runtime successfully "
+                f"({outcome['active_count']} active endpoints)."
             )
         except Exception as exc:
-            await create_activity_log("DELETE_PROXY_FAIL", f"Xoa proxy that bai: {endpoint_id} - {exc}", ip)
-            request.session["flash_error"] = f"Xoa proxy loi: {_describe_proxy_endpoint_error(exc)}"
+            await create_activity_log("DELETE_PROXY_FAIL", f"Proxy delete failed: {endpoint_id} - {exc}", ip)
+            request.session["flash_error"] = f"Could not delete proxy endpoint: {_describe_proxy_endpoint_error(exc)}"
         return _redirect("/control")
 
     @app.post("/control/proxy-endpoints/toggle")
@@ -671,7 +669,7 @@ def create_app() -> FastAPI:
         endpoint_id = endpoint_id.strip()
         previous = await _get_proxy_endpoint_snapshot(endpoint_id)
         if previous is None:
-            request.session["flash_error"] = f"Toggle proxy loi: Proxy endpoint {endpoint_id} khong ton tai."
+            request.session["flash_error"] = f"Cannot update proxy endpoint `{endpoint_id}` because it does not exist."
             return _redirect("/control")
 
         next_status = "inactive" if previous.get("status") == "active" else "active"
@@ -684,15 +682,15 @@ def create_app() -> FastAPI:
                 mutate=lambda: upsert_proxy_endpoint(endpoint_id, **fields),
                 rollback=lambda: _restore_proxy_endpoint_snapshot(endpoint_id, previous),
             )
-            action = "Bat" if next_status == "active" else "Tat"
-            await create_activity_log("TOGGLE_PROXY", f"{action} proxy: {endpoint_id} va apply runtime thanh cong", ip)
+            action = "Enabled" if next_status == "active" else "Disabled"
+            await create_activity_log("TOGGLE_PROXY", f"{action} proxy endpoint `{endpoint_id}` and applied runtime successfully", ip)
             request.session["flash_message"] = (
-                f"Da {action.lower()} proxy {endpoint_id} va apply runtime thanh cong "
-                f"({outcome['active_count']} proxy dang active)."
+                f"{action} proxy endpoint `{endpoint_id}` and applied runtime successfully "
+                f"({outcome['active_count']} active endpoints)."
             )
         except Exception as exc:
-            await create_activity_log("TOGGLE_PROXY_FAIL", f"Toggle proxy that bai: {endpoint_id} - {exc}", ip)
-            request.session["flash_error"] = f"Toggle proxy loi: {_describe_proxy_endpoint_error(exc)}"
+            await create_activity_log("TOGGLE_PROXY_FAIL", f"Proxy toggle failed: {endpoint_id} - {exc}", ip)
+            request.session["flash_error"] = f"Could not update proxy endpoint: {_describe_proxy_endpoint_error(exc)}"
         return _redirect("/control")
         try:
             new_status = await toggle_proxy_status(endpoint_id)
@@ -733,8 +731,8 @@ def create_app() -> FastAPI:
             is_public=1 if is_public else 0,
             sort_order=sort_order,
         )
-        await create_activity_log("SAVE_MODULE", f"Luu portal module: {module_id.strip()}", ip)
-        request.session["flash_message"] = f"Đã lưu portal module {module_id.strip()}."
+        await create_activity_log("SAVE_MODULE", f"Saved portal module: {module_id.strip()}", ip)
+        request.session["flash_message"] = f"Saved portal module `{module_id.strip()}`."
         return _redirect("/control")
 
     @app.post("/control/portal-modules/delete")
@@ -744,8 +742,8 @@ def create_app() -> FastAPI:
             return redirect
         ip = _client_ip(request)
         await delete_portal_module(module_id)
-        await create_activity_log("DELETE_MODULE", f"Xoa portal module: {module_id}", ip)
-        request.session["flash_message"] = f"Đã xóa portal module {module_id}."
+        await create_activity_log("DELETE_MODULE", f"Deleted portal module: {module_id}", ip)
+        request.session["flash_message"] = f"Deleted portal module `{module_id}`."
         return _redirect("/control")
 
     # ── Deploy Actions ───────────────────────────────────────────
@@ -760,15 +758,15 @@ def create_app() -> FastAPI:
             outcome = await _apply_current_proxy_state(job_type="proxy_sync", request_payload={"mode": "manual"})
             await create_activity_log(
                 "PROXY_SYNC",
-                f"Sync {outcome['active_count']} proxy xuong runtime - thanh cong",
+                f"Synced {outcome['active_count']} proxy endpoints to runtime successfully",
                 ip,
             )
             request.session["flash_message"] = (
-                f"Da dong bo {outcome['active_count']} proxy xuong runtime thanh cong."
+                f"Synced {outcome['active_count']} active proxy endpoints to runtime."
             )
         except Exception as exc:
-            await create_activity_log("PROXY_SYNC_FAIL", f"Sync proxy that bai: {exc}", ip)
-            request.session["flash_error"] = f"Proxy sync loi: {_describe_proxy_endpoint_error(exc)}"
+            await create_activity_log("PROXY_SYNC_FAIL", f"Proxy sync failed: {exc}", ip)
+            request.session["flash_error"] = f"Proxy sync failed: {_describe_proxy_endpoint_error(exc)}"
         return _redirect("/control")
         active = await get_proxy_endpoints(active_only=True)
         job_id = await create_deploy_job("proxy_sync", "queued", "proxy-runtime", {"count": len(active)})
@@ -793,12 +791,12 @@ def create_app() -> FastAPI:
         try:
             result = await ensure_wildcard_certificate()
             await mark_deploy_job_finished(job_id, "success", response_payload=result)
-            await create_activity_log("WILDCARD_CERT", "Ensure wildcard cert - thanh cong", ip)
-            request.session["flash_message"] = "Đã yêu cầu proxy-operator đảm bảo wildcard certificate."
+            await create_activity_log("WILDCARD_CERT", "Wildcard certificate check succeeded", ip)
+            request.session["flash_message"] = "Requested wildcard certificate assurance from the proxy operator."
         except Exception as exc:
             await mark_deploy_job_finished(job_id, "failed", error_message=str(exc))
-            await create_activity_log("WILDCARD_CERT_FAIL", f"Wildcard cert that bai: {exc}", ip)
-            request.session["flash_error"] = f"Wildcard certificate lỗi: {exc}"
+            await create_activity_log("WILDCARD_CERT_FAIL", f"Wildcard certificate request failed: {exc}", ip)
+            request.session["flash_error"] = f"Wildcard certificate request failed: {exc}"
         return _redirect("/control")
 
     return app

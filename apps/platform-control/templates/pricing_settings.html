@@ -1,15 +1,15 @@
 {% extends "admin_base.html" %}
 {% set active_page = "pricing-settings" %}
-{% block title %}Pricing Settings{% endblock %}
-{% block page_title %}Pricing Settings{% endblock %}
+{% block title %}Runtime Settings{% endblock %}
+{% block page_title %}Runtime Settings{% endblock %}
 
 {% block content %}
 {% set runtime_snapshot = runtime_state.get('settings', {}) if runtime_state else {} %}
 <div class="page-stack">
     <section class="page-head">
         <div>
-            <h1 class="page-title">Pricing Runtime Settings</h1>
-            <p class="page-subtitle">Control AI translation and auto-sync from platform-control, then push into pricing runtime.</p>
+            <h1 class="page-title">Runtime Settings</h1>
+            <p class="page-subtitle">Manage AI translation and automatic sync policy from Platform Control, then push the saved configuration into pricing runtime.</p>
         </div>
     </section>
 
@@ -17,8 +17,8 @@
         <article class="shell-card">
             <div class="panel-heading">
                 <div>
-                    <h2 class="panel-title">Runtime configuration</h2>
-                    <p class="panel-copy">Saved in control-plane DB, then imported into pricing-hub runtime through the admin bridge.</p>
+                    <h2 class="panel-title">Control-Plane Configuration</h2>
+                    <p class="panel-copy">These values are stored locally first, then imported into runtime through the internal admin bridge.</p>
                 </div>
             </div>
 
@@ -49,7 +49,7 @@
 
                 <div style="display:grid; gap:16px; grid-template-columns: repeat(2, minmax(0, 1fr));">
                     <div>
-                        <label class="field-label">Auto sync interval (minutes)</label>
+                        <label class="field-label">Auto-sync interval (minutes)</label>
                         <input class="control" type="number" min="1" step="1" name="auto_sync_interval_minutes" value="{{ all_settings.get('auto_sync_interval_minutes', '15') }}">
                     </div>
                 </div>
@@ -60,19 +60,19 @@
                 </div>
 
                 <div style="display:flex; gap:12px; justify-content:flex-end;">
-                    <button type="button" class="button-secondary" onclick="testAiConnection()">Test AI connection</button>
-                    <button type="submit" class="button">Save settings</button>
+                    <button type="button" class="button-secondary" onclick="testAiConnection()">Test AI Connection</button>
+                    <button type="submit" class="button">Save Changes</button>
                 </div>
 
-                <div id="aiTestResult" style="font-size:13px; color:var(--text-secondary);">Use the test button before enabling translation after changing key, provider, or model.</div>
+                <div id="aiTestResult" style="font-size:13px; color:var(--text-secondary);">Run a connection test before enabling translation after changing provider, model, key, or base URL.</div>
             </form>
         </article>
 
         <article class="shell-card">
             <div class="panel-heading">
                 <div>
-                    <h2 class="panel-title">Runtime snapshot</h2>
-                    <p class="panel-copy">Current values reported by pricing-hub internal admin bridge.</p>
+                    <h2 class="panel-title">Runtime Snapshot</h2>
+                    <p class="panel-copy">Current settings reported back by the pricing runtime admin bridge.</p>
                 </div>
             </div>
             {% if runtime_state.get('error') %}

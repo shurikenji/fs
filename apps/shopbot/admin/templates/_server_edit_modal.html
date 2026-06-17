@@ -4,40 +4,42 @@
         <div class="modal-content">
             <form method="POST" action="/servers/{{ editing.id }}/edit" id="editForm">
                 <div class="modal-header">
-                    <h5 class="modal-title">Sửa server: {{ editing.name }}</h5>
+                    <h5 class="modal-title">Edit API Source: {{ editing.name }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <h6 class="text-muted mb-2">Thông tin cơ bản</h6>
+                    <h6 class="text-muted mb-2">Core Connection</h6>
                     <div class="row mb-2">
-                        <div class="col"><label class="form-label">Tên</label><input name="name" class="form-control" value="{{ editing.name }}" required></div>
-                        <div class="col"><label class="form-label">Địa chỉ API</label><input name="base_url" class="form-control" value="{{ editing.base_url }}" required></div>
+                        <div class="col"><label class="form-label">Source Name</label><input name="name" class="form-control" value="{{ editing.name }}" required></div>
+                        <div class="col"><label class="form-label">Base URL</label><input name="base_url" class="form-control" value="{{ editing.base_url }}" required></div>
                     </div>
 
                     <div class="mb-2">
-                        <label class="form-label">Loại API</label>
+                        <label class="form-label">API Type</label>
                         <select name="api_type" class="form-select" id="edit_api_type">
+                            {% set api_type_labels = {'newapi': 'NewAPI', 'rixapi': 'RixAPI', 'other': 'Custom'} %}
                             {% for t in api_types %}
-                            <option value="{{ t.value }}" {% if editing.api_type == t.value %}selected{% endif %}>{{ t.label }}</option>
+                            <option value="{{ t.value }}" {% if editing.api_type == t.value %}selected{% endif %}>{{ api_type_labels.get(t.value, t.label) }}</option>
                             {% endfor %}
                         </select>
                     </div>
 
                     <hr>
-                    <h6 class="text-muted mb-2">Xác thực</h6>
+                    <h6 class="text-muted mb-2">Authentication</h6>
                     <div class="mb-2" id="edit_auth_type_wrap">
-                        <label class="form-label">Kiểu xác thực</label>
+                        <label class="form-label">Auth Strategy</label>
                         <select name="auth_type" class="form-select" id="edit_auth_type">
+                            {% set auth_type_labels = {'header': 'Header + Bearer', 'bearer_only': 'Bearer Only', 'cookie': 'Cookie Session', 'none': 'No Authentication'} %}
                             {% for a in auth_types %}
-                            <option value="{{ a.value }}" {% if editing.auth_type == a.value %}selected{% endif %}>{{ a.label }}</option>
+                            <option value="{{ a.value }}" {% if editing.auth_type == a.value %}selected{% endif %}>{{ auth_type_labels.get(a.value, a.label) }}</option>
                             {% endfor %}
                         </select>
                     </div>
 
                     <div id="edit_auth_fields">
-                        <div class="mb-2" id="edit_header_wrap"><label class="form-label">Header mã người dùng</label><input name="auth_user_header" class="form-control" value="{{ editing.auth_user_header or '' }}"></div>
-                        <div class="mb-2"><label class="form-label" id="edit_user_value_label">User ID</label><input name="auth_user_value" class="form-control" value="{{ editing.auth_user_value or '' }}"></div>
-                        <div class="mb-2"><label class="form-label" id="edit_token_label">Token truy cập</label><input name="auth_token" class="form-control" value="{{ editing.auth_token or '' }}"></div>
+                        <div class="mb-2" id="edit_header_wrap"><label class="form-label">User Header Name</label><input name="auth_user_header" class="form-control" value="{{ editing.auth_user_header or '' }}"></div>
+                        <div class="mb-2"><label class="form-label" id="edit_user_value_label">User Identifier</label><input name="auth_user_value" class="form-control" value="{{ editing.auth_user_value or '' }}"></div>
+                        <div class="mb-2"><label class="form-label" id="edit_token_label">Access Token</label><input name="auth_token" class="form-control" value="{{ editing.auth_token or '' }}"></div>
                     </div>
 
                     <div id="edit_cookie_field" class="mb-2" style="display:none;">
@@ -46,7 +48,7 @@
 
                     <div class="form-check mb-2" id="edit_multi_group_wrap">
                         <input class="form-check-input" type="checkbox" name="supports_multi_group" id="edit_multi_group" value="1" {% if editing.supports_multi_group %}checked{% endif %}>
-                        <label class="form-check-label" for="edit_multi_group">Bật hỗ trợ nhiều nhóm</label>
+                        <label class="form-check-label" for="edit_multi_group">Supports multi-group policies</label>
                     </div>
 
                     <hr>
@@ -54,45 +56,46 @@
                         <div id="edit_key_lookup_wrap">
                             <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" name="supports_key_lookup_by_id" id="edit_supports_key_lookup_by_id" value="1" {% if editing.supports_key_lookup_by_id %}checked{% endif %}>
-                                <label class="form-check-label" for="edit_supports_key_lookup_by_id">Server hỗ trợ lấy full key bằng token ID</label>
+                                <label class="form-check-label" for="edit_supports_key_lookup_by_id">Supports resolving the full key from a token ID</label>
                             </div>
                             <div class="mb-2">
-                                <label class="form-label">Endpoint lấy key theo ID</label>
+                                <label class="form-label">Token ID Lookup Endpoint</label>
                                 <input name="token_key_endpoint_template" class="form-control" value="{{ editing.token_key_endpoint_template or '/api/token/{id}/key' }}" placeholder="/api/token/{id}/key">
-                                <div class="form-text">Bật cho NewAPI bản mới. Hệ thống sẽ thay <code>{id}</code> bằng token ID và gọi <code>POST</code>.</div>
+                                <div class="form-text">For newer NewAPI deployments, the runtime replaces <code>{id}</code> with the token ID and sends a <code>POST</code> request.</div>
                             </div>
                         </div>
-                        <h6 class="text-muted mb-2">Nâng cao</h6>
-                        <div class="mb-2"><label class="form-label">Đường dẫn lấy nhóm</label><input name="groups_endpoint" class="form-control" value="{{ editing.groups_endpoint or '' }}"></div>
-                        <div class="mb-2"><label class="form-label">Danh sách nhóm nhập tay</label><input name="manual_groups" class="form-control" value="{{ editing.manual_groups or '' }}"></div>
+                        <h6 class="text-muted mb-2">Advanced Routing</h6>
+                        <div class="mb-2"><label class="form-label">Groups Endpoint</label><input name="groups_endpoint" class="form-control" value="{{ editing.groups_endpoint or '' }}"></div>
+                        <div class="mb-2"><label class="form-label">Manual Group List</label><input name="manual_groups" class="form-control" value="{{ editing.manual_groups or '' }}"></div>
                         <div class="mb-2"><label class="form-label">Custom Headers (JSON)</label><textarea name="custom_headers" class="form-control" rows="2">{{ editing.custom_headers or '' }}</textarea></div>
                     </div>
 
                     <hr>
-                    <h6 class="text-muted mb-2">Chính sách giảm giá</h6>
+                    <h6 class="text-muted mb-2">Spend Tier Policy</h6>
                     <div class="discount-builder" data-builder="edit">
                         <div class="discount-builder__hero">
                             <div>
-                                <h4>Thiết lập bậc chiết khấu</h4>
-                                <p>Chỉnh trực tiếp từng mốc chi tiêu và quyền lợi. Khi lưu, giao diện sẽ tự sinh JSON chuẩn cho backend.</p>
+                                <h4>Configure Spend Tiers</h4>
+                                <p>Define threshold-based pricing benefits here. The editor still writes the backend-compatible JSON payload on save.</p>
                             </div>
-                            <button type="button" class="btn btn-sm btn-primary" onclick="addDiscountTier('edit')">Thêm bậc giảm giá</button>
+                            <button type="button" class="btn btn-sm btn-primary" onclick="addDiscountTier('edit')">Add Tier</button>
                         </div>
                         <div class="discount-builder__grid">
                             <div class="discount-builder__panel">
-                                <div class="discount-builder__panel-title">Nguồn tích lũy</div>
-                                <strong>Nhập key để cộng chi tiêu</strong>
+                                <div class="discount-builder__panel-title">Spend Accrual Source</div>
+                                <strong>Imported keys contribute to spend</strong>
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="checkbox" name="import_spend_accrual_enabled" id="edit_import_spend_accrual_enabled" value="1" {% if editing.import_spend_accrual_enabled %}checked{% endif %}>
-                                    <label class="form-check-label" for="edit_import_spend_accrual_enabled">Bật cộng chi tiêu từ key người dùng nhập vào</label>
+                                    <label class="form-check-label" for="edit_import_spend_accrual_enabled">Enable spend accrual from user-imported keys</label>
                                 </div>
                             </div>
                             <div class="discount-builder__panel">
-                                <div class="discount-builder__panel-title">Cách cộng benefit</div>
-                                <label class="form-label">Kiểu áp dụng</label>
+                                <div class="discount-builder__panel-title">Benefit Merge Mode</div>
+                                <label class="form-label">Runtime Strategy</label>
                                 <select name="discount_stack_mode" class="form-select">
+                                    {% set stack_mode_labels = {'exclusive': 'Best Benefit Only', 'combine_selected_types': 'Combine Selected Benefit Types'} %}
                                     {% for mode in discount_stack_modes %}
-                                    <option value="{{ mode.value }}" {% if editing.discount_stack_mode == mode.value %}selected{% endif %}>{{ mode.label }}</option>
+                                    <option value="{{ mode.value }}" {% if editing.discount_stack_mode == mode.value %}selected{% endif %}>{{ stack_mode_labels.get(mode.value, mode.label) }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -101,15 +104,15 @@
                         <div style="border-top: 1px solid var(--border-light); padding-top: 1rem; margin-top: 0.25rem;">
                             <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
                                 <div>
-                                    <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-bottom: 0.25rem;">Ưu đãi được cộng dồn</div>
-                                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.82rem;">Chọn loại ưu đãi có thể kết hợp với nhau. Chỉ áp dụng khi server dùng chế độ <strong>Cộng dồn các loại đã chọn</strong>.</p>
+                                    <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-bottom: 0.25rem;">Allowed Combined Benefits</div>
+                                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.82rem;">Choose which benefit types can stack when the source uses the combined-benefit strategy.</p>
                                 </div>
                                 <div class="stack-rule-picker__presets">
-                                    <span style="font-size: 0.75rem; color: var(--text-tertiary); margin-right: 0.25rem;">Nhanh:</span>
-                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('edit', 'cashback_only')">Chỉ hoàn tiền</button>
-                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('edit', 'fixed_plus_cashback')">Cố định + hoàn</button>
-                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('edit', 'percent_plus_cashback')">% + hoàn</button>
-                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('edit', 'tier_price_plus_cashback')">Giá riêng + hoàn</button>
+                                    <span style="font-size: 0.75rem; color: var(--text-tertiary); margin-right: 0.25rem;">Presets:</span>
+                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('edit', 'cashback_only')">Cashback Only</button>
+                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('edit', 'fixed_plus_cashback')">Fixed + Cashback</button>
+                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('edit', 'percent_plus_cashback')">Percent + Cashback</button>
+                                    <button type="button" class="btn" onclick="applyDiscountStackPreset('edit', 'tier_price_plus_cashback')">Tier Price + Cashback</button>
                                 </div>
                             </div>
                             <div class="stack-rule-picker" data-stack-picker="edit">
@@ -118,25 +121,25 @@
                                     <label class="stack-rule-card">
                                         <input type="checkbox" value="percent_off" onchange="toggleDiscountAllowedType('edit', this.value, this.checked)">
                                         <span class="stack-rule-card__body">
-                                            <div><strong>Giảm %</strong><small>Giảm theo phần trăm đơn hàng.</small></div>
+                                            <div><strong>Percent Off</strong><small>Apply a percentage discount to the order.</small></div>
                                         </span>
                                     </label>
                                     <label class="stack-rule-card">
                                         <input type="checkbox" value="fixed_off" onchange="toggleDiscountAllowedType('edit', this.value, this.checked)">
                                         <span class="stack-rule-card__body">
-                                            <div><strong>Giảm cố định</strong><small>Trừ số tiền cố định.</small></div>
+                                            <div><strong>Fixed Discount</strong><small>Subtract a fixed amount.</small></div>
                                         </span>
                                     </label>
                                     <label class="stack-rule-card">
                                         <input type="checkbox" value="cashback" onchange="toggleDiscountAllowedType('edit', this.value, this.checked)">
                                         <span class="stack-rule-card__body">
-                                            <div><strong>Hoàn tiền</strong><small>Hoàn lại sau khi thanh toán.</small></div>
+                                            <div><strong>Cashback</strong><small>Grant value back after payment.</small></div>
                                         </span>
                                     </label>
                                     <label class="stack-rule-card">
                                         <input type="checkbox" value="tier_price" onchange="toggleDiscountAllowedType('edit', this.value, this.checked)">
                                         <span class="stack-rule-card__body">
-                                            <div><strong>Giá riêng bậc</strong><small>Áp giá theo bậc chi tiêu.</small></div>
+                                            <div><strong>Tier Price</strong><small>Override price per spend tier.</small></div>
                                         </span>
                                     </label>
                                 </div>
@@ -144,33 +147,33 @@
                             </div>
                         </div>
                         <div class="discount-badge-row">
-                            <span class="badge badge-info">Giảm theo %</span>
-                            <span class="badge badge-info">Giảm cố định</span>
-                            <span class="badge badge-info">Hoàn tiền</span>
-                            <span class="badge badge-info">Giá riêng theo bậc</span>
+                            <span class="badge badge-info">Percent Off</span>
+                            <span class="badge badge-info">Fixed Discount</span>
+                            <span class="badge badge-info">Cashback</span>
+                            <span class="badge badge-info">Tier Price</span>
                         </div>
                         <div id="edit_discount_tiers_builder" class="discount-builder__list mt-3"></div>
                         <div class="discount-builder__advanced">
-                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleDiscountJson('edit')">Mở cấu hình JSON nâng cao</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleDiscountJson('edit')">Open Advanced JSON</button>
                             <div id="edit_discount_json_wrap" class="mt-2" style="display:none;">
-                                <label class="form-label">JSON nâng cao</label>
+                                <label class="form-label">Advanced JSON</label>
                                 <textarea id="edit_discount_tiers_json" name="discount_tiers_json" class="form-control discount-json-input" rows="10">{{ editing.discount_tiers_json or '[]' }}</textarea>
-                                <div class="form-text">Mỗi bậc sẽ có <code>min_spend_vnd</code> và danh sách <code>benefits</code>.</div>
+                                <div class="form-text">Each tier should include <code>min_spend_vnd</code> and a <code>benefits</code> array.</div>
                             </div>
                         </div>
                     </div>
                     {% if editing.pricing_versions %}
                     <div class="mb-3">
-                        <label class="form-label">Lịch sử cấu hình giá</label>
+                        <label class="form-label">Pricing Version History</label>
                         <div class="table-responsive">
                             <table class="table table-sm">
                                 <thead>
                                     <tr>
-                                        <th>Phiên bản</th>
-                                        <th>Có hiệu lực từ</th>
-                                        <th>Giá/$</th>
-                                        <th>Quota/$</th>
-                                        <th>Hệ số quota</th>
+                                        <th>Version</th>
+                                        <th>Effective From</th>
+                                        <th>Price / $1</th>
+                                        <th>Quota / $1</th>
+                                        <th>Quota Multiplier</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -190,24 +193,24 @@
                     {% endif %}
 
                     <hr>
-                    <h6 class="text-muted mb-2">Cấu hình giá</h6>
+                    <h6 class="text-muted mb-2">Pricing Defaults</h6>
                     <div class="row mb-2">
-                        <div class="col"><label class="form-label">Giá/$ (VND)</label><input name="price_per_unit" type="number" class="form-control" value="{{ editing.price_per_unit }}" required></div>
-                        <div class="col"><label class="form-label">Quota/$</label><input name="quota_per_unit" type="number" class="form-control" value="{{ editing.quota_per_unit }}" required></div>
+                        <div class="col"><label class="form-label">Price / $1 (VND)</label><input name="price_per_unit" type="number" class="form-control" value="{{ editing.price_per_unit }}" required></div>
+                        <div class="col"><label class="form-label">Quota / $1</label><input name="quota_per_unit" type="number" class="form-control" value="{{ editing.quota_per_unit }}" required></div>
                     </div>
                     <div class="row mb-2">
-                        <div class="col"><label class="form-label">Hệ số $</label><input name="dollar_per_unit" type="number" step="0.1" class="form-control" value="{{ editing.dollar_per_unit }}"></div>
-                        <div class="col"><label class="form-label">Hệ số quota</label><input name="quota_multiple" type="number" step="0.01" class="form-control" value="{{ editing.quota_multiple }}"></div>
+                        <div class="col"><label class="form-label">Dollar Multiplier</label><input name="dollar_per_unit" type="number" step="0.1" class="form-control" value="{{ editing.dollar_per_unit }}"></div>
+                        <div class="col"><label class="form-label">Quota Multiplier</label><input name="quota_multiple" type="number" step="0.01" class="form-control" value="{{ editing.quota_multiple }}"></div>
                     </div>
-                    <div class="mb-2"><label class="form-label">Nhóm mặc định</label><input name="default_group" class="form-control" value="{{ editing.default_group or '' }}"></div>
-                    <div class="mb-2"><button type="button" class="btn btn-outline-info btn-sm" onclick="previewServerGroups('edit')">Tải groups</button></div>
+                    <div class="mb-2"><label class="form-label">Default Group</label><input name="default_group" class="form-control" value="{{ editing.default_group or '' }}"></div>
+                    <div class="mb-2"><button type="button" class="btn btn-outline-info btn-sm" onclick="previewServerGroups('edit')">Preview Groups</button></div>
                     <div id="edit_group_preview" class="mb-2" style="display:none;"></div>
 
                     {{ entity_state_checkbox('editActive', editing.is_active) }}
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
-                    <button type="submit" class="btn btn-primary">Lưu</button>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
             </form>
         </div>

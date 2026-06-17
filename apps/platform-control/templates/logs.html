@@ -1,17 +1,17 @@
 {% extends "admin_base.html" %}
 {% set active_page = "logs" %}
-{% block title %}Nhật ký{% endblock %}
-{% block page_title %}Nhật ký hoạt động{% endblock %}
+{% block title %}Audit Logs{% endblock %}
+{% block page_title %}Audit Logs{% endblock %}
 
 {% block content %}
 <div class="page-stack">
     <section class="page-head">
         <div>
-            <h1 class="page-title">Nhật ký hoạt động</h1>
-            <p class="page-subtitle">Tất cả hành động quản trị gần đây trên control plane.</p>
+            <h1 class="page-title">Audit Logs</h1>
+            <p class="page-subtitle">Review recent control-plane actions, operator events, and runtime management changes from one stream.</p>
         </div>
         <div class="page-actions">
-            <span class="top-badge">{{ logs|length }} entries</span>
+            <span class="top-badge">{{ logs|length }} events</span>
         </div>
     </section>
 
@@ -24,7 +24,7 @@
                         <th style="width:160px;">Action</th>
                         <th>Details</th>
                         <th style="width:120px;">IP</th>
-                        <th style="width:180px;">Time</th>
+                        <th style="width:180px;">Timestamp</th>
                     </tr>
                 </thead>
                 <tbody>

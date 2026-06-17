@@ -140,7 +140,7 @@ async def order_cancel(order_id: Annotated[int, Path()]):
 
 @router.get("/{order_id}/refund")
 async def order_refund(order_id: Annotated[int, Path()]):
-    """Hoàn tiền đơn đã thanh toán về ví của người dùng."""
+    """Refund a paid order back to the user's wallet."""
     order = await _get_order_or_redirect(order_id)
     if isinstance(order, RedirectResponse):
         return order
@@ -150,21 +150,21 @@ async def order_refund(order_id: Annotated[int, Path()]):
 
     new_balance = await refund_order_to_wallet(
         order_id,
-        reason="Admin hoàn tiền",
+        reason="Admin refund",
         tx_type="admin_refund",
-        description=f"Admin hoàn tiền đơn {order['order_code']}",
+        description=f"Admin refund for order {order['order_code']}",
     )
     if new_balance is None:
         return _redirect_to_order_detail(order_id)
     await SpendLedgerService.record_order_refund(order)
 
     await add_log(
-        f"Admin hoàn tiền đơn {order['order_code']}, số tiền {format_vnd(order['amount'])}",
+        f"Admin refunded order {order['order_code']}, amount {format_vnd(order['amount'])}",
         module="admin",
     )
     await notify_user(order["user_id"], _refund_notification_message(order, new_balance))
     refunded_order = await get_order_by_id(order_id)
     if refunded_order:
-        await notify_admin_order_refunded(refunded_order, reason="Admin hoàn tiền")
+        await notify_admin_order_refunded(refunded_order, reason="Admin refund")
 
     return _redirect_to_order_detail(order_id)

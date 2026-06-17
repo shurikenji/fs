@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Người dùng{% endblock %}
+{% block title %}Customers{% endblock %}
 {% block content %}
 
 <div class="page-header">
@@ -13,25 +13,25 @@
                     <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                 </svg>
             </span>
-            Người dùng
+            Customers
         </h1>
-        <p class="page-subtitle">Quản lý tài khoản và quyền người dùng</p>
+        <p class="page-subtitle">Search customer accounts, review roles, and open detail pages for wallet or order actions.</p>
     </div>
 </div>
 
 <div class="card mb-3">
     <form class="filter-bar" method="GET">
         <input type="text" name="search" class="form-control" style="max-width:320px;"
-            placeholder="Tìm theo tên, username hoặc Telegram ID..."
+            placeholder="Search by name, username, or Telegram ID"
             value="{{ filter_search|default('') }}">
         <button type="submit" class="btn btn-primary">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            Tìm kiếm
+            Search
         </button>
         {% if filter_search %}
-        <a href="/users" class="btn btn-outline-secondary">Xóa lọc</a>
+        <a href="/users" class="btn btn-outline-secondary">Reset</a>
         {% endif %}
     </form>
 </div>
@@ -42,11 +42,11 @@
             <tr>
                 <th style="width:60px;">#</th>
                 <th>Telegram ID</th>
-                <th>Tài khoản</th>
-                <th>Họ tên</th>
-                <th>Quyền</th>
-                <th>Trạng thái</th>
-                <th>Ngày tạo</th>
+                <th>Username</th>
+                <th>Full name</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Created</th>
                 <th style="width:80px;"></th>
             </tr>
         </thead>
@@ -57,31 +57,31 @@
                 <td data-label="Telegram ID">
                     <code class="cell-code--subtle">{{ u.telegram_id }}</code>
                 </td>
-                <td data-label="Tài khoản">
+                <td data-label="Username">
                     {% if u.username %}
                     <span class="cell-name" style="color:var(--primary);">@{{ u.username }}</span>
                     {% else %}
-                    <span class="cell-meta">Chưa có</span>
+                    <span class="cell-meta">Not set</span>
                     {% endif %}
                 </td>
-                <td data-label="Họ tên" class="cell-name">{{ u.full_name|default('Chưa cập nhật') }}</td>
-                <td data-label="Quyền">
+                <td data-label="Full name" class="cell-name">{{ u.full_name|default('Not provided') }}</td>
+                <td data-label="Role">
                     {% if u.is_admin %}
-                    <span class="badge badge-warning">⭐ Quản trị</span>
+                    <span class="badge badge-warning">Admin</span>
                     {% else %}
-                    <span class="cell-meta">Người dùng</span>
+                    <span class="cell-meta">Customer</span>
                     {% endif %}
                 </td>
-                <td data-label="Trạng thái">
+                <td data-label="Status">
                     {% if u.is_banned %}
-                    <span class="badge badge-danger">🔒 Đã khóa</span>
+                    <span class="badge badge-danger">Locked</span>
                     {% else %}
-                    <span class="badge badge-success">✓ Bình thường</span>
+                    <span class="badge badge-success">Active</span>
                     {% endif %}
                 </td>
-                <td data-label="Ngày tạo"><span class="cell-date">{{ u.created_at | time_vn }}</span></td>
+                <td data-label="Created"><span class="cell-date">{{ u.created_at | time_vn }}</span></td>
                 <td data-label="">
-                    <a href="/users/{{ u.id }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
+                    <a href="/users/{{ u.id }}" class="btn btn-sm btn-outline-primary">Open</a>
                 </td>
             </tr>
             {% else %}
@@ -89,7 +89,7 @@
                 <td colspan="8">
                     <div class="empty-state">
                         <div class="icon">👥</div>
-                        <h4>Không tìm thấy người dùng</h4>
+                        <h4>No customers found</h4>
                     </div>
                 </td>
             </tr>

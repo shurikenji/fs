@@ -1,49 +1,47 @@
 {% extends "admin_base.html" %}
 {% set active_page = "settings" %}
-{% block title %}Cài đặt{% endblock %}
-{% block page_title %}Cài đặt{% endblock %}
+{% block title %}System Settings{% endblock %}
+{% block page_title %}System Settings{% endblock %}
 
 {% block content %}
 <div class="page-stack">
     <section class="page-head">
         <div>
-            <h1 class="page-title">Cài đặt hệ thống</h1>
-            <p class="page-subtitle">Quản lý mật khẩu admin, operator connection, và runtime configuration.</p>
+            <h1 class="page-title">System Settings</h1>
+            <p class="page-subtitle">Manage operator connectivity, admin access rotation, and platform-level runtime maintenance actions.</p>
         </div>
     </section>
 
     <section class="content-grid" style="grid-template-columns: 1fr 1fr;">
-        <!-- Password change -->
         <article class="shell-card">
             <div class="panel-heading">
                 <div>
-                    <h2 class="panel-title">Đổi mật khẩu</h2>
-                    <p class="panel-copy">Sau khi đổi, cập nhật ADMIN_PASSWORD trong .env và restart service.</p>
+                    <h2 class="panel-title">Rotate Admin Password</h2>
+                    <p class="panel-copy">This records the change request only. Update `ADMIN_PASSWORD` in `.env`, then restart the service to apply it.</p>
                 </div>
             </div>
             <form method="POST" action="/control/settings/password" style="display:grid; gap:var(--space-4);">
                 <div>
-                    <label class="field-label">Mật khẩu hiện tại</label>
+                    <label class="field-label">Current password</label>
                     <input class="control" type="password" name="current" required>
                 </div>
                 <div>
-                    <label class="field-label">Mật khẩu mới</label>
+                    <label class="field-label">New password</label>
                     <input class="control" type="password" name="newpass" required minlength="6">
                 </div>
                 <div>
-                    <label class="field-label">Xác nhận mật khẩu mới</label>
+                    <label class="field-label">Confirm new password</label>
                     <input class="control" type="password" name="confirm" required minlength="6">
                 </div>
-                <button type="submit" class="button" style="justify-self:start;">Đổi mật khẩu</button>
+                <button type="submit" class="button" style="justify-self:start;">Save Change Request</button>
             </form>
         </article>
 
-        <!-- Operator info -->
         <article class="shell-card">
             <div class="panel-heading">
                 <div>
                     <h2 class="panel-title">Proxy Operator</h2>
-                    <p class="panel-copy">Kết nối tới proxy-operator runtime agent.</p>
+                    <p class="panel-copy">Internal endpoint used to reconcile active proxy runtime state with the control plane.</p>
                 </div>
             </div>
             <div class="table-wrap">
@@ -58,7 +56,7 @@
             </div>
             <div style="margin-top:var(--space-5);">
                 <form method="POST" action="/control/deploy/proxies/sync" style="display:inline;">
-                    <button type="submit" class="button" style="height:36px; padding:0 16px; font-size:13px;">Sync Runtime</button>
+                    <button type="submit" class="button" style="height:36px; padding:0 16px; font-size:13px;">Sync Active Proxies</button>
                 </form>
             </div>
         </article>

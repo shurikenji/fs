@@ -1,26 +1,27 @@
 {% extends "portal_base.html" %}
-{% block title %}API Keys — Shupremium{% endblock %}
+{% block title %}Key Tools - Shupremium{% endblock %}
 
 {% block content %}
 <div x-data="keysApp()" x-cloak class="page-stack">
     <section class="fade-up" style="text-align: center;">
-        <h1 class="page-title">API Key Management</h1>
+        <p class="page-eyebrow" style="justify-content:center;">Key Tools</p>
+        <h1 class="page-title">Key Tools</h1>
         <p class="page-subtitle" style="max-width: 46ch; margin: var(--space-3) auto 0;">
-            Check your current group and switch to a different pricing tier when you need to.
+            Resolve the current key-to-group mapping and update its visible pricing policy when needed.
         </p>
     </section>
 
     <section class="shell-panel centered-form fade-up">
         <div class="panel-heading">
             <div>
-                <h2 class="panel-title">Look up your key</h2>
-                <p class="panel-copy">Select a source, paste your key, and we'll show which group it's assigned to.</p>
+                <h2 class="panel-title">Resolve key routing</h2>
+                <p class="panel-copy">Select a source, paste a key, and inspect the active group or ordered group chain.</p>
             </div>
         </div>
 
         <div style="display: grid; gap: var(--space-4);">
             <div>
-                <label class="field-label">Source</label>
+                <label class="field-label">Runtime source</label>
                 <select class="select-control" x-model="serverId" @change="resetState()">
                     <option value="">Choose a source</option>
                     {% for s in servers %}
@@ -30,12 +31,12 @@
             </div>
             <div>
                 <label class="field-label">API key</label>
-                <input type="text" placeholder="Paste your key (e.g. sk-...)" class="control code-text"
+                <input type="text" placeholder="Paste the key to inspect (for example: sk-...)" class="control code-text"
                     x-model="apiKey">
             </div>
             <button class="button button--lg" style="width: 100%; margin-top: var(--space-2);" @click="resolveKey()"
                 :disabled="loading || !serverId || !apiKey">
-                <span x-text="loading ? 'Looking up…' : 'Look up key'"></span>
+                <span x-text="loading ? 'Resolving...' : 'Resolve key'"></span>
             </button>
         </div>
     </section>
@@ -43,7 +44,7 @@
     <div x-show="error" class="status-banner is-error centered-form fade-up">
         <span class="status-banner__dot"></span>
         <div>
-            <strong>Something went wrong.</strong>
+            <strong>Key lookup failed.</strong>
             <div class="panel-copy mt-1" x-text="error"></div>
         </div>
     </div>
@@ -51,7 +52,7 @@
     <div x-show="message" class="status-banner is-success centered-form fade-up">
         <span class="status-banner__dot"></span>
         <div>
-            <strong>Changes saved.</strong>
+            <strong>Group policy updated.</strong>
             <div class="panel-copy mt-1" x-text="message"></div>
         </div>
     </div>
@@ -61,10 +62,10 @@
             <section class="shell-card centered-form">
                 <div class="panel-heading">
                     <div>
-                        <h2 class="panel-title">Current group</h2>
+                        <h2 class="panel-title">Current assignment</h2>
                         <p class="panel-copy" x-text="keyInfo.selection_mode === 'multiple'
-                            ? 'Your key uses these groups in order, from left to right.'
-                            : 'This is the group your key is currently using.'"></p>
+                            ? 'This key uses an ordered group chain from left to right.'
+                            : 'This is the group currently applied to the key.'"></p>
                     </div>
                 </div>
 
@@ -92,13 +93,13 @@
             <section class="shell-card centered-form">
                 <div class="panel-heading">
                     <div>
-                        <h2 class="panel-title">Switch group</h2>
+                        <h2 class="panel-title">Update assignment</h2>
                         <p class="panel-copy" x-text="keyInfo.selection_mode === 'multiple'
-                            ? 'Choose groups in the order you want. The chain is applied left to right.'
-                            : 'Pick a different group to change your pricing tier.'"></p>
+                            ? 'Choose groups in execution order. The chain is applied from left to right.'
+                            : 'Pick a different group to change the active pricing tier.'"></p>
                     </div>
                     <button class="button" @click="saveGroups()" :disabled="saving || selectedGroups.length === 0">
-                        <span x-text="saving ? 'Saving…' : 'Save changes'"></span>
+                        <span x-text="saving ? 'Saving...' : 'Save changes'"></span>
                     </button>
                 </div>
 
@@ -249,7 +250,7 @@
                     } else if (this.keyInfo) {
                         this.keyInfo.token.groups = [...data.groups];
                         this.keyInfo.token.display_groups = [...data.display_groups];
-                        this.message = 'Groups updated successfully.';
+                        this.message = 'Group policy saved successfully.';
                     }
                 } catch (e) {
                     this.error = 'Request failed: ' + e.message;

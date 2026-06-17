@@ -1,20 +1,20 @@
 {% extends "control/base.html" %}
-{% block title %}Máy chủ API{% endblock %}
+{% block title %}Connectors{% endblock %}
 
 {% block content %}
 <div x-data="serversAdmin()" x-cloak class="page-shell">
     <section class="page-header">
         <div>
-            <p class="page-eyebrow">Server inventory</p>
-            <h1 class="page-title">Quản lý máy chủ API</h1>
-            <p class="page-subtitle">Thêm, sửa, sync, hoặc tắt từng upstream server.</p>
+            <p class="page-eyebrow">Runtime catalog</p>
+            <h1 class="page-title">Connectors</h1>
+            <p class="page-subtitle">Register upstream pricing sources, define auth behavior, and control what the public portal can expose.</p>
         </div>
         <div class="page-actions">
-            <a href="/control" class="btn-admin secondary">Về tổng quan</a>
+            <a href="/control" class="btn-admin secondary">Back to Overview</a>
             <form method="POST" action="/control/servers/sync-all">
-                <button type="submit" class="btn-admin">Sync all</button>
+                <button type="submit" class="btn-admin">Sync All Enabled</button>
             </form>
-            <button type="button" class="btn-admin ghost" @click="openAddForm()">Thêm server</button>
+            <button type="button" class="btn-admin ghost" @click="openAddForm()">Create Connector</button>
         </div>
     </section>
 
@@ -36,11 +36,11 @@
             {% if s.latest_sync %}
             <div class="meta-list mt-3">
                 <div class="meta-row">
-                    <span>Multiple</span>
+                    <span>Quota multiple</span>
                     <strong>x{{ s.quota_multiple or 1 }}</strong>
                 </div>
                 <div class="meta-row">
-                    <span>Last sync</span>
+                    <span>Latest sync</span>
                     {% if s.latest_sync.status == "success" %}
                     <span class="badge-soft success">success</span>
                     {% else %}
@@ -52,7 +52,7 @@
                     <strong>{{ s.latest_sync.created_at }}</strong>
                 </div>
                 <div class="meta-row">
-                    <span>Source</span>
+                    <span>Trigger</span>
                     <strong>{{ s.latest_sync.trigger or "manual" }}</strong>
                 </div>
                 <div class="meta-row">
@@ -68,7 +68,7 @@
                     <strong>{{ s.active_profile.parser_id }}</strong>
                 </div>
                 <div class="meta-row">
-                    <span>Display</span>
+                    <span>Display profile</span>
                     <strong>{{ s.active_profile.display_profile }}</strong>
                 </div>
                 <div class="meta-row">
@@ -86,7 +86,7 @@
             {% elif s.pricing_fetched_at %}
             <div class="meta-list mt-3">
                 <div class="meta-row">
-                    <span>Multiple</span>
+                    <span>Quota multiple</span>
                     <strong>x{{ s.quota_multiple or 1 }}</strong>
                 </div>
                 <div class="meta-row">
@@ -98,7 +98,7 @@
                     <strong>{{ s.active_profile.parser_id }}</strong>
                 </div>
                 <div class="meta-row">
-                    <span>Display</span>
+                    <span>Display profile</span>
                     <strong>{{ s.active_profile.display_profile }}</strong>
                 </div>
                 <div class="meta-row">
@@ -113,7 +113,7 @@
             {% else %}
             <div class="meta-list mt-3">
                 <div class="meta-row">
-                    <span>Multiple</span>
+                    <span>Quota multiple</span>
                     <strong>x{{ s.quota_multiple or 1 }}</strong>
                 </div>
                 <div class="meta-row">
@@ -125,7 +125,7 @@
                     <strong>{{ s.active_profile.parser_id }}</strong>
                 </div>
                 <div class="meta-row">
-                    <span>Display</span>
+                    <span>Display profile</span>
                     <strong>{{ s.active_profile.display_profile }}</strong>
                 </div>
                 <div class="meta-row">
@@ -143,10 +143,10 @@
                 <form method="POST" action="/control/servers/{{ s.id }}/sync">
                     <button type="submit" class="btn-admin secondary">Sync</button>
                 </form>
-                <a href="/control/servers/{{ s.id }}/groups" class="btn-admin secondary">Manage groups</a>
-                <a href="/control/servers/{{ s.id }}/models" class="btn-admin secondary">Manage models</a>
+                <a href="/control/servers/{{ s.id }}/groups" class="btn-admin secondary">Group Visibility</a>
+                <a href="/control/servers/{{ s.id }}/models" class="btn-admin secondary">Model Visibility</a>
                 <button type="button" class="btn-admin ghost" @click='editServer({{ s | tojson }})'>Edit</button>
-                <a href="/control/servers/{{ s.id }}/delete" class="btn-admin ghost" style="color: var(--admin-danger);" onclick="return confirm('Delete this server?')">Delete</a>
+                <a href="/control/servers/{{ s.id }}/delete" class="btn-admin ghost" style="color: var(--admin-danger);" onclick="return confirm('Delete this connector?')">Delete</a>
             </div>
         </article>
         {% endfor %}
@@ -154,7 +154,7 @@
 
     {% if not servers %}
     <div class="table-card">
-        <div class="empty-state">Chưa có server nào được cấu hình.</div>
+        <div class="empty-state">No connectors are configured yet. Create one to start importing pricing, balance, key, and log data.</div>
     </div>
     {% endif %}
 
@@ -162,20 +162,20 @@
         <div>
             <div class="drawer-overlay" @click="formOpen = false"></div>
             <aside class="drawer-panel">
-                <button type="button" class="drawer-close" @click="formOpen = false" aria-label="Close server editor">×</button>
+                <button type="button" class="drawer-close" @click="formOpen = false" aria-label="Close connector editor">&times;</button>
 
                 <div class="mt-4">
-                    <p class="page-eyebrow">Server editor</p>
-                    <h2 class="page-title" style="font-size: clamp(1.5rem, 3vw, 2rem);" x-text="editing ? 'Chỉnh sửa connector' : 'Thêm connector'"></h2>
-                    <p class="page-subtitle">Khai báo cách Pricing Hub xác thực, fetch pricing, resolve token, và query logs cho upstream server này.</p>
+                    <p class="page-eyebrow">Connector editor</p>
+                    <h2 class="page-title" style="font-size: clamp(1.5rem, 3vw, 2rem);" x-text="editing ? 'Edit Connector' : 'Create Connector'"></h2>
+                    <p class="page-subtitle">Define how the runtime authenticates, syncs pricing, resolves token metadata, and reads usage logs from this upstream source.</p>
                 </div>
 
                 <form method="POST" action="/control/servers/save" class="mt-4">
                     <div class="field-grid">
                         <div>
-                            <label class="form-label">Server id</label>
+                            <label class="form-label">Connector ID</label>
                             <input type="text" name="id" class="form-control code-block" x-model="form.id" :readonly="editing" required>
-                            <div class="field-help" x-show="editing">Server id is locked for existing connectors.</div>
+                            <div class="field-help" x-show="editing">Connector IDs stay locked after creation.</div>
                         </div>
                         <div>
                             <label class="form-label">Display name</label>
@@ -186,7 +186,7 @@
                             <input type="url" name="base_url" class="form-control code-block" x-model="form.base_url" required>
                         </div>
                         <div>
-                            <label class="form-label">Type</label>
+                            <label class="form-label">Connector type</label>
                             <select name="type" class="form-select" x-model="form.type" @change="applyTypeDefaults()">
                                 {% for t in server_types %}
                                 <option value="{{ t.value }}">{{ t.label }}</option>
@@ -194,9 +194,9 @@
                             </select>
                         </div>
                         <div>
-                            <label class="form-label">Multiple</label>
+                            <label class="form-label">Quota multiple</label>
                             <input type="number" step="0.01" min="0.01" name="quota_multiple" class="form-control" x-model="form.quota_multiple">
-                            <div class="field-help">Group ratio and displayed model prices are divided by this value.</div>
+                            <div class="field-help">Displayed model prices and group ratios are divided by this value.</div>
                         </div>
                         <div>
                             <label class="form-label">Auth mode</label>
@@ -211,16 +211,16 @@
                             <label class="form-label">Auth user header</label>
                             <input type="text" class="form-control code-block" value="New-Api-User" readonly>
                             <input type="hidden" name="auth_user_header" :value="fixedUserHeader()">
-                            <div class="field-help">Default header from the standard NewAPI/RixAPI request format. Admin only needs to enter the User ID below.</div>
+                            <div class="field-help">Standard header for NewAPI and RixAPI request formats. Enter only the user value below.</div>
                         </div>
                         <div x-show="!usesFixedUserHeader()">
                             <label class="form-label">Auth user header</label>
                             <input type="text" name="auth_user_header" class="form-control code-block" x-model="form.auth_user_header" placeholder="Optional custom header">
-                            <div class="field-help">Only needed for non-standard server types.</div>
+                            <div class="field-help">Use this only for non-standard upstream contracts.</div>
                         </div>
                         <div>
                             <label class="form-label">Auth user value</label>
-                            <input type="text" name="auth_user_value" class="form-control" x-model="form.auth_user_value" :placeholder="usesFixedUserHeader() ? 'User ID' : 'Optional user header value'">
+                            <input type="text" name="auth_user_value" class="form-control" x-model="form.auth_user_value" :placeholder="usesFixedUserHeader() ? 'User ID' : 'Optional header value'">
                         </div>
                         <div style="grid-column: 1 / -1;">
                             <label class="form-label">Auth token</label>
@@ -245,38 +245,38 @@
                         <div>
                             <label class="form-label">Groups path</label>
                             <input type="text" name="groups_path" class="form-control code-block" x-model="form.groups_path" placeholder="/api/user/self/groups">
-                            <div class="field-help">Leave empty to use the shopbot-style default for this server type.</div>
+                            <div class="field-help">Leave empty to use the default path for this connector type.</div>
                         </div>
                         <div>
                             <label class="form-label">Parser override</label>
                             <input type="text" name="parser_override" class="form-control code-block" x-model="form.parser_override" placeholder="newapi_standard / yunwu_pricing_new">
-                            <div class="field-help">Optional. Leave empty to auto-detect by server id and payload shape.</div>
+                            <div class="field-help">Optional. Leave empty to auto-detect from connector ID and payload shape.</div>
                         </div>
                         <div>
                             <label class="form-label">Display profile</label>
                             <input type="text" name="display_profile" class="form-control code-block" x-model="form.display_profile" placeholder="flat / variant_matrix">
-                            <div class="field-help">Optional. Controls public rendering only.</div>
+                            <div class="field-help">Optional. Affects public portal rendering only.</div>
                         </div>
                         <div>
                             <label class="form-label">Variant pricing mode</label>
                             <input type="text" name="variant_pricing_mode" class="form-control code-block" x-model="form.variant_pricing_mode" placeholder="yunwu_matrix">
-                            <div class="field-help">Optional. Enables server-specific matrix extraction.</div>
+                            <div class="field-help">Optional. Enables connector-specific matrix extraction.</div>
                         </div>
                         <div style="grid-column: 1 / -1;">
                             <label class="form-label">Endpoint alias map JSON</label>
                             <textarea name="endpoint_aliases_json" class="form-control code-block" x-model="form.endpoint_aliases_json" rows="4" placeholder='{"aigc-image":{"label":"AIGC Image","public_path":"aigc-image","method":"POST"}}'></textarea>
-                            <div class="field-help">Optional public-safe endpoint aliases. Raw upstream routes will stay hidden from users.</div>
+                            <div class="field-help">Optional public-safe endpoint aliases. Raw upstream routes stay hidden from end users.</div>
                         </div>
                         <div style="grid-column: 1 / -1;">
                             <label class="form-label">Manual groups</label>
                             <input type="text" name="manual_groups" class="form-control code-block" x-model="form.manual_groups" placeholder="default,Azure,Claude,Gemini">
-                            <div class="field-help">Same as shopbot: when set, public pricing and key selection will only use this comma-separated group list.</div>
+                            <div class="field-help">When set, public pricing and key resolution only use this comma-separated group allowlist.</div>
                         </div>
                     </div>
 
                     <div class="admin-card mt-4" style="padding: 18px;">
-                        <h3 class="section-title">Behavior flags</h3>
-                        <p class="section-copy">Bật tắt capability mà không cần sửa code.</p>
+                        <h3 class="section-title">Behavior Flags</h3>
+                        <p class="section-copy">Enable or disable runtime capabilities without changing application code.</p>
                         <div class="check-grid mt-3">
                             <label class="form-check">
                                 <input type="checkbox" name="enabled" class="form-check-input" x-model="form.enabled">
@@ -297,7 +297,7 @@
 
                     <div class="actions-row mt-4">
                         <button type="button" class="btn-admin ghost" @click="formOpen = false">Cancel</button>
-                        <button type="submit" class="btn-admin">Save server</button>
+                        <button type="submit" class="btn-admin" x-text="editing ? 'Save Changes' : 'Create Connector'"></button>
                     </div>
                 </form>
             </aside>

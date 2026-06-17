@@ -1,12 +1,10 @@
 {% extends "admin_base.html" %}
 {% set active_page = "dashboard" %}
 {% block title %}Dashboard{% endblock %}
-{% block page_title %}Tổng quan{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
 
 {% block content %}
 <div class="page-stack" x-data="adminDashboard()">
-
-    <!-- ══════════ MODAL OVERLAY ══════════ -->
     <template x-teleport="body">
         <div x-show="modalOpen" x-transition.opacity class="modal-backdrop" @click.self="modalOpen = false" style="display:none;">
             <div class="modal-dialog" x-show="modalOpen" x-transition @click.stop>
@@ -15,20 +13,19 @@
                     <button class="button-ghost" @click="modalOpen = false" style="height:28px; padding:0 8px; font-size:18px; line-height:1;">&times;</button>
                 </div>
 
-                <!-- ── Proxy Form ── -->
                 <form x-show="modalType === 'proxy'" method="POST" action="/control/proxy-endpoints/save" class="modal-body">
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">ID (không đổi sau khi tạo)</label>
+                            <label class="field-label">Endpoint ID</label>
                             <input class="control" name="endpoint_id" x-model="pf.endpoint_id" required :readonly="pf.isEdit" :style="pf.isEdit && 'opacity:0.6'">
                         </div>
                         <div>
-                            <label class="field-label">Tên hiển thị</label>
+                            <label class="field-label">Display name</label>
                             <input class="control" name="name" x-model="pf.name" placeholder="GPT1" required>
                         </div>
                         <div>
-                            <label class="field-label">Liên kết nguồn (Source ID, tùy chọn)</label>
-                            <input class="control" name="source_id" x-model="pf.source_id" placeholder="Bo trong neu proxy khong can gan voi 1 source cu the">
+                            <label class="field-label">Linked source ID</label>
+                            <input class="control" name="source_id" x-model="pf.source_id" placeholder="Optional">
                         </div>
                     </div>
                     <div class="modal-grid-3">
@@ -37,7 +34,7 @@
                             <input class="control" name="domain" x-model="pf.domain" placeholder="gpt1.shupremium.com" required>
                         </div>
                         <div>
-                            <label class="field-label">Target API (upstream)</label>
+                            <label class="field-label">Upstream host</label>
                             <input class="control" name="target_host" x-model="pf.target_host" placeholder="api.example.com" required>
                         </div>
                         <div>
@@ -49,64 +46,63 @@
                     </div>
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Port nội bộ</label>
+                            <label class="field-label">Internal port</label>
                             <input class="control" name="port" type="number" x-model="pf.port" placeholder="3001" required>
                         </div>
                         <div>
-                            <label class="field-label">Trạng thái</label>
+                            <label class="field-label">Status</label>
                             <select class="control select-control" name="status" x-model="pf.status">
-                                <option value="active">Hoạt động</option><option value="inactive">Đã tắt</option>
+                                <option value="active">Active</option><option value="inactive">Inactive</option>
                             </select>
                         </div>
                         <div style="display:flex; align-items:end; padding-bottom:10px;">
                             <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-secondary);">
-                                <input type="checkbox" name="tls_skip_verify" :checked="pf.tls_skip_verify"> Bỏ qua TLS verify
+                                <input type="checkbox" name="tls_skip_verify" :checked="pf.tls_skip_verify"> Skip TLS verification
                             </label>
                         </div>
                     </div>
                     <div class="modal-actions">
-                        <button type="button" class="button-secondary" @click="modalOpen = false">Huỷ</button>
-                        <button type="submit" class="button" x-text="pf.isEdit ? 'Cập nhật proxy' : 'Tạo proxy mới'"></button>
+                        <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
+                        <button type="submit" class="button" x-text="pf.isEdit ? 'Save Changes' : 'Create Endpoint'"></button>
                     </div>
                 </form>
 
-                <!-- ── Source Form ── -->
                 <form x-show="modalType === 'source'" method="POST" action="/control/service-sources/save" class="modal-body">
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">ID</label>
+                            <label class="field-label">Source ID</label>
                             <input class="control" name="source_id" x-model="sf.source_id" required :readonly="sf.isEdit" :style="sf.isEdit && 'opacity:0.6'">
                         </div>
                         <div>
-                            <label class="field-label">Tên hiển thị</label>
+                            <label class="field-label">Display name</label>
                             <input class="control" name="name" x-model="sf.name" required>
                         </div>
                         <div>
-                            <label class="field-label">Loại nguồn</label>
+                            <label class="field-label">Source type</label>
                             <input class="control" name="source_type" x-model="sf.source_type">
                         </div>
                     </div>
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Upstream URL (API gốc)</label>
+                            <label class="field-label">Upstream base URL</label>
                             <input class="control" name="upstream_base_url" x-model="sf.upstream_base_url" placeholder="https://api.example.com" required>
                         </div>
                         <div>
-                            <label class="field-label">Domain công khai (qua proxy)</label>
+                            <label class="field-label">Public base URL</label>
                             <input class="control" name="public_base_url" x-model="sf.public_base_url" placeholder="https://gpt1.shupremium.com">
                         </div>
                         <div>
-                            <label class="field-label">Tỷ giá balance (hệ số USD)</label>
+                            <label class="field-label">Balance rate</label>
                             <input class="control" name="balance_rate" type="number" step="0.01" x-model="sf.balance_rate">
                         </div>
                     </div>
                     <div style="border-top:1px solid var(--border); padding-top:var(--space-4); margin-top:var(--space-2);">
-                        <p class="panel-copy" style="margin:0 0 var(--space-3);">🔑 Xác thực (để lấy bảng giá và balance từ API gốc)</p>
+                        <p class="panel-copy" style="margin:0 0 var(--space-3);">Authentication used for pricing, balance, token, and log lookups.</p>
                         <div class="modal-grid-4">
                             <div>
-                                <label class="field-label">Chế độ</label>
+                                <label class="field-label">Auth mode</label>
                                 <select class="control select-control" name="auth_mode" x-model="sf.auth_mode">
-                                    <option value="header">Header</option><option value="token">Token</option><option value="cookie">Cookie</option><option value="none">Không cần</option>
+                                    <option value="header">Header</option><option value="token">Token</option><option value="cookie">Cookie</option><option value="none">None</option>
                                 </select>
                             </div>
                             <div><label class="field-label">Header name</label><input class="control" name="auth_user_header" x-model="sf.auth_user_header"></div>
@@ -121,35 +117,34 @@
                     <input type="hidden" name="token_search_path" x-model="sf.token_search_path">
                     <input type="hidden" name="notes" x-model="sf.notes">
                     <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="enabled" :checked="sf.enabled"> Bật nguồn</label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Hiện bảng giá</label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="public_balance_enabled" :checked="sf.public_balance_enabled"> Hiện balance</label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="enabled" :checked="sf.enabled"> Enabled</label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Public pricing</label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="public_balance_enabled" :checked="sf.public_balance_enabled"> Public balance</label>
                     </div>
                     <div class="modal-actions">
-                        <button type="button" class="button-secondary" @click="modalOpen = false">Huỷ</button>
-                        <button type="submit" class="button" x-text="sf.isEdit ? 'Cập nhật nguồn' : 'Tạo nguồn mới'"></button>
+                        <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
+                        <button type="submit" class="button" x-text="sf.isEdit ? 'Save Changes' : 'Create Source'"></button>
                     </div>
                 </form>
 
-                <!-- ── Module Form ── -->
                 <form x-show="modalType === 'module'" method="POST" action="/control/portal-modules/save" class="modal-body">
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">ID</label>
+                            <label class="field-label">Module ID</label>
                             <input class="control" name="module_id" x-model="mf.module_id" required :readonly="mf.isEdit" :style="mf.isEdit && 'opacity:0.6'">
                         </div>
                         <div>
-                            <label class="field-label">Tên hiển thị (trên menu)</label>
+                            <label class="field-label">Menu label</label>
                             <input class="control" name="name" x-model="mf.name" required>
                         </div>
                         <div>
-                            <label class="field-label">Đường dẫn (path)</label>
+                            <label class="field-label">Path</label>
                             <input class="control" name="path" x-model="mf.path" placeholder="/pricing" required>
                         </div>
                     </div>
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">URL công khai</label>
+                            <label class="field-label">Public URL</label>
                             <input class="control" name="public_url" x-model="mf.public_url">
                         </div>
                         <div>
@@ -157,43 +152,42 @@
                             <input class="control" name="icon" x-model="mf.icon" placeholder="table">
                         </div>
                         <div>
-                            <label class="field-label">Thứ tự sắp xếp</label>
+                            <label class="field-label">Sort order</label>
                             <input class="control" name="sort_order" type="number" x-model="mf.sort_order">
                         </div>
                     </div>
                     <div>
-                        <label class="field-label">Mô tả</label>
-                        <textarea class="control textarea-control" name="description" x-model="mf.description" placeholder="Mô tả ngắn"></textarea>
+                        <label class="field-label">Description</label>
+                        <textarea class="control textarea-control" name="description" x-model="mf.description" placeholder="Short module guidance"></textarea>
                     </div>
                     <div style="display:flex; gap:16px; align-items:center;">
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="enabled" :checked="mf.enabled"> Bật trang</label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="is_public" :checked="mf.is_public"> Hiển thị công khai</label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="enabled" :checked="mf.enabled"> Enabled</label>
+                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="is_public" :checked="mf.is_public"> Public</label>
                     </div>
                     <div class="modal-actions">
-                        <button type="button" class="button-secondary" @click="modalOpen = false">Huỷ</button>
-                        <button type="submit" class="button" x-text="mf.isEdit ? 'Cập nhật' : 'Tạo trang mới'"></button>
+                        <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
+                        <button type="submit" class="button" x-text="mf.isEdit ? 'Save Changes' : 'Create Module'"></button>
                     </div>
                 </form>
             </div>
         </div>
     </template>
 
-    <!-- ══════════ STAT CARDS ══════════ -->
     <section class="metric-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
         <article class="metric-card">
-            <div class="metric-label">Proxies</div>
+            <div class="metric-label">Proxy endpoints</div>
             <div class="metric-value">{{ proxy_stats.active }}/{{ proxy_stats.total }}</div>
-            <p class="metric-copy">{{ proxy_stats.active }} hoạt động, {{ proxy_stats.inactive }} tắt</p>
+            <p class="metric-copy">{{ proxy_stats.active }} active, {{ proxy_stats.inactive }} inactive</p>
         </article>
         <article class="metric-card">
-            <div class="metric-label">Nguồn API</div>
+            <div class="metric-label">Upstream sources</div>
             <div class="metric-value">{{ source_stats.enabled }}/{{ source_stats.total }}</div>
-            <p class="metric-copy">{{ source_stats.enabled }} đang bật</p>
+            <p class="metric-copy">{{ source_stats.enabled }} enabled</p>
         </article>
         <article class="metric-card">
-            <div class="metric-label">Modules</div>
+            <div class="metric-label">Portal modules</div>
             <div class="metric-value">{{ module_stats.public }}/{{ module_stats.total }}</div>
-            <p class="metric-copy">{{ module_stats.public }} hiển thị công khai</p>
+            <p class="metric-copy">{{ module_stats.public }} visible to the public portal</p>
         </article>
         <article class="metric-card">
             <div class="metric-label">Operator</div>
@@ -205,21 +199,20 @@
                 {% endif %}
             </div>
             <p class="metric-copy">
-                Agent quan ly proxy runtime.
+                Proxy runtime operator status.
                 {% if operator_status.wildcard_cert and operator_status.wildcard_cert.available %}
-                Wildcard SSL san sang.
+                Wildcard certificate is available.
                 {% else %}
-                Wildcard SSL chua kha dung.
+                Wildcard certificate is not yet available.
                 {% endif %}
             </p>
         </article>
     </section>
 
-    <!-- ══════════ SYSTEM + ACTIVITY ══════════ -->
     <section class="content-grid" style="grid-template-columns: 1fr 1fr;">
         <article class="shell-card">
             <div class="panel-heading">
-                <div><h2 class="panel-title">Thông tin hệ thống</h2><p class="panel-copy">VPS đang chạy platform</p></div>
+                <div><h2 class="panel-title">System Overview</h2><p class="panel-copy">Current host and runtime health for the platform node.</p></div>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
@@ -235,8 +228,8 @@
         </article>
         <article class="shell-card">
             <div class="panel-heading">
-                <div><h2 class="panel-title">Hoạt động gần đây</h2><p class="panel-copy">Nhật ký hành động quản trị</p></div>
-                <a class="button-secondary" href="/control/logs" style="font-size:12px; height:32px; padding:0 12px;">Xem tất cả</a>
+                <div><h2 class="panel-title">Recent Activity</h2><p class="panel-copy">Latest operator and admin actions on the control plane.</p></div>
+                <a class="button-secondary" href="/control/logs" style="font-size:12px; height:32px; padding:0 12px;">Open Audit Logs</a>
             </div>
             {% if activity_logs %}
             <div style="display:grid; gap:2px; max-height:220px; overflow-y:auto;">
@@ -251,48 +244,45 @@
                 {% endfor %}
             </div>
             {% else %}
-            <p class="panel-copy">Chưa có hoạt động nào.</p>
+            <p class="panel-copy">No activity recorded yet.</p>
             {% endif %}
         </article>
     </section>
 
-    <!-- ══════════ QUICK ACTIONS ══════════ -->
     <section class="shell-card" style="padding:var(--space-4) var(--space-6);">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--space-3);">
             <div style="display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap;">
                 <form method="POST" action="/control/deploy/proxies/sync" style="display:inline;">
                     <button type="submit" class="button" style="height:36px; padding:0 16px; font-size:13px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
-                        Đồng bộ Proxy
+                        Sync Active Proxies
                     </button>
                 </form>
                 <form method="POST" action="/control/deploy/wildcard-cert" style="display:inline;">
                     <button type="submit" class="button-secondary" style="height:36px; padding:0 16px; font-size:13px;">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                        Cấp Wildcard SSL
+                        Ensure Wildcard Certificate
                     </button>
                 </form>
             </div>
             <p class="panel-copy" style="margin:0;">
-                Luu, sua, xoa va bat/tat proxy se tu apply runtime ngay. Nut "Dong bo Proxy" chi dung de reconcile/retry thu cong.
-                Nut "Cap Wildcard SSL" chi dung de ensure wildcard cert neu operator chua thay cert kha dung.
+                Create, update, delete, and toggle actions already reconcile runtime automatically. Use these buttons for manual recovery, retry, or certificate assurance only.
             </p>
         </div>
     </section>
 
-    <!-- ══════════ PROXY SERVERS ══════════ -->
     <section id="proxy-endpoints">
         <article class="shell-table">
             <div class="panel-heading">
                 <div>
-                    <h2 class="panel-title">Proxy Servers</h2>
-                    <p class="panel-copy">Moi proxy la 1 domain chuyen tiep toi 1 API upstream. Luu thay doi se tu apply runtime va rollback neu runtime fail.</p>
+                    <h2 class="panel-title">Proxy Endpoints</h2>
+                    <p class="panel-copy">Each endpoint maps one public domain to one upstream API target. Changes auto-apply to runtime and roll back if reconciliation fails.</p>
                 </div>
-                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddProxy()">+ Thêm Proxy</button>
+                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddProxy()">Create Endpoint</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
-                    <thead><tr><th>Tên</th><th>Domain</th><th>Target API</th><th>Port</th><th>Trạng thái</th><th style="text-align:right;">Thao tác</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Domain</th><th>Upstream</th><th>Port</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
                     <tbody>
                         {% for item in proxy_endpoints %}
                         <tr>
@@ -300,18 +290,18 @@
                             <td><a href="https://{{ item.domain }}" target="_blank" class="code-text" style="color:var(--text-accent);">{{ item.domain }}</a></td>
                             <td class="code-text">{{ item.target_protocol }}://{{ item.target_host }}{% if item.tls_skip_verify %} <span class="tag is-warm" style="font-size:9px; height:20px;">skip-tls</span>{% endif %}</td>
                             <td>{{ item.port }}</td>
-                            <td>{% if item.status == 'active' %}<span class="tag is-accent">Hoạt động</span>{% else %}<span class="tag is-warm">Đã tắt</span>{% endif %}</td>
+                            <td>{% if item.status == 'active' %}<span class="tag is-accent">Active</span>{% else %}<span class="tag is-warm">Inactive</span>{% endif %}</td>
                             <td style="text-align:right;">
                                 <div style="display:inline-flex; gap:4px;">
                                     <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
-                                        @click="openEditProxy('{{ item.id }}', '{{ item.source_id or '' }}', '{{ item.name }}', '{{ item.domain }}', '{{ item.target_host }}', '{{ item.target_protocol }}', {{ item.tls_skip_verify or 0 }}, {{ item.port }}, '{{ item.status }}')">Sửa</button>
+                                        @click="openEditProxy('{{ item.id }}', '{{ item.source_id or '' }}', '{{ item.name }}', '{{ item.domain }}', '{{ item.target_host }}', '{{ item.target_protocol }}', {{ item.tls_skip_verify or 0 }}, {{ item.port }}, '{{ item.status }}')">Edit</button>
                                     <form method="POST" action="/control/proxy-endpoints/toggle" style="display:inline;">
                                         <input type="hidden" name="endpoint_id" value="{{ item.id }}">
-                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px;">{% if item.status == 'active' %}Tắt{% else %}Bật{% endif %}</button>
+                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px;">{% if item.status == 'active' %}Disable{% else %}Enable{% endif %}</button>
                                     </form>
-                                    <form method="POST" action="/control/proxy-endpoints/delete" style="display:inline;" onsubmit="return confirm('Xóa proxy {{ item.name }}?')">
+                                    <form method="POST" action="/control/proxy-endpoints/delete" style="display:inline;" onsubmit="return confirm('Delete proxy endpoint {{ item.name }}?')">
                                         <input type="hidden" name="endpoint_id" value="{{ item.id }}">
-                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Xóa</button>
+                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Delete</button>
                                     </form>
                                 </div>
                             </td>
@@ -323,19 +313,18 @@
         </article>
     </section>
 
-    <!-- ══════════ NGUỒN API ══════════ -->
     <section id="service-sources">
         <article class="shell-table">
             <div class="panel-heading">
                 <div>
-                    <h2 class="panel-title">Nguồn API</h2>
-                    <p class="panel-copy">Danh sách nguồn API tổng quan. Màn này vẫn dùng được, nhưng pricing visibility chi tiết nên chỉnh ở <strong>Pricing Sources</strong> trong menu bên trái.</p>
+                    <h2 class="panel-title">Upstream Sources</h2>
+                    <p class="panel-copy">General source registry for proxy and portal operations. Detailed pricing visibility controls remain under <strong>Pricing Sources</strong>.</p>
                 </div>
-                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddSource()">+ Thêm nguồn</button>
+                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddSource()">Create Source</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
-                    <thead><tr><th>Tên</th><th>Upstream URL</th><th>Domain công khai</th><th>Tỷ giá</th><th>Tính năng</th><th style="text-align:right;">Thao tác</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Upstream URL</th><th>Public URL</th><th>Balance rate</th><th>Flags</th><th style="text-align:right;">Actions</th></tr></thead>
                     <tbody>
                         {% for item in service_sources %}
                         <tr>
@@ -344,17 +333,17 @@
                             <td class="code-text">{{ item.public_base_url or "—" }}</td>
                             <td>{{ item.balance_rate }}</td>
                             <td>
-                                {% if item.enabled %}<span class="tag is-accent" style="font-size:10px; height:22px; padding:0 6px;">Bật</span>{% else %}<span class="tag is-warm" style="font-size:10px; height:22px; padding:0 6px;">Tắt</span>{% endif %}
-                                {% if item.public_pricing_enabled %}<span class="tag" style="font-size:10px; height:22px; padding:0 6px;">Bảng giá</span>{% endif %}
-                                {% if item.public_balance_enabled %}<span class="tag" style="font-size:10px; height:22px; padding:0 6px;">Balance</span>{% endif %}
+                                {% if item.enabled %}<span class="tag is-accent" style="font-size:10px; height:22px; padding:0 6px;">enabled</span>{% else %}<span class="tag is-warm" style="font-size:10px; height:22px; padding:0 6px;">disabled</span>{% endif %}
+                                {% if item.public_pricing_enabled %}<span class="tag" style="font-size:10px; height:22px; padding:0 6px;">pricing</span>{% endif %}
+                                {% if item.public_balance_enabled %}<span class="tag" style="font-size:10px; height:22px; padding:0 6px;">balance</span>{% endif %}
                             </td>
                             <td style="text-align:right;">
                                 <div style="display:inline-flex; gap:4px;">
                                     <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
-                                        @click="openEditSource('{{ item.id }}', '{{ item.name }}', '{{ item.source_type or 'newapi' }}', '{{ item.upstream_base_url }}', '{{ item.public_base_url or '' }}', {{ item.balance_rate or 1.0 }}, '{{ item.auth_mode or 'header' }}', '{{ item.auth_user_header or '' }}', '{{ item.auth_user_value or '' }}', '{{ item.auth_token or '' }}', '{{ item.auth_cookie or '' }}', '{{ item.pricing_path or '/api/pricing' }}', '{{ item.ratio_config_path or '/api/ratio_config' }}', '{{ item.log_path or '/api/log/self' }}', '{{ item.token_search_path or '/api/token/search' }}', '{{ item.notes or '' }}', {{ item.enabled or 0 }}, {{ item.public_pricing_enabled or 0 }}, {{ item.public_balance_enabled or 0 }})">Sửa</button>
-                                    <form method="POST" action="/control/service-sources/delete" style="display:inline;" onsubmit="return confirm('Xóa nguồn {{ item.name }}?')">
+                                        @click="openEditSource('{{ item.id }}', '{{ item.name }}', '{{ item.source_type or 'newapi' }}', '{{ item.upstream_base_url }}', '{{ item.public_base_url or '' }}', {{ item.balance_rate or 1.0 }}, '{{ item.auth_mode or 'header' }}', '{{ item.auth_user_header or '' }}', '{{ item.auth_user_value or '' }}', '{{ item.auth_token or '' }}', '{{ item.auth_cookie or '' }}', '{{ item.pricing_path or '/api/pricing' }}', '{{ item.ratio_config_path or '/api/ratio_config' }}', '{{ item.log_path or '/api/log/self' }}', '{{ item.token_search_path or '/api/token/search' }}', '{{ item.notes or '' }}', {{ item.enabled or 0 }}, {{ item.public_pricing_enabled or 0 }}, {{ item.public_balance_enabled or 0 }})">Edit</button>
+                                    <form method="POST" action="/control/service-sources/delete" style="display:inline;" onsubmit="return confirm('Delete source {{ item.name }}?')">
                                         <input type="hidden" name="source_id" value="{{ item.id }}">
-                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Xóa</button>
+                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Delete</button>
                                     </form>
                                 </div>
                             </td>
@@ -366,34 +355,33 @@
         </article>
     </section>
 
-    <!-- ══════════ MENU PORTAL ══════════ -->
     <section id="portal-modules">
         <article class="shell-table">
             <div class="panel-heading">
                 <div>
-                    <h2 class="panel-title">Menu Portal</h2>
-                    <p class="panel-copy">Quản lý các trang hiển thị trên <a href="/" target="_blank" style="color:var(--text-accent);">shupremium.com</a>.</p>
+                    <h2 class="panel-title">Portal Modules</h2>
+                    <p class="panel-copy">Manage the public-facing module registry rendered on <a href="/" target="_blank" style="color:var(--text-accent);">shupremium.com</a>.</p>
                 </div>
-                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddModule()">+ Thêm trang</button>
+                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddModule()">Create Module</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
-                    <thead><tr><th>Tên</th><th>Đường dẫn</th><th>Mô tả</th><th>Công khai</th><th>Bật</th><th style="text-align:right;">Thao tác</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Path</th><th>Description</th><th>Public</th><th>Enabled</th><th style="text-align:right;">Actions</th></tr></thead>
                     <tbody>
                         {% for item in portal_modules %}
                         <tr>
                             <td><strong>{{ item.name }}</strong></td>
                             <td class="code-text">{{ item.path }}</td>
                             <td style="color:var(--text-secondary); font-size:13px; max-width:200px;">{{ item.description or "—" }}</td>
-                            <td>{% if item.is_public %}<span class="tag is-accent" style="font-size:10px; height:22px;">Có</span>{% else %}<span class="tag" style="font-size:10px; height:22px;">Ẩn</span>{% endif %}</td>
-                            <td>{% if item.enabled %}<span class="tag is-accent" style="font-size:10px; height:22px;">Bật</span>{% else %}<span class="tag is-warm" style="font-size:10px; height:22px;">Tắt</span>{% endif %}</td>
+                            <td>{% if item.is_public %}<span class="tag is-accent" style="font-size:10px; height:22px;">visible</span>{% else %}<span class="tag" style="font-size:10px; height:22px;">hidden</span>{% endif %}</td>
+                            <td>{% if item.enabled %}<span class="tag is-accent" style="font-size:10px; height:22px;">enabled</span>{% else %}<span class="tag is-warm" style="font-size:10px; height:22px;">disabled</span>{% endif %}</td>
                             <td style="text-align:right;">
                                 <div style="display:inline-flex; gap:4px;">
                                     <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
-                                        @click="openEditModule('{{ item.id }}', '{{ item.name }}', '{{ item.path }}', '{{ item.public_url or '' }}', '{{ item.icon or '' }}', '{{ item.description or '' }}', {{ item.enabled or 0 }}, {{ item.is_public or 0 }}, {{ item.sort_order or 0 }})">Sửa</button>
-                                    <form method="POST" action="/control/portal-modules/delete" style="display:inline;" onsubmit="return confirm('Xóa module {{ item.name }}?')">
+                                        @click="openEditModule('{{ item.id }}', '{{ item.name }}', '{{ item.path }}', '{{ item.public_url or '' }}', '{{ item.icon or '' }}', '{{ item.description or '' }}', {{ item.enabled or 0 }}, {{ item.is_public or 0 }}, {{ item.sort_order or 0 }})">Edit</button>
+                                    <form method="POST" action="/control/portal-modules/delete" style="display:inline;" onsubmit="return confirm('Delete portal module {{ item.name }}?')">
                                         <input type="hidden" name="module_id" value="{{ item.id }}">
-                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Xóa</button>
+                                        <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Delete</button>
                                     </form>
                                 </div>
                             </td>
@@ -405,36 +393,35 @@
         </article>
     </section>
 
-    <!-- ══════════ DEPLOY HISTORY ══════════ -->
     {% if deploy_jobs %}
     <section>
         <article class="shell-table">
             <div class="panel-heading">
-                <div><h2 class="panel-title">Lịch sử thao tác</h2><p class="panel-copy">Log cac lan auto-apply proxy, reconcile thu cong/thiet bai va wildcard SSL.</p></div>
+                <div><h2 class="panel-title">Deployment History</h2><p class="panel-copy">Recent proxy reconciliation jobs, wildcard certificate runs, and runtime apply attempts.</p></div>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
-                    <thead><tr><th>#</th><th>Loại</th><th>Kết quả</th><th>Thời gian</th></tr></thead>
+                    <thead><tr><th>#</th><th>Job type</th><th>Result</th><th>Updated</th></tr></thead>
                     <tbody>
                         {% for item in deploy_jobs %}
                         <tr>
                             <td>{{ item.id }}</td>
                             <td class="code-text">
                                 {% if item.job_type == 'proxy_sync' %}
-                                Đồng bộ Proxy
+                                Proxy sync
                                 {% elif item.job_type == 'wildcard_cert' %}
-                                Wildcard SSL
+                                Wildcard certificate
                                 {% elif item.job_type == 'proxy_save_apply' %}
-                                Luu proxy + apply
+                                Save endpoint + apply
                                 {% elif item.job_type == 'proxy_delete_apply' %}
-                                Xoa proxy + apply
+                                Delete endpoint + apply
                                 {% elif item.job_type == 'proxy_toggle_apply' %}
-                                Toggle proxy + apply
+                                Toggle endpoint + apply
                                 {% else %}
                                 {{ item.job_type }}
                                 {% endif %}
                             </td>
-                            <td>{% if item.status == "success" %}<span class="tag is-accent">Thành công</span>{% elif item.status == "failed" %}<span class="tag is-warm">Thất bại</span>{% else %}<span class="tag">{{ item.status }}</span>{% endif %}{% if item.error_message %}<span style="color:var(--danger); font-size:12px; margin-left:8px;">{{ item.error_message }}</span>{% endif %}</td>
+                            <td>{% if item.status == "success" %}<span class="tag is-accent">success</span>{% elif item.status == "failed" %}<span class="tag is-warm">failed</span>{% else %}<span class="tag">{{ item.status }}</span>{% endif %}{% if item.error_message %}<span style="color:var(--danger); font-size:12px; margin-left:8px;">{{ item.error_message }}</span>{% endif %}</td>
                             <td style="color:var(--text-tertiary); font-size:13px;">{{ item.updated_at }}</td>
                         </tr>
                         {% endfor %}
@@ -503,25 +490,22 @@ function adminDashboard() {
         sf: emptySource(),
         mf: emptyModule(),
 
-        // ── Proxy ──
-        openAddProxy() { this.pf = emptyProxy(); this.modalType = 'proxy'; this.modalTitle = 'Thêm Proxy mới'; this.modalOpen = true; },
+        openAddProxy() { this.pf = emptyProxy(); this.modalType = 'proxy'; this.modalTitle = 'Create Proxy Endpoint'; this.modalOpen = true; },
         openEditProxy(id, sid, name, domain, host, proto, skipTls, port, status) {
             this.pf = { isEdit:true, endpoint_id:id, source_id:sid, name:name, domain:domain, target_host:host, target_protocol:proto, tls_skip_verify:!!skipTls, port:port, status:status };
-            this.modalType = 'proxy'; this.modalTitle = 'Sửa proxy: ' + name; this.modalOpen = true;
+            this.modalType = 'proxy'; this.modalTitle = 'Edit Proxy Endpoint: ' + name; this.modalOpen = true;
         },
 
-        // ── Source ──
-        openAddSource() { this.sf = emptySource(); this.modalType = 'source'; this.modalTitle = 'Thêm nguồn API mới'; this.modalOpen = true; },
+        openAddSource() { this.sf = emptySource(); this.modalType = 'source'; this.modalTitle = 'Create Upstream Source'; this.modalOpen = true; },
         openEditSource(id, name, type, upstream, pub, rate, authMode, authHeader, authValue, authToken, authCookie, pricingPath, ratioPath, logPath, tokenPath, notes, enabled, pricing, balance) {
             this.sf = { isEdit:true, source_id:id, name:name, source_type:type, upstream_base_url:upstream, public_base_url:pub, balance_rate:rate, auth_mode:authMode, auth_user_header:authHeader, auth_user_value:authValue, auth_token:authToken, auth_cookie:authCookie, pricing_path:pricingPath, ratio_config_path:ratioPath, log_path:logPath, token_search_path:tokenPath, notes:notes, enabled:!!enabled, public_pricing_enabled:!!pricing, public_balance_enabled:!!balance };
-            this.modalType = 'source'; this.modalTitle = 'Sửa nguồn: ' + name; this.modalOpen = true;
+            this.modalType = 'source'; this.modalTitle = 'Edit Upstream Source: ' + name; this.modalOpen = true;
         },
 
-        // ── Module ──
-        openAddModule() { this.mf = emptyModule(); this.modalType = 'module'; this.modalTitle = 'Thêm trang mới vào Portal'; this.modalOpen = true; },
+        openAddModule() { this.mf = emptyModule(); this.modalType = 'module'; this.modalTitle = 'Create Portal Module'; this.modalOpen = true; },
         openEditModule(id, name, path, url, icon, desc, enabled, isPublic, order) {
             this.mf = { isEdit:true, module_id:id, name:name, path:path, public_url:url, icon:icon, description:desc, enabled:!!enabled, is_public:!!isPublic, sort_order:order };
-            this.modalType = 'module'; this.modalTitle = 'Sửa: ' + name; this.modalOpen = true;
+            this.modalType = 'module'; this.modalTitle = 'Edit Portal Module: ' + name; this.modalOpen = true;
         }
     };
 }

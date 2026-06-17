@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Kho Tài Khoản{% endblock %}
+{% block title %}Account Inventory{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>
@@ -9,7 +9,7 @@
                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
             </svg>
         </span>
-        Kho Tài Khoản
+        Account Inventory
     </h1>
     <div class="page-actions">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
@@ -17,7 +17,7 @@
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Thêm tài khoản
+            Add Inventory
         </button>
     </div>
 </div>
@@ -29,7 +29,7 @@
         <line x1="12" y1="16" x2="12" y2="12"></line>
         <line x1="12" y1="8" x2="12.01" y2="8"></line>
     </svg>
-    Chưa có sản phẩm nào thuộc loại <b>Tài khoản có sẵn</b>. Hãy tạo sản phẩm với loại <code>account_stocked</code> trước.
+    No products are using the <b>account_stocked</b> delivery type yet. Create one first to start managing stocked credentials.
 </div>
 {% endif %}
 
@@ -42,9 +42,9 @@
                 <span class="badge badge-secondary">{{ info.cat_icon }} {{ info.cat_name }}</span>
             </h3>
             <div class="text-secondary" style="font-size: 0.85rem;">
-                Còn: <span class="text-success fw-bold">{{ info.available }}</span> / {{ info.total }}
+                Available: <span class="text-success fw-bold">{{ info.available }}</span> / {{ info.total }}
                 {% if info.format_template %}
-                — Định dạng: <code>{{ info.format_template }}</code>
+                — Format: <code>{{ info.format_template }}</code>
                 {% endif %}
             </div>
         </div>
@@ -59,10 +59,10 @@
                     <th>{{ label.strip() }}</th>
                     {% endfor %}
                     {% else %}
-                    <th>Data</th>
+                    <th>Payload</th>
                     {% endif %}
-                    <th>Trạng thái</th>
-                    <th>Bán cho</th>
+                    <th>Status</th>
+                    <th>Sold to</th>
                     <th></th>
                 </tr>
             </thead>
@@ -79,21 +79,21 @@
                     </td>
                     {% endfor %}
                     {% else %}
-                    <td data-label="Data">
+                    <td data-label="Payload">
                         <code>{{ a.account_data[:80] }}{{ '...' if a.account_data|length > 80 }}</code>
                     </td>
                     {% endif %}
-                    <td data-label="Trạng thái">
+                    <td data-label="Status">
                         {% if not a.is_sold %}
-                        <span class="badge badge-success">Còn</span>
+                        <span class="badge badge-success">Available</span>
                         {% else %}
-                        <span class="badge badge-danger">Đã bán</span>
+                        <span class="badge badge-danger">Sold</span>
                         {% endif %}
                     </td>
-                    <td data-label="Bán cho">{{ a.sold_to_user|default('—') }}</td>
+                    <td data-label="Sold to">{{ a.sold_to_user|default('—') }}</td>
                     <td data-label="" class="actions">
                         {% if not a.is_sold %}
-                        <a href="/account-stock/{{ a.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Xóa</a>
+                        <a href="/account-stock/{{ a.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Delete</a>
                         {% endif %}
                     </td>
                 </tr>
@@ -109,12 +109,12 @@
         <div class="modal-content">
             <form method="POST" action="/account-stock/add">
                 <div class="modal-header">
-                    <h5 class="modal-title">Thêm tài khoản vào kho</h5>
+                    <h5 class="modal-title">Add Inventory Batch</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-2">
-                        <label class="form-label">Sản phẩm</label>
+                        <label class="form-label">Product</label>
                         <select name="product_id" class="form-select" id="stockProductSelect" onchange="updatePlaceholder()">
                             {% for p in stock_products %}
                             {% set cat = cat_map.get(p.category_id, {}) %}
@@ -126,12 +126,12 @@
                     </div>
                     <div class="mb-2" id="formatHint"></div>
                     <div class="mb-2">
-                        <label class="form-label">Dữ liệu tài khoản (mỗi dòng 1 account)</label>
+                        <label class="form-label">Account rows</label>
                         <textarea name="accounts_data" class="form-control" rows="5" required id="accountsInput" placeholder="email@example.com|password123"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Thêm</button>
+                    <button type="submit" class="btn btn-primary">Save Inventory</button>
                 </div>
             </form>
         </div>
@@ -146,16 +146,16 @@ function updatePlaceholder() {
     var hint = document.getElementById('formatHint');
     var input = document.getElementById('accountsInput');
     if (fmt) {
-        hint.innerHTML = '<small class="text-info">Định dạng: <code>' + fmt + '</code> — Nhập theo thứ tự, cách nhau bằng <b>|</b></small>';
+        hint.innerHTML = '<small class="text-info">Expected format: <code>' + fmt + '</code> — use <b>|</b> as the field separator.</small>';
         input.placeholder = fmt.split('|').map(function (f) { return f.trim().toLowerCase() + '_value'; }).join('|');
     } else {
         hint.innerHTML = '';
-        input.placeholder = 'Dữ liệu tài khoản (text tùy ý)';
+        input.placeholder = 'Free-form account payload per line';
     }
 }
 
 function confirmDelete() {
-    return confirm('Bạn có chắc muốn xóa tài khoản này?');
+    return confirm('Delete this inventory record?');
 }
 
 document.addEventListener('DOMContentLoaded', updatePlaceholder);

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Người dùng #{{ user.id }}{% endblock %}
+{% block title %}Customer #{{ user.id }}{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>
@@ -9,7 +9,7 @@
                 <circle cx="12" cy="7" r="4"></circle>
             </svg>
         </span>
-        Hồ sơ người dùng
+        Customer Profile
     </h1>
 </div>
 
@@ -17,7 +17,7 @@
     <div class="col-12 col-md-6">
         <div class="card">
             <div class="card-header">
-                <h3>Thông tin tài khoản</h3>
+                <h3>Account Overview</h3>
             </div>
             <div class="card-body" style="padding: 0;">
                 <table class="table">
@@ -31,59 +31,59 @@
                     </tr>
                     <tr>
                         <th>Username</th>
-                        <td>{{ user.username|default('Chưa có') }}</td>
+                        <td>{{ user.username|default('Not set') }}</td>
                     </tr>
                     <tr>
-                        <th>Họ tên</th>
-                        <td>{{ user.full_name|default('Chưa cập nhật') }}</td>
+                        <th>Full name</th>
+                        <td>{{ user.full_name|default('Not provided') }}</td>
                     </tr>
                     <tr>
-                        <th>Vai trò</th>
+                        <th>Role</th>
                         <td>
                             {% if user.is_admin %}
-                            <span class="badge badge-success">Quản trị viên</span>
+                            <span class="badge badge-success">Admin</span>
                             {% else %}
-                            <span class="text-secondary">Người dùng thường</span>
+                            <span class="text-secondary">Customer</span>
                             {% endif %}
                         </td>
                     </tr>
                     <tr>
-                        <th>Trạng thái</th>
+                        <th>Account state</th>
                         <td>
                             {% if user.is_banned %}
-                            <span class="badge badge-danger">Đã khóa</span>
+                            <span class="badge badge-danger">Locked</span>
                             {% else %}
-                            <span class="badge badge-success">Đang hoạt động</span>
+                            <span class="badge badge-success">Active</span>
                             {% endif %}
                         </td>
                     </tr>
                     <tr>
-                        <th>Chiết khấu</th>
+                        <th>Discount policy</th>
                         <td>
                             {% if user.is_admin %}
-                            <span class="badge badge-warning">Tự động tắt cho tài khoản quản trị</span>
+                            <span class="badge badge-warning">Disabled for admin account</span>
                             {% elif user.disable_discounts %}
-                            <span class="badge badge-warning">Đã tắt thủ công</span>
+                            <span class="badge badge-warning">Manually disabled</span>
                             {% else %}
-                            <span class="badge badge-success">Đang bật</span>
+                            <span class="badge badge-success">Enabled</span>
                             {% endif %}
                         </td>
                     </tr>
                     <tr>
-                        <th>Ngày tạo</th>
+                        <th>Created at</th>
                         <td>{{ user.created_at | time_vn }}</td>
                     </tr>
                 </table>
             </div>
             <div class="card-body" style="border-top: 1px solid var(--border);">
                 <a href="/users/{{ user.id }}/toggle-admin" class="btn btn-outline-primary btn-sm">
-                    {{ 'Gỡ quyền quản trị' if user.is_admin else 'Cấp quyền quản trị' }}
+                    {{ 'Remove Admin Access' if user.is_admin else 'Grant Admin Access' }}
                 </a>
                 <a href="/users/{{ user.id }}/toggle-ban" class="btn btn-outline-danger btn-sm">
-                    {{ 'Mở khóa tài khoản' if user.is_banned else 'Khóa tài khoản' }}
+                    {{ 'Unlock Account' if user.is_banned else 'Lock Account' }}
                 </a>
                 <a href="/users/{{ user.id }}/toggle-discounts" class="btn btn-outline-warning btn-sm">
-                    {{ 'Bật lại chiết khấu' if user.disable_discounts else 'Tắt chiết khấu' }}
+                    {{ 'Re-enable Discounts' if user.disable_discounts else 'Disable Discounts' }}
                 </a>
             </div>
         </div>
@@ -92,7 +92,7 @@
     <div class="col-12 col-md-6">
         <div class="card mb-3">
             <div class="card-header">
-                <h3>Ví điện tử</h3>
+                <h3>Wallet</h3>
             </div>
             <div class="card-body">
                 <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-bottom: 1rem;">
@@ -101,13 +101,13 @@
                 <form method="POST" action="/users/{{ user.id }}/adjust-wallet">
                     <div class="row g-2">
                         <div class="col-8">
-                            <input name="amount" type="number" class="form-control" placeholder="Số tiền cộng hoặc trừ" required>
+                            <input name="amount" type="number" class="form-control" placeholder="Positive or negative adjustment amount" required>
                         </div>
                         <div class="col-4">
-                            <button class="btn btn-primary w-100">Cập nhật</button>
+                            <button class="btn btn-primary w-100">Apply</button>
                         </div>
                         <div class="col-12">
-                            <input name="description" class="form-control" placeholder="Lý do điều chỉnh">
+                            <input name="description" class="form-control" placeholder="Reason for this adjustment">
                         </div>
                     </div>
                 </form>
@@ -116,7 +116,7 @@
 
         <div class="card">
             <div class="card-header">
-                <h3>Đơn gần đây</h3>
+                <h3>Recent Orders</h3>
             </div>
             <div class="card-body" style="padding: 0;">
                 <table class="table">
@@ -124,7 +124,7 @@
                     <tr>
                         <td><a href="/orders/{{ o.id }}"><code>{{ o.order_code }}</code></a></td>
                         <td>{{ format_vnd(o.amount) }}</td>
-                        <td><span class="status-badge {{ o.status }}">{{ status_emoji(o.status) }} {{ o.status }}</span></td>
+                        <td><span class="status-badge {{ o.status }}">{{ status_emoji(o.status) }} {{ o.status|replace('_', ' ')|title }}</span></td>
                     </tr>
                     {% endfor %}
                 </table>

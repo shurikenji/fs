@@ -1,7 +1,7 @@
 {% macro entity_state_badge(is_active) -%}
 <span class="entity-state {{ 'entity-state--on' if is_active else 'entity-state--off' }}">
     <span class="entity-state__dot"></span>
-    {{ 'Đang bật' if is_active else 'Tạm tắt' }}
+    {{ 'Enabled' if is_active else 'Paused' }}
 </span>
 {%- endmacro %}
 
@@ -12,7 +12,7 @@
         type="submit"
         class="btn btn-sm entity-toggle-btn {{ 'entity-toggle-btn--disable' if is_active else 'entity-toggle-btn--enable' }}"
     >
-        {{ 'Tắt' if is_active else 'Bật' }}
+        {{ 'Disable' if is_active else 'Enable' }}
     </button>
 </form>
 {%- endmacro %}
@@ -21,7 +21,7 @@
 <div class="form-check entity-checkbox">
     <input class="form-check-input" type="checkbox" name="is_active" id="{{ input_id }}" {% if is_active %}checked{% endif %}>
     <label class="form-check-label" for="{{ input_id }}">
-        Trạng thái: {{ 'Đang bật' if is_active else 'Tạm tắt' }}
+        State: {{ 'Enabled' if is_active else 'Paused' }}
     </label>
 </div>
 {%- endmacro %}

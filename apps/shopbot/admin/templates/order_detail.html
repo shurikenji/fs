@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Đơn #{{ order.order_code }}{% endblock %}
+{% block title %}Order #{{ order.order_code }}{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>
@@ -11,7 +11,7 @@
                 <line x1="16" y1="17" x2="8" y2="17"></line>
             </svg>
         </span>
-        Đơn {{ order.order_code }}
+        Order {{ order.order_code }}
     </h1>
 </div>
 
@@ -19,31 +19,31 @@
     <div class="col-12 col-lg-8">
         <div class="card">
             <div class="card-header">
-                <h3>Chi tiết đơn hàng</h3>
+                <h3>Order Details</h3>
                 <span class="status-badge {{ order.status }}">
-                    {{ status_emoji(order.status) }} {{ status_text_vi(order.status) }}
+                    {{ status_emoji(order.status) }} {{ order.status|replace('_', ' ')|title }}
                 </span>
             </div>
             <div class="card-body" style="padding: 0;">
                 <table class="table">
                     <tr>
-                        <th width="30%">Mã đơn</th>
+                        <th width="30%">Order code</th>
                         <td><code style="background: var(--primary-50); color: var(--primary-dark); padding: 0.25rem 0.5rem; border-radius: 6px;">{{ order.order_code }}</code></td>
                     </tr>
                     <tr>
                         <th>User ID</th>
                         <td>
                             {{ order.user_id }}
-                            <a href="/users/{{ order.user_id }}" class="btn btn-sm btn-outline-secondary" style="margin-left: 0.5rem;">Xem</a>
+                            <a href="/users/{{ order.user_id }}" class="btn btn-sm btn-outline-secondary" style="margin-left: 0.5rem;">Open Customer</a>
                         </td>
                     </tr>
                     <tr>
-                        <th>Sản phẩm</th>
+                        <th>Product</th>
                         <td>{{ order.product_name|default('—') }} ({{ order.product_type }})</td>
                     </tr>
                     {% if order.server_id %}
                     <tr>
-                        <th>Máy chủ</th>
+                        <th>API source</th>
                         <td>
                             {{ server_name or ('Server #' ~ order.server_id) }}
                             <span class="text-secondary">(ID: {{ order.server_id }})</span>
@@ -51,24 +51,24 @@
                     </tr>
                     {% endif %}
                     <tr>
-                        <th>Số tiền</th>
+                        <th>Amount</th>
                         <td><span class="fw-bold" style="font-size: 1.1rem;">{{ format_vnd(order.amount) }}</span></td>
                     </tr>
                     {% if (order.quantity or 1) > 1 %}
                     <tr>
-                        <th>Số lượng</th>
+                        <th>Quantity</th>
                         <td>x{{ order.quantity }}</td>
                     </tr>
                     {% endif %}
                     {% if order.base_amount %}
                     <tr>
-                        <th>Giá gốc</th>
+                        <th>Base amount</th>
                         <td>{{ format_vnd(order.base_amount) }}</td>
                     </tr>
                     {% endif %}
                     {% if order.discount_amount %}
                     <tr>
-                        <th>Giảm giá</th>
+                        <th>Discount</th>
                         <td>-{{ format_vnd(order.discount_amount) }}</td>
                     </tr>
                     {% endif %}
@@ -79,76 +79,76 @@
                     </tr>
                     {% endif %}
                     <tr>
-                        <th>Thanh toán</th>
+                        <th>Payment</th>
                         <td>
                             {% if order.payment_method == 'wallet' %}
-                            <span class="badge badge-secondary">Ví nội bộ</span>
+                            <span class="badge badge-secondary">Wallet</span>
                             {% else %}
-                            <span class="badge badge-info">Chuyển khoản QR</span>
+                            <span class="badge badge-info">QR transfer</span>
                             {% endif %}
                         </td>
                     </tr>
                     <tr>
-                        <th>Ngày tạo</th>
+                        <th>Created at</th>
                         <td>{{ order.created_at | time_vn }}</td>
                     </tr>
                     {% if order.paid_at %}
                     <tr>
-                        <th>Thanh toán lúc</th>
+                        <th>Paid at</th>
                         <td>{{ order.paid_at | time_vn }}</td>
                     </tr>
                     {% endif %}
                     {% if order.expired_at %}
                     <tr>
-                        <th>Hết hạn lúc</th>
+                        <th>Expires at</th>
                         <td>{{ order.expired_at | time_vn }}</td>
                     </tr>
                     {% endif %}
                     {% if order.refunded_at %}
                     <tr>
-                        <th>Hoàn tiền lúc</th>
+                        <th>Refunded at</th>
                         <td>{{ order.refunded_at | time_vn }}</td>
                     </tr>
                     {% endif %}
                     {% if order.api_key %}
                     <tr>
-                        <th>API Key</th>
+                        <th>API key</th>
                         <td><code>{{ order.api_key }}</code></td>
                     </tr>
                     {% endif %}
                     {% if order.api_token_name %}
                     <tr>
-                        <th>Token Name</th>
+                        <th>Token name</th>
                         <td><code>{{ order.api_token_name }}</code></td>
                     </tr>
                     {% endif %}
                     {% if order.quota_before is not none %}
                     <tr>
-                        <th>Quota</th>
+                        <th>Quota delta</th>
                         <td>{{ "{:,}".format(order.quota_before) }} → {{ "{:,}".format(order.quota_after) }}</td>
                     </tr>
                     {% endif %}
                     {% if order.delivery_info %}
                     <tr>
-                        <th>Delivery</th>
+                        <th>Delivery payload</th>
                         <td><pre class="mb-0" style="background: var(--background-subtle); padding: 0.5rem; border-radius: 6px;">{{ order.delivery_info }}</pre></td>
                     </tr>
                     {% endif %}
                     {% if order.delivery_token_names %}
                     <tr>
-                        <th>Delivery Token Names</th>
+                        <th>Delivery token names</th>
                         <td><pre class="mb-0" style="background: var(--background-subtle); padding: 0.5rem; border-radius: 6px;">{{ order.delivery_token_names }}</pre></td>
                     </tr>
                     {% endif %}
                     {% if order.mb_transaction_id %}
                     <tr>
-                        <th>MB TX ID</th>
+                        <th>MB transaction ID</th>
                         <td><code>{{ order.mb_transaction_id }}</code></td>
                     </tr>
                     {% endif %}
                     {% if order.refund_reason %}
                     <tr>
-                        <th>Hoàn tiền</th>
+                        <th>Refund reason</th>
                         <td>{{ order.refund_reason }}</td>
                     </tr>
                     {% endif %}
@@ -160,24 +160,24 @@
     <div class="col-12 col-lg-4">
         <div class="card">
             <div class="card-header">
-                <h3>Thao tác</h3>
+                <h3>Actions</h3>
             </div>
             <div class="card-body">
                 {% if order.status in ['paid', 'processing'] and order.product_type == 'service_upgrade' %}
-                <form method="POST" action="/orders/{{ order.id }}/complete" class="mb-2" onsubmit="return confirm('Đánh dấu đơn Dịch vụ này là Hoàn thành và báo luôn cho khách hàng?');">
-                    <button type="submit" class="btn btn-success w-100">Hoàn thành đơn Dịch vụ</button>
+                <form method="POST" action="/orders/{{ order.id }}/complete" class="mb-2" onsubmit="return confirm('Mark this service order as completed and notify the customer now?');">
+                    <button type="submit" class="btn btn-success w-100">Complete Service Order</button>
                 </form>
                 {% endif %}
 
                 {% if order.status in ['pending','paid'] %}
-                <a href="/orders/{{ order.id }}/cancel" class="btn btn-outline-danger w-100 mb-2" onclick="return confirmDelete('Hủy đơn này?')">Hủy đơn (Không hoàn tiền)</a>
+                <a href="/orders/{{ order.id }}/cancel" class="btn btn-outline-danger w-100 mb-2" onclick="return confirmDelete('Cancel this order without refund?')">Cancel Order</a>
                 {% endif %}
 
                 {% if order.status in ['paid','processing','completed'] and order.product_type != 'wallet_topup' %}
-                <a href="/orders/{{ order.id }}/refund" class="btn btn-danger w-100 mb-2" onclick="return confirmDelete('Hủy đơn & HOÀN TIỀN vào ví khách hàng?')">Hủy & Hoàn tiền</a>
+                <a href="/orders/{{ order.id }}/refund" class="btn btn-danger w-100 mb-2" onclick="return confirmDelete('Cancel this order and refund the customer wallet?')">Cancel and Refund</a>
                 {% endif %}
 
-                <a href="/orders" class="btn btn-outline-secondary w-100">Quay lại</a>
+                <a href="/orders" class="btn btn-outline-secondary w-100">Back to Orders</a>
             </div>
         </div>
     </div>
@@ -185,8 +185,7 @@
 
 <script>
 function confirmDelete(msg) {
-    return confirm(msg || 'Bạn có chắc muốn thực hiện thao tác này?');
+    return confirm(msg || 'Run this order action?');
 }
 </script>
 {% endblock %}
-

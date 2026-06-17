@@ -1,26 +1,27 @@
 {% extends "portal_base.html" %}
-{% block title %}Check Balance — Shupremium{% endblock %}
+{% block title %}Balance Check - Shupremium{% endblock %}
 
 {% block content %}
 <div x-data="balanceApp()" class="page-stack" x-cloak>
     <section class="fade-up" style="text-align: center;">
-        <h1 class="page-title">Check your balance</h1>
+        <p class="page-eyebrow" style="justify-content:center;">Balance Check</p>
+        <h1 class="page-title">Balance Check</h1>
         <p class="page-subtitle" style="max-width: 44ch; margin: var(--space-3) auto 0;">
-            See how much credit is left on your API key. Just pick a source and paste it below.
+            Query remaining credit for a specific key against the selected runtime source.
         </p>
     </section>
 
     <section class="shell-panel centered-form fade-up">
         <div class="panel-heading">
             <div>
-                <h2 class="panel-title">Enter your details</h2>
-                <p class="panel-copy">We'll check the remaining balance from the selected source.</p>
+                <h2 class="panel-title">Resolve balance</h2>
+                <p class="panel-copy">Select the connector, paste an API key, and run a direct balance lookup.</p>
             </div>
         </div>
 
         <div style="display: grid; gap: var(--space-4);">
             <div>
-                <label class="field-label">Source</label>
+                <label class="field-label">Runtime source</label>
                 <select class="select-control" x-model="serverId">
                     <option value="">Choose a source</option>
                     <template x-for="server in servers" :key="server.id">
@@ -30,12 +31,12 @@
             </div>
             <div>
                 <label class="field-label">API key</label>
-                <input type="text" class="control code-text" placeholder="Paste your API key here (e.g. sk-...)"
+                <input type="text" class="control code-text" placeholder="Paste the key to validate (for example: sk-...)"
                     x-model="apiKey">
             </div>
             <button class="button button--lg" style="width: 100%; margin-top: var(--space-2);" @click="checkBalance()"
                 :disabled="loading || !serverId || !apiKey">
-                <span x-text="loading ? 'Checking…' : 'Check balance'"></span>
+                <span x-text="loading ? 'Checking...' : 'Run balance check'"></span>
             </button>
         </div>
     </section>
@@ -43,7 +44,7 @@
     <div x-show="error" class="status-banner is-error centered-form fade-up">
         <span class="status-banner__dot"></span>
         <div>
-            <strong>Something went wrong.</strong>
+            <strong>Balance lookup failed.</strong>
             <div class="panel-copy mt-1" x-text="error"></div>
         </div>
     </div>
@@ -53,7 +54,7 @@
             <span class="status-banner__dot"></span>
             <div>
                 <strong x-text="'Source: ' + result.server"></strong>
-                <div class="panel-copy mt-1">Balance retrieved successfully.</div>
+                <div class="panel-copy mt-1">The selected source returned a balance snapshot successfully.</div>
             </div>
         </div>
 
@@ -66,12 +67,12 @@
             <article class="metric-card" style="text-align: center;">
                 <div class="metric-label">Limit</div>
                 <div class="metric-value" x-text="'$' + result.data.limit_usd"></div>
-                <p class="metric-copy">Credit limit</p>
+                <p class="metric-copy">Configured credit limit</p>
             </article>
             <article class="metric-card" style="text-align: center;">
                 <div class="metric-label">Used</div>
                 <div class="metric-value" style="color: var(--warning);" x-text="'$' + result.data.usage_usd"></div>
-                <p class="metric-copy">Total spent</p>
+                <p class="metric-copy">Reported usage to date</p>
             </article>
         </div>
     </section>
@@ -90,39 +91,39 @@
             result: null,
 
             activeServer() {
-        return this.servers.find((server) => String(server.id) === String(this.serverId)) || null;
-    },
+                return this.servers.find((server) => String(server.id) === String(this.serverId)) || null;
+            },
 
             activeServerName() {
-        return this.activeServer()?.name || 'No source selected';
-    },
+                return this.activeServer()?.name || 'No source selected';
+            },
 
-        async checkBalance() {
-        this.loading = true;
-        this.error = '';
-        this.result = null;
-        try {
-            const response = await fetch('/api/check-balance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    api_key: this.apiKey,
-                    server: this.serverId,
-                }),
-            });
-            const payload = await response.json();
-            if (!response.ok) {
-                this.error = payload.detail || payload.error || 'Failed to check balance';
-                return;
-            }
-            this.result = payload;
-        } catch (error) {
-            this.error = 'Request failed: ' + error.message;
-        } finally {
-            this.loading = false;
-        }
-    },
-    };
-}
+            async checkBalance() {
+                this.loading = true;
+                this.error = '';
+                this.result = null;
+                try {
+                    const response = await fetch('/api/check-balance', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            api_key: this.apiKey,
+                            server: this.serverId,
+                        }),
+                    });
+                    const payload = await response.json();
+                    if (!response.ok) {
+                        this.error = payload.detail || payload.error || 'Failed to check balance';
+                        return;
+                    }
+                    this.result = payload;
+                } catch (error) {
+                    this.error = 'Request failed: ' + error.message;
+                } finally {
+                    this.loading = false;
+                }
+            },
+        };
+    }
 </script>
 {% endblock %}

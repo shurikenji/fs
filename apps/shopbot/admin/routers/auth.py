@@ -1,6 +1,6 @@
 """
-admin/routers/auth.py — Login / Logout với session.
-Rate limit IP-based chống brute force.
+admin/routers/auth.py - Session-based login and logout for Shopbot admin.
+IP-based throttling helps reduce brute-force attempts.
 """
 from __future__ import annotations
 
@@ -16,16 +16,14 @@ from bot.config import settings
 
 router = APIRouter(tags=["auth"])
 
-# In-memory IP Rate Limiter for Login (chống brute force)
-# Cấu trúc: {"IP": {"attempts": int, "lockout_until": float}}
 _login_attempts: dict[str, dict] = {}
 MAX_ATTEMPTS = 5
 LOCKOUT_MINUTES = 5
 
 
 def _hash_password(raw_password: str) -> str:
-    """Băm password để so sánh an toàn hơn Plaintext."""
-    return hashlib.sha256(raw_password.encode('utf-8')).hexdigest()
+    """Hash the password before comparison to avoid plaintext-only checks."""
+    return hashlib.sha256(raw_password.encode("utf-8")).hexdigest()
 
 
 @router.get(settings.admin_login_path, response_class=HTMLResponse)
@@ -44,7 +42,6 @@ async def login_submit(request: Request):
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
 
-    # Kiểm tra IP Rate Limit
     if client_ip in _login_attempts:
         record = _login_attempts[client_ip]
         if record["lockout_until"] > now:
@@ -54,21 +51,18 @@ async def login_submit(request: Request):
                 "login.html",
                 {
                     "request": request,
-                    "error": f"Tạm khóa IP. Thử lại sau {remain} phút.",
+                    "error": f"This IP is temporarily locked. Try again in {remain} minute(s).",
                     "post_url": settings.admin_login_path,
                 },
             )
         elif record["lockout_until"] != 0 and record["lockout_until"] < now:
-            # Hết hạn khóa, reset
             _login_attempts[client_ip] = {"attempts": 0, "lockout_until": 0}
 
     form = await request.form()
     password = form.get("password", "")
 
-    # Lấy password từ DB settings
     saved_password = await get_setting("admin_password") or "admin123"
 
-    # Tương thích ngược: check cả plaintext lẫn hash
     hashed_input = _hash_password(password)
     is_valid = (password == saved_password) or (hashed_input == saved_password)
 
@@ -77,7 +71,6 @@ async def login_submit(request: Request):
         _login_attempts.pop(client_ip, None)
         return RedirectResponse("/", status_code=303)
 
-    # Đăng nhập sai → Tăng counter
     if client_ip not in _login_attempts:
         _login_attempts[client_ip] = {"attempts": 0, "lockout_until": 0}
 
@@ -90,7 +83,7 @@ async def login_submit(request: Request):
         "login.html",
         {
             "request": request,
-            "error": "Mật khẩu không đúng",
+            "error": "Incorrect admin password.",
             "post_url": settings.admin_login_path,
         },
     )

@@ -1,17 +1,17 @@
 {% extends "control/base.html" %}
-{% block title %}Manage Models{% endblock %}
+{% block title %}Model Visibility{% endblock %}
 
 {% block content %}
 <div x-data="serverModelsPage()" x-cloak class="page-shell">
     <section class="page-header">
         <div>
-            <p class="page-eyebrow">Visibility controls</p>
-            <h1 class="page-title">Manage models</h1>
-            <p class="page-subtitle">Exclude specific models from <strong>{{ server.name }}</strong> so they disappear from public pricing and public usage logs.</p>
+            <p class="page-eyebrow">Connector policy</p>
+            <h1 class="page-title">Model Visibility</h1>
+            <p class="page-subtitle">Exclude specific models from <strong>{{ server.name }}</strong> so they no longer appear in public pricing and public usage log views.</p>
         </div>
         <div class="page-actions">
-            <a href="/control/servers" class="btn-admin secondary">Back to servers</a>
-            <a href="/control/servers/{{ server.id }}/groups" class="btn-admin ghost">Manage groups</a>
+            <a href="/control/servers" class="btn-admin secondary">Back to Connectors</a>
+            <a href="/control/servers/{{ server.id }}/groups" class="btn-admin ghost">Open Group Visibility</a>
         </div>
     </section>
 
@@ -22,15 +22,15 @@
                 <span class="badge-soft success"><span x-text="visibleModels.length"></span> visible</span>
                 <span class="badge-soft warn"><span x-text="models.length - visibleModels.length"></span> excluded</span>
             </div>
-            <div class="muted">Uses cached pricing snapshot only.</div>
+            <div class="muted">Uses the latest cached pricing snapshot for this connector.</div>
         </div>
         <div class="field-grid mt-4" style="grid-template-columns: 1.2fr 220px auto auto auto auto;">
             <div>
-                <label class="form-label">Search models</label>
+                <label class="form-label">Search Models</label>
                 <input type="text" class="form-control" placeholder="Filter by model name or provider" x-model="query">
             </div>
             <div>
-                <label class="form-label">Pricing mode</label>
+                <label class="form-label">Pricing Mode</label>
                 <select class="form-select" x-model="mode">
                     <option value="">All modes</option>
                     <option value="token">Token</option>
@@ -40,16 +40,16 @@
                 </select>
             </div>
             <div class="actions-row" style="align-items: end;">
-                <button type="button" class="btn-admin secondary" @click="showAll()">Show all</button>
+                <button type="button" class="btn-admin secondary" @click="showAll()">Show All</button>
             </div>
             <div class="actions-row" style="align-items: end;">
-                <button type="button" class="btn-admin ghost" @click="selectFiltered()">Select filtered</button>
+                <button type="button" class="btn-admin ghost" @click="selectFiltered()">Select Filtered</button>
             </div>
             <div class="actions-row" style="align-items: end;">
-                <button type="button" class="btn-admin ghost" @click="clearSelection()">Clear selection</button>
+                <button type="button" class="btn-admin ghost" @click="clearSelection()">Clear Selection</button>
             </div>
             <div class="actions-row" style="align-items: end;">
-                <button type="button" class="btn-admin ghost" @click="excludeSelected()">Exclude selected</button>
+                <button type="button" class="btn-admin ghost" @click="excludeSelected()">Exclude Selected</button>
             </div>
         </div>
     </section>
@@ -58,10 +58,10 @@
         <form method="POST" action="/control/servers/{{ server.id }}/models/save" class="table-card">
             <div class="actions-row" style="justify-content: space-between;">
                 <div>
-                    <h2 class="section-title">Cached model catalog</h2>
-                    <p class="section-copy">Unchecked rows are excluded from public pricing and public usage logs. Admin still keeps the full cached catalog.</p>
+                    <h2 class="section-title">Cached Model Catalog</h2>
+                    <p class="section-copy">Unchecked rows remain in admin cache but are removed from public-facing pricing surfaces.</p>
                 </div>
-                <button type="submit" class="btn-admin">Save visibility</button>
+                <button type="submit" class="btn-admin">Save Changes</button>
             </div>
             <div class="table-responsive mt-4">
                 <table class="table align-middle">
@@ -104,7 +104,7 @@
 
     <template x-if="!models.length">
         <section class="table-card">
-            <div class="empty-state">No pricing cache found for this server yet. Run a sync first, then come back to manage model visibility.</div>
+            <div class="empty-state">No pricing cache is available for this connector yet. Run a sync, then return here to manage model visibility.</div>
         </section>
     </template>
 </div>

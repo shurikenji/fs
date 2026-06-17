@@ -1,9 +1,8 @@
 {% extends "base.html" %}
-{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form, entity_state_checkbox %}
-{% block title %}Sản phẩm{% endblock %}
+{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form %}
+{% block title %}Products{% endblock %}
 {% block content %}
 
-<!-- Page Header -->
 <div class="page-header animate-fade-up">
     <div>
         <h1>
@@ -14,9 +13,9 @@
                     <line x1="12" y1="22.08" x2="12" y2="12"></line>
                 </svg>
             </span>
-            Quản lý sản phẩm
+            Products
         </h1>
-        <p style="margin: 0.3rem 0 0; color: var(--text-secondary); font-size: 0.9rem;">API keys, tài khoản có sẵn và dịch vụ. Mỗi sản phẩm kết nối với server để lấy thông tin nhóm và quota.</p>
+        <p class="page-subtitle">Manage sellable SKUs for keys, stocked accounts, and service workflows with server-aware pricing context.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
@@ -24,12 +23,11 @@
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Thêm sản phẩm
+            Create Product
         </button>
     </div>
 </div>
 
-<!-- KPI Row -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;" class="animate-fade-up">
     <div class="stat-card">
         <div class="stat-icon emerald">
@@ -37,7 +35,7 @@
         </div>
         <div class="stat-content">
             <div class="stat-value">{{ products|length }}</div>
-            <div class="stat-label">Tổng sản phẩm</div>
+            <div class="stat-label">Total products</div>
         </div>
     </div>
     <div class="stat-card">
@@ -46,7 +44,7 @@
         </div>
         <div class="stat-content">
             <div class="stat-value">{{ servers|selectattr('is_active')|list|length }}</div>
-            <div class="stat-label">Máy chủ đang bật</div>
+            <div class="stat-label">Active sources</div>
         </div>
     </div>
     <div class="stat-card">
@@ -55,7 +53,7 @@
         </div>
         <div class="stat-content">
             <div class="stat-value">{{ categories|length }}</div>
-            <div class="stat-label">Danh mục</div>
+            <div class="stat-label">Categories</div>
         </div>
     </div>
     <div class="stat-card">
@@ -64,50 +62,48 @@
         </div>
         <div class="stat-content">
             <div class="stat-value">{{ products | selectattr('is_active') | list | length }}</div>
-            <div class="stat-label">Đang bật</div>
+            <div class="stat-label">Enabled</div>
         </div>
     </div>
 </div>
 
-<!-- Search/Filter Bar -->
 <div class="card animate-fade-up" style="margin-bottom: 1.25rem;">
     <div class="card-body" style="padding: 0.875rem 1.25rem;">
         <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
             <div style="position: relative; flex: 1; min-width: 200px;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2" style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); pointer-events: none;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" id="productSearch" class="form-control" placeholder="Tìm sản phẩm theo tên..." style="padding-left: 2.25rem;" oninput="filterProducts()">
+                <input type="text" id="productSearch" class="form-control" placeholder="Search products by name" style="padding-left: 2.25rem;" oninput="filterProducts()">
             </div>
             <select id="filterType" class="form-select" style="flex: 0 0 180px;" onchange="filterProducts()">
-                <option value="">Tất cả loại</option>
-                <option value="key_new">Key mới</option>
-                <option value="key_topup">Nạp key</option>
-                <option value="account_stocked">Tài khoản</option>
-                <option value="service_upgrade">Dịch vụ</option>
+                <option value="">All types</option>
+                <option value="key_new">New Key</option>
+                <option value="key_topup">Top Up</option>
+                <option value="account_stocked">Stock Account</option>
+                <option value="service_upgrade">Service Upgrade</option>
             </select>
             <select id="filterStatus" class="form-select" style="flex: 0 0 150px;" onchange="filterProducts()">
-                <option value="">Tất cả trạng thái</option>
-                <option value="active">Đang bật</option>
-                <option value="inactive">Đã tắt</option>
+                <option value="">All states</option>
+                <option value="active">Enabled</option>
+                <option value="inactive">Paused</option>
             </select>
             <span id="filterCount" style="font-size: 0.8rem; color: var(--text-tertiary); white-space: nowrap; flex-shrink: 0;"></span>
         </div>
     </div>
 </div>
 
-<!-- Products Table -->
 <div class="table-card animate-fade-up">
     {% if products %}
     <table class="table product-table" id="productsTable">
         <thead>
             <tr>
                 <th style="width: 3rem; text-align: center;">#</th>
-                <th>Sản phẩm</th>
-                <th>Ngữ cảnh</th>
-                <th>Loại giao hàng</th>
-                <th>Giá</th>
-                <th>Trạng thái</th>
-                <th>Kho</th>
-                <th>Thao tác</th>
+                <th>Product</th>
+                <th>Context</th>
+                <th>Delivery</th>
+                <th>Price</th>
+                <th>State</th>
+                <th>Stock</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody id="productsTableBody">
@@ -115,15 +111,15 @@
             <tr data-name="{{ p.name | lower }}" data-type="{{ p.product_type }}" data-active="{{ 'active' if p.is_active else 'inactive' }}">
                 {% set next_url = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
                 <td data-label="#" style="text-align: center; color: var(--text-tertiary); font-size: 0.82rem;">{{ p.sort_order }}</td>
-                <td data-label="Sản phẩm">
+                <td data-label="Product">
                     <div class="product-title" style="font-weight: 600;">{{ p.name }}</div>
                     {% if p.description_short %}
                     <div class="product-description" style="color: var(--text-secondary); font-size: 0.82rem;">{{ p.description_short }}</div>
                     {% else %}
-                    <div class="product-empty" style="color: var(--text-tertiary); font-size: 0.8rem; font-style: italic;">Không có mô tả</div>
+                    <div class="product-empty" style="color: var(--text-tertiary); font-size: 0.8rem; font-style: italic;">No summary provided.</div>
                     {% endif %}
                 </td>
-                <td data-label="Ngữ cảnh">
+                <td data-label="Context">
                     <div class="product-stack" style="display: flex; gap: 0.35rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
                         <span class="product-chip">{{ p.cat_name|default('-') }}</span>
                         {% if p.srv_name and p.srv_name != '-' %}
@@ -137,18 +133,18 @@
                     </div>
                     <div class="product-meta" style="font-size: 0.78rem; color: var(--text-tertiary);">
                         {% if p.server_id %}
-                        Máy chủ #{{ p.server_id }}
+                        Source #{{ p.server_id }}
                         {% if p.uses_server_default_group %}
-                        <br><span style="color: var(--primary); font-weight: 500;">Kế thừa từ server</span>
+                        <br><span style="color: var(--primary); font-weight: 500;">Using source default group</span>
                         {% elif p.group_name %}
-                        <br><span style="color: var(--warning); font-weight: 500;">Override nhóm</span>
+                        <br><span style="color: var(--warning); font-weight: 500;">Product-level group override</span>
                         {% endif %}
                         {% else %}
-                        Không có server
+                        No linked source
                         {% endif %}
                     </div>
                 </td>
-                <td data-label="Loại giao hàng">
+                <td data-label="Delivery">
                     <div class="product-delivery">
                         <span class="badge {{ p.type_theme }}" style="background: var(--{{ p.type_theme }}-bg); color: var(--{{ p.type_theme }});">{{ p.type_label }}</span>
                         {% if p.format_template %}
@@ -158,31 +154,31 @@
                         {% endif %}
                     </div>
                 </td>
-                <td data-label="Giá">
+                <td data-label="Price">
                     <div class="product-price" style="font-weight: 700; font-size: 0.95rem;">{{ format_vnd(p.price_vnd) }}</div>
                     <div class="product-price-meta" style="font-size: 0.78rem; color: var(--text-tertiary);">
                         {% if p.server_id %}
-                        Q: {{ "{:,}".format(p.quota_amount or 0) }} | ${{ p.dollar_amount or 0 }}
+                        Quota: {{ "{:,}".format(p.quota_amount or 0) }} | ${{ p.dollar_amount or 0 }}
                         {% else %}
-                        Sản phẩm độc lập
+                        Standalone catalog item
                         {% endif %}
                     </div>
                 </td>
-                <td data-label="Trạng thái">
+                <td data-label="State">
                     {{ entity_state_badge(p.is_active) }}
                 </td>
-                <td data-label="Kho">
+                <td data-label="Stock">
                     {% if p.stock == -1 %}
-                    <span style="font-size: 0.85rem; color: var(--primary); font-weight: 500;">♾ Không giới hạn</span>
+                    <span style="font-size: 0.85rem; color: var(--primary); font-weight: 500;">Unlimited</span>
                     {% elif p.product_type == 'account_stocked' %}
                     <span style="font-weight: 700; font-size: 0.95rem; {% if p.stock < 5 %}color: var(--danger);{% elif p.stock < 20 %}color: var(--warning);{% endif %}">{{ p.stock }}</span>
-                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Tài khoản khả dụng</div>
+                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Available credentials</div>
                     {% else %}
                     <span style="font-weight: 700; font-size: 0.95rem;">{{ p.stock }}</span>
-                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Sẵn sàng bán</div>
+                    <div style="font-size: 0.78rem; color: var(--text-tertiary);">Sellable units</div>
                     {% endif %}
                 </td>
-                <td data-label="Thao tác">
+                <td data-label="Actions">
                     <div class="actions">
                         {{ entity_toggle_form('/products/' ~ p.id ~ '/toggle-active', p.is_active, next_url) }}
                         <a
@@ -190,8 +186,8 @@
                             class="btn btn-sm btn-outline-primary"
                             data-edit-modal-url="/products/{{ p.id }}/edit-modal"
                             data-edit-modal-init="initializeProductEditModal"
-                        >Sửa</a>
-                        <a href="/products/{{ p.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Xóa</a>
+                        >Edit</a>
+                        <a href="/products/{{ p.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Delete</a>
                     </div>
                 </td>
             </tr>
@@ -199,16 +195,16 @@
         </tbody>
     </table>
     <div id="emptyFilter" style="display: none; padding: 3rem 2rem; text-align: center;">
-        <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">🔍</div>
-        <h3 style="color: var(--text-secondary); font-weight: 500; margin-bottom: 0.5rem;">Không tìm thấy sản phẩm nào</h3>
-        <p style="color: var(--text-tertiary);">Thử thay đổi từ khóa hoặc bộ lọc.</p>
+        <div style="font-size: 2.5rem; margin-bottom: 0.75rem;">Search</div>
+        <h3 style="color: var(--text-secondary); font-weight: 500; margin-bottom: 0.5rem;">No matching products</h3>
+        <p style="color: var(--text-tertiary);">Try a different search term or filter combination.</p>
     </div>
     {% else %}
     <div style="padding: 4rem 2rem; text-align: center;">
-        <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
-        <h3 style="color: var(--text-secondary); font-weight: 500;">Chưa có sản phẩm nào</h3>
-        <p style="color: var(--text-tertiary); margin-bottom: 1.5rem;">Tạo sản phẩm đầu tiên để bắt đầu bán hàng.</p>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">Thêm sản phẩm đầu tiên</button>
+        <div style="font-size: 3rem; margin-bottom: 1rem;">Catalog</div>
+        <h3 style="color: var(--text-secondary); font-weight: 500;">No products created yet</h3>
+        <p style="color: var(--text-tertiary); margin-bottom: 1.5rem;">Create the first product to connect pricing, delivery, and source policy.</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">Create First Product</button>
     </div>
     {% endif %}
 </div>
@@ -222,9 +218,9 @@ function filterProducts() {
     let visibleCount = 0;
 
     rows.forEach(row => {
-        const name = (row.dataset.name || '');
-        const type = (row.dataset.type || '');
-        const active = (row.dataset.active || '');
+        const name = row.dataset.name || '';
+        const type = row.dataset.type || '';
+        const active = row.dataset.active || '';
 
         const matchName = !search || name.includes(search);
         const matchType = !typeFilter || type === typeFilter;
@@ -239,7 +235,7 @@ function filterProducts() {
     });
 
     const countEl = document.getElementById('filterCount');
-    if (countEl) countEl.textContent = `Hiển thị ${visibleCount} / ${rows.length} sản phẩm`;
+    if (countEl) countEl.textContent = `Showing ${visibleCount} / ${rows.length} products`;
 
     const emptyFilter = document.getElementById('emptyFilter');
     const table = document.getElementById('productsTable');
@@ -257,26 +253,25 @@ function filterProducts() {
 document.addEventListener('DOMContentLoaded', filterProducts);
 </script>
 
-<!-- Add Modal -->
 <div class="modal fade" id="addModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form method="POST" action="/products/add" id="addForm">
                 <div class="modal-header">
-                    <h5 class="modal-title">Thêm sản phẩm</h5>
+                    <h5 class="modal-title">Create Product</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label class="form-label">Tên</label>
+                                <label class="form-label">Product Name</label>
                                 <input name="name" class="form-control" required>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label class="form-label">Danh mục</label>
+                                <label class="form-label">Category</label>
                                 <select name="category_id" class="form-select" id="addCategorySelect" onchange="syncProductTypeOptions('add')">
                                     {% for c in categories %}
                                     <option value="{{ c.id }}" data-cat-type="{{ c.cat_type }}">{{ c.icon }} {{ c.name }}</option>
@@ -289,30 +284,30 @@ document.addEventListener('DOMContentLoaded', filterProducts);
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label class="form-label">Loại</label>
+                                <label class="form-label">Product Type</label>
                                 <select name="product_type" class="form-select" id="addProductType" onchange="toggleAddFields()">
-                                    <option value="key_new">Key mới</option>
-                                    <option value="key_topup">Nạp thêm key</option>
-                                    <option value="account_stocked">Tài khoản có sẵn</option>
-                                    <option value="service_upgrade">Dịch vụ / Nâng cấp</option>
+                                    <option value="key_new">New Key</option>
+                                    <option value="key_topup">Top Up Existing Key</option>
+                                    <option value="account_stocked">Stock Account</option>
+                                    <option value="service_upgrade">Service Upgrade</option>
                                 </select>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-group">
-                                <label class="form-label">Giá (VND)</label>
+                                <label class="form-label">Price (VND)</label>
                                 <input name="price_vnd" type="number" class="form-control" required>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-group">
-                                <label class="form-label">Tồn kho (-1 = vô hạn)</label>
+                                <label class="form-label">Stock (-1 = unlimited)</label>
                                 <input name="stock" type="number" class="form-control" value="-1">
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="form-group">
-                                <label class="form-label">Thứ tự</label>
+                                <label class="form-label">Sort</label>
                                 <input name="sort_order" type="number" class="form-control" value="0">
                             </div>
                         </div>
@@ -322,9 +317,9 @@ document.addEventListener('DOMContentLoaded', filterProducts);
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">Server</label>
+                                    <label class="form-label">API Source</label>
                                     <select name="server_id" id="addServerSelect" class="form-select">
-                                        <option value="">- Không có -</option>
+                                        <option value="">- None -</option>
                                         {% for s in servers %}
                                         <option value="{{ s.id }}">{{ s.name }}</option>
                                         {% endfor %}
@@ -333,13 +328,13 @@ document.addEventListener('DOMContentLoaded', filterProducts);
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">Quota</label>
+                                    <label class="form-label">Quota Amount</label>
                                     <input name="quota_amount" type="number" class="form-control" value="0">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">Số USD</label>
+                                    <label class="form-label">Dollar Amount</label>
                                     <input name="dollar_amount" type="number" step="0.1" class="form-control" value="0">
                                 </div>
                             </div>
@@ -347,52 +342,52 @@ document.addEventListener('DOMContentLoaded', filterProducts);
 
                         <div class="form-group" id="addGroupWrap" style="display:none;">
                             <div class="d-flex justify-content-between align-items-end mb-2">
-                                <label class="form-label mb-0">Ghi đè nhóm</label>
+                                <label class="form-label mb-0">Group Override</label>
                                 <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearGroupOverride('add')">Mặc định server</button>
-                                    <button type="button" class="btn btn-sm btn-outline-info" id="addFetchGroupBtn" onclick="fetchGroups('add')" style="display:none;">Tải lại</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="addToggleGroupModeBtn" onclick="toggleGroupInputMode('add')">Danh sách</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearGroupOverride('add')">Use Source Default</button>
+                                    <button type="button" class="btn btn-sm btn-outline-info" id="addFetchGroupBtn" onclick="fetchGroups('add')" style="display:none;">Refresh Groups</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="addToggleGroupModeBtn" onclick="toggleGroupInputMode('add')">Use List</button>
                                 </div>
                             </div>
                             <div id="addGroupInputContainer">
-                                <input name="group_name" id="addGroupInput" class="form-control" placeholder="Nhập tên group...">
+                                <input name="group_name" id="addGroupInput" class="form-control" placeholder="Enter group name">
                             </div>
                             <div class="product-group-helper" id="addGroupStrategy"></div>
                         </div>
                     </div>
 
                     <div class="form-group" id="addFormatWrap" style="display:none;">
-                        <label class="form-label">Mẫu định dạng</label>
+                        <label class="form-label">Account Format Template</label>
                         <input name="format_template" class="form-control" placeholder="Email|Password|Cookie">
-                        <div class="form-text">Cách nhau bằng dấu |</div>
+                        <div class="form-text">Use `|` as the field separator for stocked account rows.</div>
                     </div>
 
                     <div class="form-group" id="addInputPromptWrap" style="display:none;">
-                        <label class="form-label">Hướng dẫn nhập liệu</label>
-                        <input name="input_prompt" class="form-control" placeholder="Nhập thông tin khách cần cung cấp...">
+                        <label class="form-label">Service Input Prompt</label>
+                        <input name="input_prompt" class="form-control" placeholder="Describe the input the customer must provide">
                     </div>
 
                     <div class="form-group" id="addPromotionWrap">
-                        <label class="form-label">Chương trình khuyến mãi</label>
+                        <label class="form-label">Promotion</label>
                         <div class="row">
                             <div class="col-md-4">
-                                <input name="promotion_name" class="form-control" placeholder="Tên chương trình">
+                                <input name="promotion_name" class="form-control" placeholder="Promotion name">
                             </div>
                             <div class="col-md-4">
                                 <select name="promotion_type" class="form-select">
-                                    <option value="">- Không áp dụng -</option>
-                                    <option value="percent_off">Giảm theo phần trăm</option>
-                                    <option value="fixed_off">Giảm số tiền cố định</option>
-                                    <option value="override_price">Chốt giá bán</option>
+                                    <option value="">- No promotion -</option>
+                                    <option value="percent_off">Percent Off</option>
+                                    <option value="fixed_off">Fixed Discount</option>
+                                    <option value="override_price">Override Price</option>
                                 </select>
                             </div>
                             <div class="col-md-4">
-                                <input name="promotion_value" type="number" step="0.01" class="form-control" placeholder="Giá trị">
+                                <input name="promotion_value" type="number" step="0.01" class="form-control" placeholder="Value">
                             </div>
                         </div>
                         <div class="row mt-2">
                             <div class="col-md-4">
-                                <input name="promotion_priority" type="number" class="form-control" value="0" placeholder="Độ ưu tiên">
+                                <input name="promotion_priority" type="number" class="form-control" value="0" placeholder="Priority">
                             </div>
                             <div class="col-md-4">
                                 <input name="promotion_start_at" class="form-control" placeholder="2026-03-20T09:00:00">
@@ -403,17 +398,17 @@ document.addEventListener('DOMContentLoaded', filterProducts);
                         </div>
                         <div class="form-check mt-2">
                             <input class="form-check-input" type="checkbox" name="promotion_is_active" id="addPromotionActive" value="1" checked>
-                            <label class="form-check-label" for="addPromotionActive">Đang áp dụng khuyến mãi</label>
+                            <label class="form-check-label" for="addPromotionActive">Enable this promotion immediately</label>
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Mô tả</label>
+                        <label class="form-label">Description</label>
                         <textarea name="description" class="form-control" rows="3"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-primary">Thêm</button>
+                    <button type="submit" class="btn btn-primary">Create Product</button>
                 </div>
             </form>
         </div>
@@ -429,12 +424,12 @@ document.addEventListener('DOMContentLoaded', filterProducts);
     const groupInputMode = { add: 'manual', edit: 'manual' };
     const productTypeOptions = {
         key_api: [
-            { value: 'key_new', label: 'Key mới' },
-            { value: 'key_topup', label: 'Nạp thêm key' },
+            { value: 'key_new', label: 'New Key' },
+            { value: 'key_topup', label: 'Top Up Existing Key' },
         ],
         general: [
-            { value: 'account_stocked', label: 'Tài khoản có sẵn' },
-            { value: 'service_upgrade', label: 'Dịch vụ / Nâng cấp' },
+            { value: 'account_stocked', label: 'Stock Account' },
+            { value: 'service_upgrade', label: 'Service Upgrade' },
         ],
     };
     const serverMetaMap = {
@@ -514,15 +509,15 @@ document.addEventListener('DOMContentLoaded', filterProducts);
         const serverMeta = getServerMeta(prefix);
 
         if (!serverMeta) {
-            helper.innerHTML = 'Chọn server trước. Nếu để trống, sẽ không gửi group.';
+            helper.innerHTML = 'Select an API source first. Leaving this empty means no group override will be sent.';
             return;
         }
 
         const defaultGroups = splitGroups(serverMeta.defaultGroup);
-        const defaultLabel = defaultGroups.length ? defaultGroups.join(', ') : 'không có';
+        const defaultLabel = defaultGroups.length ? defaultGroups.join(', ') : 'none';
 
         if (currentValue) {
-            helper.innerHTML = `Chiến lược hiện tại: <strong>override sản phẩm</strong> với <code>${currentValue}</code>. Xóa để dùng mặc định server: <code>${defaultLabel}</code>.`;
+            helper.innerHTML = `Current strategy: <strong>product override</strong> with <code>${currentValue}</code>. Clear this field to fall back to the source default: <code>${defaultLabel}</code>.`;
             return;
         }
 
@@ -530,11 +525,11 @@ document.addEventListener('DOMContentLoaded', filterProducts);
             const mode = defaultGroups.length > 1 || serverMeta.supportsMultiGroup
                 ? 'multi-group'
                 : 'single-group';
-            helper.innerHTML = `Chiến lược hiện tại: <strong>kế thừa mặc định server</strong> (${mode}) từ <strong>${serverMeta.name}</strong>: <code>${defaultLabel}</code>.`;
+            helper.innerHTML = `Current strategy: <strong>inherit source default</strong> (${mode}) from <strong>${serverMeta.name}</strong>: <code>${defaultLabel}</code>.`;
             return;
         }
 
-        helper.innerHTML = `Server <strong>${serverMeta.name}</strong> chưa có group mặc định.`;
+        helper.innerHTML = `Source <strong>${serverMeta.name}</strong> does not have a default group configured yet.`;
     }
 
     function clearGroupOverride(prefix) {
@@ -607,20 +602,20 @@ document.addEventListener('DOMContentLoaded', filterProducts);
 
         if (groupInputMode[prefix] === 'manual') {
             groupInputMode[prefix] = 'select';
-            toggleBtn.textContent = 'Nhập tay';
+            toggleBtn.textContent = 'Use Manual Input';
             toggleBtn.classList.replace('btn-outline-secondary', 'btn-outline-primary');
             fetchBtn.style.display = 'inline-block';
-            container.innerHTML = `<select name="group_name" id="${prefix}GroupInput" class="form-select"><option value="${currentValue}" selected>${currentValue || 'Đang tải...'}</option></select>`;
+            container.innerHTML = `<select name="group_name" id="${prefix}GroupInput" class="form-select"><option value="${currentValue}" selected>${currentValue || 'Loading groups...'}</option></select>`;
             attachGroupInputListeners(prefix);
             checkAndFetchGroups(prefix);
             return;
         }
 
         groupInputMode[prefix] = 'manual';
-        toggleBtn.textContent = 'Danh sách';
+        toggleBtn.textContent = 'Use List';
         toggleBtn.classList.replace('btn-outline-primary', 'btn-outline-secondary');
         fetchBtn.style.display = 'none';
-        container.innerHTML = `<input type="text" name="group_name" id="${prefix}GroupInput" class="form-control" value="${currentValue}" placeholder="Nhập tên group...">`;
+        container.innerHTML = `<input type="text" name="group_name" id="${prefix}GroupInput" class="form-control" value="${currentValue}" placeholder="Enter group name">`;
         attachGroupInputListeners(prefix);
         updateGroupStrategy(prefix);
     }
@@ -647,21 +642,21 @@ document.addEventListener('DOMContentLoaded', filterProducts);
         const serverSelect = document.getElementById(`${prefix}ServerSelect`);
         const serverId = serverSelect.value;
         if (!serverId) {
-            alert('Chọn server trước.');
+            alert('Select an API source first.');
             return;
         }
 
         const container = document.getElementById(`${prefix}GroupInputContainer`);
         const currentInput = document.getElementById(`${prefix}GroupInput`);
         const currentValue = currentInput ? currentInput.value : '';
-        container.innerHTML = `<select name="group_name" id="${prefix}GroupInput" class="form-select" disabled><option>Đang tải...</option></select>`;
+        container.innerHTML = `<select name="group_name" id="${prefix}GroupInput" class="form-select" disabled><option>Loading groups...</option></select>`;
 
         try {
             const response = await fetch(`/servers/${serverId}/api/groups`);
             const result = await response.json();
 
             if (!result.success || !result.data) {
-                throw new Error(result.message || 'Lỗi không xác định');
+                throw new Error(result.message || 'Unknown error');
             }
 
             groupsDataMap = result.data;
@@ -669,8 +664,8 @@ document.addEventListener('DOMContentLoaded', filterProducts);
             const serverMeta = getServerMeta(prefix);
             const defaultGroups = splitGroups(serverMeta ? serverMeta.defaultGroup : '');
             const blankLabel = defaultGroups.length
-                ? `- Dùng mặc định: ${defaultGroups.join(', ')} -`
-                : '- Chọn group -';
+                ? `- Use source default: ${defaultGroups.join(', ')} -`
+                : '- Select a group -';
             selectHtml += `<option value="">${blankLabel}</option>`;
 
             let hasMatch = false;
@@ -683,7 +678,7 @@ document.addEventListener('DOMContentLoaded', filterProducts);
             }
 
             if (currentValue && !hasMatch) {
-                selectHtml += `<option value="${currentValue}" selected>${currentValue} (Tùy chỉnh)</option>`;
+                selectHtml += `<option value="${currentValue}" selected>${currentValue} (custom)</option>`;
             }
 
             selectHtml += `</select>`;
@@ -691,9 +686,9 @@ document.addEventListener('DOMContentLoaded', filterProducts);
             attachGroupInputListeners(prefix);
             updateGroupStrategy(prefix);
         } catch (error) {
-            console.error('Lỗi tải groups:', error);
-            alert(`Không thể tải groups: ${error.message}`);
-            container.innerHTML = `<input type="text" name="group_name" id="${prefix}GroupInput" class="form-control" value="${currentValue}" placeholder="Nhập tên group...">`;
+            console.error('Failed to load groups:', error);
+            alert(`Could not load groups: ${error.message}`);
+            container.innerHTML = `<input type="text" name="group_name" id="${prefix}GroupInput" class="form-control" value="${currentValue}" placeholder="Enter group name">`;
             attachGroupInputListeners(prefix);
             updateGroupStrategy(prefix);
         }
@@ -717,7 +712,7 @@ document.addEventListener('DOMContentLoaded', filterProducts);
     }
 
     function confirmDelete() {
-        return confirm('Bạn có chắc muốn xóa sản phẩm này?');
+        return confirm('Delete this product? This action cannot be undone.');
     }
 
     function bindProductServerSelect(prefix) {

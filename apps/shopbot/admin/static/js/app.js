@@ -1,11 +1,9 @@
-/* admin/static/js/app.js — Admin panel JavaScript */
+/* admin/static/js/app.js - Shopbot admin shared behavior */
 
-// Confirm dialog trước khi xóa
 function confirmDelete(message) {
-    return confirm(message || 'Bạn có chắc chắn muốn xóa?');
+    return confirm(message || 'Are you sure you want to delete this item?');
 }
 
-// Auto-hide alerts sau 5 giây
 document.addEventListener('DOMContentLoaded', function () {
     const alerts = document.querySelectorAll('.alert-dismissible');
     alerts.forEach(function (alert) {
@@ -16,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
-// Highlight active sidebar link
 document.addEventListener('DOMContentLoaded', function () {
     const path = window.location.pathname;
     document.querySelectorAll('.sidebar .nav-link').forEach(function (link) {
@@ -95,14 +92,14 @@ window.AdminRemoteModal = (function () {
                 },
             });
             if (!response.ok) {
-                throw new Error('Failed to load edit dialog');
+                throw new Error('Failed to load the edit dialog');
             }
 
             const html = await response.text();
             const doc = new DOMParser().parseFromString(html, 'text/html');
             const modalEl = doc.getElementById('editModal') || doc.querySelector('.modal');
             if (!modalEl) {
-                throw new Error('Edit dialog markup missing');
+                throw new Error('Edit dialog markup is missing');
             }
 
             removeActiveRemoteModal();

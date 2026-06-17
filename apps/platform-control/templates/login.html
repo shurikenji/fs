@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login — Shupremium</title>
+    <title>Platform Control Sign In - Shupremium</title>
     <meta name="csrf-token" content="{{ csrf_token(request) }}">
     <link rel="stylesheet" href="/static/css/app.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
@@ -144,12 +144,12 @@
                 </span>
                 <span>
                     <div class="login-brand__title">Platform Control</div>
-                    <div class="login-brand__sub">Shupremium Admin</div>
+                    <div class="login-brand__sub">Operator Access</div>
                 </span>
             </div>
 
-            <h1 class="login-title">Đăng nhập</h1>
-            <p class="login-desc">Control plane duy nhất cho proxy runtime, service registry, và portal modules.</p>
+            <h1 class="login-title">Sign in</h1>
+            <p class="login-desc">Control plane for proxy endpoints, upstream source registry, portal modules, and pricing runtime sync workflows.</p>
 
             {% if error %}
             <div class="login-error">
@@ -160,8 +160,8 @@
 
             <form method="POST" action="/control/login" class="login-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-                <input class="login-input" type="password" name="password" placeholder="Mật khẩu quản trị" required autofocus>
-                <button class="login-btn" type="submit">Đăng nhập</button>
+                <input class="login-input" type="password" name="password" placeholder="Admin password" required autofocus>
+                <button class="login-btn" type="submit">Sign In</button>
             </form>
         </div>
         <div class="login-footer">

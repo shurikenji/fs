@@ -34,19 +34,19 @@ router = protected_router(prefix="/servers", tags=["servers"])
 _API_TYPES = [
     {"value": "newapi", "label": "NewAPI"},
     {"value": "rixapi", "label": "RixAPI"},
-    {"value": "other", "label": "Khác (tùy chỉnh)"},
+    {"value": "other", "label": "Custom"},
 ]
 
 _AUTH_TYPES = [
     {"value": "header", "label": "Header + Bearer"},
-    {"value": "bearer_only", "label": "Chỉ dùng Bearer"},
-    {"value": "cookie", "label": "Xác thực bằng cookie"},
-    {"value": "none", "label": "Không xác thực"},
+    {"value": "bearer_only", "label": "Bearer Only"},
+    {"value": "cookie", "label": "Cookie Session"},
+    {"value": "none", "label": "No Authentication"},
 ]
 
 _DISCOUNT_STACK_MODES = [
-    {"value": "exclusive", "label": "Chỉ lấy ưu đãi tốt nhất"},
-    {"value": "combine_selected_types", "label": "Cộng dồn các loại đã chọn"},
+    {"value": "exclusive", "label": "Best Benefit Only"},
+    {"value": "combine_selected_types", "label": "Combine Selected Benefit Types"},
 ]
 
 
@@ -116,7 +116,7 @@ def _build_server_flash_context(request: Request) -> dict[str, str]:
     error = _clean_str(request.query_params.get("error"))
     if error == "invalid_discount_tiers":
         return {
-            "flash_message": "Cấu hình discount tiers không hợp lệ. Vui lòng kiểm tra lại JSON.",
+            "flash_message": "Spend tier configuration is invalid. Review the JSON payload and try again.",
             "flash_type": "danger",
         }
     return {}
@@ -714,7 +714,7 @@ async def preview_groups(request: Request):
     form = await request.form()
     server = _get_server_form_payload(form)
     if not server.get("name"):
-        server["name"] = "Preview Server"
+        server["name"] = "Preview Source"
 
     groups_data = await _resolve_groups_data(server)
     return JSONResponse(

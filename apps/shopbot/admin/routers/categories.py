@@ -40,27 +40,27 @@ def _build_flash_context(request: Request) -> dict:
 
     if msg == "deleted":
         return {
-            "flash_message": "Đã xoá danh mục thành công.",
+            "flash_message": "Category deleted successfully.",
             "flash_type": "success",
         }
 
     if error == "not_found":
         return {
-            "flash_message": "Danh mục không tồn tại hoặc đã bị xoá.",
+            "flash_message": "Category was not found or has already been removed.",
             "flash_type": "warning",
         }
 
     if error == "in_use":
         products = int(request.query_params.get("products", 0))
-        detail = f"{products} sản phẩm" if products else "dữ liệu liên quan"
+        detail = f"{products} linked products" if products else "linked records"
         return {
-            "flash_message": f"Không thể xoá danh mục vì còn {detail}. Hãy chuyển hoặc xoá sản phẩm trước.",
+            "flash_message": f"Category cannot be deleted because {detail} still reference it. Reassign or remove those products first.",
             "flash_type": "danger",
         }
 
     if error == "delete_failed":
         return {
-            "flash_message": "Xoá danh mục thất bại do lỗi ràng buộc dữ liệu.",
+            "flash_message": "Category delete failed due to a data integrity constraint.",
             "flash_type": "danger",
         }
 

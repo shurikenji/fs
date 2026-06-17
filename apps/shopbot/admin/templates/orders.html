@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Đơn hàng{% endblock %}
+{% block title %}Orders{% endblock %}
 {% block content %}
 
 <div class="page-header">
@@ -12,87 +12,85 @@
                     <line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line>
                 </svg>
             </span>
-            Đơn hàng
+            Orders
         </h1>
-        <p class="page-subtitle">Quản lý và theo dõi trạng thái đơn hàng</p>
+        <p class="page-subtitle">Review payment state, fulfillment progress, and refund actions across all commerce orders.</p>
     </div>
 </div>
 
-{# Filter Bar #}
 <div class="card mb-3">
     <form class="filter-bar" method="GET">
         <select name="status" class="form-select" style="max-width:200px;">
-            <option value="" {{ 'selected' if not filter_status }}>Tất cả trạng thái</option>
+            <option value="" {{ 'selected' if not filter_status }}>All statuses</option>
             {% for s in ['pending','paid','completed','cancelled','refunded','processing'] %}
             <option value="{{ s }}" {{ 'selected' if filter_status == s }}>
-                {{ status_emoji(s) }} {{ status_text_vi(s) }}
+                {{ status_emoji(s) }} {{ s|replace('_', ' ')|title }}
             </option>
             {% endfor %}
         </select>
-        <input name="search" class="form-control" style="max-width:240px;" placeholder="Tìm mã đơn..." value="{{ filter_search|default('') }}">
+        <input name="search" class="form-control" style="max-width:240px;" placeholder="Search by order code" value="{{ filter_search|default('') }}">
         <button type="submit" class="btn btn-primary">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            Lọc
+            Apply
         </button>
         {% if filter_status or filter_search %}
-        <a href="/orders" class="btn btn-outline-secondary">Xóa lọc</a>
+        <a href="/orders" class="btn btn-outline-secondary">Reset</a>
         {% endif %}
     </form>
 </div>
 
-{# Orders Table #}
 <div class="table-card">
     <table class="table table-responsive-cards">
         <thead>
             <tr>
-                <th>Mã đơn</th>
-                <th>Người dùng</th>
-                <th>Sản phẩm</th>
-                <th class="text-end">Số tiền</th>
-                <th>Thanh toán</th>
-                <th>Trạng thái</th>
-                <th>Ngày tạo</th>
+                <th>Order code</th>
+                <th>Customer</th>
+                <th>Product</th>
+                <th class="text-end">Amount</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Created</th>
                 <th style="width:80px;"></th>
             </tr>
         </thead>
         <tbody>
             {% for o in orders %}
             <tr>
-                <td data-label="Mã đơn">
+                <td data-label="Order code">
                     <code class="cell-code">{{ o.order_code }}</code>
                 </td>
-                <td data-label="Người dùng">
+                <td data-label="Customer">
                     <a href="/users/{{ o.user_id }}" class="cell-name--link">#{{ o.user_id }}</a>
                 </td>
-                <td data-label="Sản phẩm">
+                <td data-label="Product">
                     <div class="cell-name cell-truncate" style="max-width:180px;">{{ o.product_name or '—' }}</div>
                     <div class="cell-meta">{{ o.product_type }}</div>
                 </td>
-                <td data-label="Số tiền" class="text-end">
+                <td data-label="Amount" class="text-end">
                     <span class="cell-price">{{ format_vnd(o.amount) }}</span>
                     {% if o.discount_amount %}
                     <div class="cell-price-discount">-{{ format_vnd(o.discount_amount) }}</div>
                     {% endif %}
                 </td>
-                <td data-label="Thanh toán">
+                <td data-label="Payment">
                     {% if o.payment_method == 'wallet' %}
-                    <span class="badge badge-secondary">👛 Ví</span>
+                    <span class="badge badge-secondary">Wallet</span>
                     {% else %}
-                    <span class="badge badge-info">📲 QR</span>
+                    <span class="badge badge-info">QR transfer</span>
                     {% endif %}
                 </td>
-                <td data-label="Trạng thái">
+                <td data-label="Status">
                     <span class="status-badge {{ o.status }}">
-                        {{ status_emoji(o.status) }} {{ status_text_vi(o.status) }}
+                        {{ status_emoji(o.status) }} {{ o.status|replace('_', ' ')|title }}
                     </span>
                 </td>
-                <td data-label="Ngày tạo">
+                <td data-label="Created">
                     <span class="cell-date">{{ o.created_at | time_vn }}</span>
                 </td>
                 <td data-label="">
-                    <a href="/orders/{{ o.id }}" class="btn btn-sm btn-outline-primary">Chi tiết</a>
+                    <a href="/orders/{{ o.id }}" class="btn btn-sm btn-outline-primary">Open</a>
                 </td>
             </tr>
             {% else %}
@@ -100,7 +98,7 @@
                 <td colspan="8">
                     <div class="empty-state">
                         <div class="icon">📄</div>
-                        <h4>Không có đơn hàng nào</h4>
+                        <h4>No orders found</h4>
                     </div>
                 </td>
             </tr>

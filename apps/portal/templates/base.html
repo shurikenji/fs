@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Pricing Hub{% endblock %}</title>
+    <title>{% block title %}Shupremium{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -21,27 +21,27 @@
 
         <aside class="app-sidebar" :class="{ 'is-open': mobileNav }">
             <div class="app-sidebar__brand">
-                <a href="/pricing" class="site-brand">
+                <a href="/" class="site-brand">
                     <span class="site-brand__mark">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M13 3L4 14h6l-1 7 11-13h-7l0-5z"/>
                         </svg>
                     </span>
                     <span>
-                        <span class="site-brand__title">Pricing Hub</span>
+                        <span class="site-brand__title">Shupremium</span>
                     </span>
                 </a>
             </div>
 
             <nav class="sidebar-nav">
                 <div class="sidebar-nav__section">Tools</div>
-                <a href="/pricing" class="sidebar-link {% if request.url.path in ['/', '/pricing'] %}is-active{% endif %}">
+                <a href="/" class="sidebar-link {% if request.url.path in ['/', '/pricing'] %}is-active{% endif %}">
                     <span class="sidebar-link__icon">M</span>
-                    <span>Model Pricing</span>
+                    <span>Pricing Explorer</span>
                 </a>
                 <a href="/keys" class="sidebar-link {% if request.url.path == '/keys' %}is-active{% endif %}">
                     <span class="sidebar-link__icon">K</span>
-                    <span>API Key Center</span>
+                    <span>Key Tools</span>
                 </a>
                 <a href="/logs" class="sidebar-link {% if request.url.path == '/logs' %}is-active{% endif %}">
                     <span class="sidebar-link__icon">L</span>
@@ -70,3 +70,4 @@
     {% block scripts %}{% endblock %}
 </body>
 </html>
+

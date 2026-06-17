@@ -1,20 +1,22 @@
 {% extends "control/base.html" %}
-{% block title %}Runtime Settings{% endblock %}
+{% block title %}AI Translation & Sync{% endblock %}
 
 {% block content %}
 <div class="page-shell">
     <section class="page-header">
         <div>
             <p class="page-eyebrow">Runtime controls</p>
-            <h1 class="page-title">Translation & Auto Sync</h1>
-            <p class="page-subtitle">Configure AI translation and the automatic refresh cadence for cached pricing/model data. These controls are only available in admin.</p>
+            <h1 class="page-title">AI Translation & Sync</h1>
+            <p class="page-subtitle">Configure translation providers and the automatic refresh cadence for cached pricing
+                and group metadata.</p>
         </div>
     </section>
 
     <section class="split-grid">
         <article class="admin-card">
             <h2 class="section-title">Provider settings</h2>
-            <p class="section-copy">Stored in SQLite so changes take effect immediately without editing environment files.</p>
+            <p class="section-copy">Settings are stored in SQLite so runtime controls update immediately without editing
+                environment files.</p>
 
             <form method="POST" action="/control/settings/save" class="mt-4">
                 <div class="field-grid">
@@ -51,7 +53,8 @@
                 <div class="divider my-5"></div>
 
                 <h2 class="section-title">Automatic sync</h2>
-                <p class="section-copy">Keep cached pricing, models, groups, and translation caches fresh on one shared schedule for all enabled servers.</p>
+                <p class="section-copy">Keep cached pricing, model catalogs, group metadata, and translations fresh on one
+                    shared schedule for every enabled connector.</p>
 
                 <div class="field-grid mt-4">
                     <div>
@@ -63,7 +66,8 @@
                             name="auto_sync_interval_minutes"
                             class="form-control"
                             value="{{ all_settings.get('auto_sync_interval_minutes', '15') }}">
-                        <div class="field-help">Applies globally to every enabled server. Changes take effect without restarting the app.</div>
+                        <div class="field-help">Applies globally to every enabled connector. Changes take effect without
+                            restarting the app.</div>
                     </div>
                 </div>
 
@@ -75,22 +79,24 @@
                 </div>
 
                 <div class="actions-row mt-4">
-                    <button type="submit" class="btn-admin">Save settings</button>
-                    <button type="button" class="btn-admin secondary" onclick="testAiConnection()">Test connection</button>
+                    <button type="submit" class="btn-admin">Save Changes</button>
+                    <button type="button" class="btn-admin secondary" onclick="testAiConnection()">Test Connection</button>
                 </div>
 
-                <div id="aiTestResult" class="field-help mt-3">Test the provider before refreshing translations when you change key, model, or base URL.</div>
+                <div id="aiTestResult" class="field-help mt-3">Validate the provider before refreshing translations when
+                    key, model, or base URL changes.</div>
             </form>
         </article>
 
         <article class="table-card">
             <h2 class="section-title">Workflow</h2>
-            <p class="section-copy">Fallback English is still available. AI is only used to improve labels and descriptions when this setting is enabled.</p>
+            <p class="section-copy">Fallback English labels remain available. AI only enriches labels and descriptions when
+                translation is enabled.</p>
 
             <div class="meta-list mt-4">
                 <div class="meta-row">
                     <span>Input</span>
-                    <strong>Server group names and descriptions</strong>
+                    <strong>Connector group names and descriptions</strong>
                 </div>
                 <div class="meta-row">
                     <span>Output</span>
@@ -102,7 +108,7 @@
                 </div>
                 <div class="meta-row">
                     <span>Storage</span>
-                    <strong>app_settings + translation caches + pricing cache</strong>
+                    <strong>`app_settings`, translation cache, and pricing cache</strong>
                 </div>
             </div>
         </article>

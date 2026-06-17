@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Tổng quan{% endblock %}
+{% block title %}Dashboard{% endblock %}
 {% block content %}
 <div class="page-header">
     <div>
@@ -12,13 +12,13 @@
                     <rect x="3" y="14" width="7" height="7"></rect>
                 </svg>
             </span>
-            Bảng điều khiển
+            Dashboard
         </h1>
-        <p class="page-subtitle">Tổng quan ngắn gọn theo ngày và tháng. Analytics chi tiết nằm ở trang riêng.</p>
+        <p class="page-subtitle">Commerce health at a glance: revenue, order flow, and API source availability for today and this month.</p>
     </div>
     <div class="page-actions">
-        <a href="/analytics" class="btn btn-outline-secondary">Analytics</a>
-        <a href="/orders" class="btn btn-primary">Đơn hàng</a>
+        <a href="/analytics" class="btn btn-outline-secondary">Revenue Analytics</a>
+        <a href="/orders" class="btn btn-primary">Orders</a>
     </div>
 </div>
 
@@ -27,7 +27,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ format_vnd(stats.today_revenue) }}</div>
-                <div class="stat-label">Doanh thu hôm nay</div>
+                <div class="stat-label">Revenue today</div>
             </div>
         </div>
     </div>
@@ -35,7 +35,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ format_vnd(stats.month_revenue) }}</div>
-                <div class="stat-label">Doanh thu tháng này</div>
+                <div class="stat-label">Revenue this month</div>
             </div>
         </div>
     </div>
@@ -43,7 +43,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ stats.today_orders }}</div>
-                <div class="stat-label">Đơn hôm nay</div>
+                <div class="stat-label">Orders today</div>
             </div>
         </div>
     </div>
@@ -51,7 +51,7 @@
         <div class="stat-card">
             <div class="stat-content">
                 <div class="stat-value">{{ stats.month_orders }}</div>
-                <div class="stat-label">Đơn tháng này</div>
+                <div class="stat-label">Orders this month</div>
             </div>
         </div>
     </div>
@@ -61,8 +61,8 @@
     <div class="col-12 col-lg-7">
         <div class="card h-100">
             <div class="card-header">
-                <h3>Trạng thái đơn hàng</h3>
-                <a href="/analytics" class="btn btn-sm btn-outline-secondary">Xem analytics</a>
+                <h3>Order Status</h3>
+                <a href="/analytics" class="btn btn-sm btn-outline-secondary">Open Analytics</a>
             </div>
             <div class="card-body">
                 {% set total_orders = stats.status_counts.values() | sum %}
@@ -71,7 +71,7 @@
                 <div class="order-status-row mb-3">
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="status-badge {{ status }}">
-                            {{ status_emoji(status) }} {{ status_text_vi(status) }}
+                            {{ status_emoji(status) }} {{ status|replace('_', ' ')|title }}
                         </span>
                         <span class="order-status-count">{{ count }}</span>
                     </div>
@@ -87,8 +87,8 @@
     <div class="col-12 col-lg-5">
         <div class="card h-100">
             <div class="card-header">
-                <h3>Máy chủ API</h3>
-                <a href="/servers" class="btn btn-sm btn-outline-secondary">Quản lý</a>
+                <h3>API Sources</h3>
+                <a href="/servers" class="btn btn-sm btn-outline-secondary">Manage Sources</a>
             </div>
             <div class="card-body" style="padding:0;">
                 {% for srv in stats.servers %}
@@ -105,7 +105,7 @@
                 {% endfor %}
                 {% if not stats.servers %}
                 <div class="empty-state" style="padding:2rem 1.25rem;">
-                    Chưa có máy chủ nào. <a href="/servers">Thêm ngay</a>
+                    No API sources configured yet. <a href="/servers">Create the first source</a>
                 </div>
                 {% endif %}
             </div>
@@ -115,7 +115,7 @@
 
 <div class="card">
     <div class="card-header">
-        <h3>Thao tác nhanh</h3>
+        <h3>Quick Actions</h3>
     </div>
     <div class="card-body">
         <div class="quick-actions-grid">
@@ -126,8 +126,8 @@
                         <path d="M7 13l4-4 3 3 5-7"></path>
                     </svg>
                 </div>
-                <div class="quick-action-label">Analytics</div>
-                <div class="quick-action-desc">KPI, xu hướng, top sản phẩm, top server</div>
+                <div class="quick-action-label">Revenue Analytics</div>
+                <div class="quick-action-desc">Review KPIs, trends, top products, and top sources.</div>
             </a>
             <a href="/products" class="quick-action-card">
                 <div class="quick-action-icon" style="background:linear-gradient(135deg,var(--primary-50),rgba(16,185,129,0.12)); color:var(--primary);">
@@ -136,8 +136,8 @@
                         <line x1="7" y1="7" x2="7.01" y2="7"></line>
                     </svg>
                 </div>
-                <div class="quick-action-label">Sản phẩm</div>
-                <div class="quick-action-desc">Thêm, sửa, xóa sản phẩm</div>
+                <div class="quick-action-label">Products</div>
+                <div class="quick-action-desc">Create, edit, or retire sellable product definitions.</div>
             </a>
             <a href="/orders" class="quick-action-card">
                 <div class="quick-action-icon" style="background:linear-gradient(135deg,var(--info-bg),rgba(14,165,233,0.12)); color:var(--info);">
@@ -146,8 +146,8 @@
                         <polyline points="14 2 14 8 20 8"></polyline>
                     </svg>
                 </div>
-                <div class="quick-action-label">Đơn hàng</div>
-                <div class="quick-action-desc">Theo dõi trạng thái và doanh thu</div>
+                <div class="quick-action-label">Orders</div>
+                <div class="quick-action-desc">Track payment state, fulfillment, and refunds.</div>
             </a>
             <a href="/servers" class="quick-action-card">
                 <div class="quick-action-icon" style="background:linear-gradient(135deg,rgba(139,92,246,0.08),rgba(139,92,246,0.14)); color:#7c3aed;">
@@ -158,8 +158,8 @@
                         <line x1="6" y1="18" x2="6.01" y2="18"></line>
                     </svg>
                 </div>
-                <div class="quick-action-label">Máy chủ API</div>
-                <div class="quick-action-desc">Cấu hình server và auth</div>
+                <div class="quick-action-label">API Sources</div>
+                <div class="quick-action-desc">Adjust source auth, group policy, and pricing rules.</div>
             </a>
         </div>
     </div>

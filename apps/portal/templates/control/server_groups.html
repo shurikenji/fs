@@ -1,18 +1,18 @@
 {% extends "control/base.html" %}
-{% block title %}Manage Groups{% endblock %}
+{% block title %}Group Visibility{% endblock %}
 
 {% block content %}
 <div x-data="serverGroupsPage()" x-cloak class="page-shell">
     <section class="page-header">
         <div>
-            <p class="page-eyebrow">Visibility controls</p>
-            <h1 class="page-title">Manage groups</h1>
-            <p class="page-subtitle">Control which groups from <strong>{{ server.name }}</strong> are visible in public pricing, key selection, and usage logs.</p>
+            <p class="page-eyebrow">Connector policy</p>
+            <h1 class="page-title">Group Visibility</h1>
+            <p class="page-subtitle">Control which groups from <strong>{{ server.name }}</strong> are exposed to public pricing, key selection, and usage log workflows.</p>
         </div>
         <div class="page-actions">
-            <a href="/control/servers" class="btn-admin secondary">Back to servers</a>
+            <a href="/control/servers" class="btn-admin secondary">Back to Connectors</a>
             <form method="POST" action="/control/servers/{{ server.id }}/groups/refresh">
-                <button type="submit" class="btn-admin ghost">Refresh catalog</button>
+                <button type="submit" class="btn-admin ghost">Refresh Catalog</button>
             </form>
         </div>
     </section>
@@ -24,27 +24,27 @@
                 <span class="badge-soft success"><span x-text="visibleGroups.length"></span> visible</span>
                 <span class="badge-soft warn"><span x-text="groups.length - visibleGroups.length"></span> hidden</span>
             </div>
-            <div class="muted">Server: <span class="code-block">{{ server.id }}</span></div>
+            <div class="muted">Connector ID: <span class="code-block">{{ server.id }}</span></div>
         </div>
         {% if server.manual_groups %}
-        <p class="field-help">Manual group override is active. Visibility toggles are applied after this manual list: <span class="code-block">{{ server.manual_groups }}</span></p>
+        <p class="field-help">Manual group override is active. Visibility rules are evaluated after this allowlist: <span class="code-block">{{ server.manual_groups }}</span></p>
         {% endif %}
         <div class="field-grid mt-4" style="grid-template-columns: 1.3fr auto auto auto auto;">
             <div>
-                <label class="form-label">Search groups</label>
+                <label class="form-label">Search Groups</label>
                 <input type="text" class="form-control" placeholder="Filter by name, label, category, or description" x-model="query">
             </div>
             <div class="actions-row" style="align-items: end;">
-                <button type="button" class="btn-admin secondary" @click="enableAll()">Enable all</button>
+                <button type="button" class="btn-admin secondary" @click="enableAll()">Enable All</button>
             </div>
             <div class="actions-row" style="align-items: end;">
-                <button type="button" class="btn-admin ghost" @click="selectFiltered()">Select filtered</button>
+                <button type="button" class="btn-admin ghost" @click="selectFiltered()">Select Filtered</button>
             </div>
             <div class="actions-row" style="align-items: end;">
-                <button type="button" class="btn-admin ghost" @click="clearSelection()">Clear selection</button>
+                <button type="button" class="btn-admin ghost" @click="clearSelection()">Clear Selection</button>
             </div>
             <div class="actions-row" style="align-items: end;">
-                <button type="button" class="btn-admin ghost" @click="disableSelected()">Disable selected</button>
+                <button type="button" class="btn-admin ghost" @click="disableSelected()">Hide Selected</button>
             </div>
         </div>
     </section>
@@ -53,10 +53,10 @@
         <form method="POST" action="/control/servers/{{ server.id }}/groups/save" class="table-card">
             <div class="actions-row" style="justify-content: space-between;">
                 <div>
-                    <h2 class="section-title">Catalog groups</h2>
-                    <p class="section-copy">Unchecked rows are hidden from public pages and public APIs only. Admin still sees the full catalog.</p>
+                    <h2 class="section-title">Imported Group Catalog</h2>
+                    <p class="section-copy">Unchecked rows stay available in admin context only and are removed from public-facing pricing data.</p>
                 </div>
-                <button type="submit" class="btn-admin">Save visibility</button>
+                <button type="submit" class="btn-admin">Save Changes</button>
             </div>
             <div class="table-responsive mt-4">
                 <table class="table align-middle">
@@ -96,7 +96,7 @@
 
     <template x-if="!groups.length">
         <section class="table-card">
-            <div class="empty-state">No group catalog found yet. Sync or refresh the server first.</div>
+            <div class="empty-state">No group catalog is available yet. Run a connector sync or refresh the imported catalog first.</div>
         </section>
     </template>
 </div>

@@ -1,5 +1,5 @@
 """
-admin/routers/products.py - CRUD sản phẩm.
+admin/routers/products.py - Product CRUD routes.
 """
 from __future__ import annotations
 
@@ -42,25 +42,25 @@ def _build_flash_context(request: Request) -> dict:
 
     if msg == "deleted":
         return {
-            "flash_message": "Đã xoá sản phẩm thành công.",
+            "flash_message": "Product deleted successfully.",
             "flash_type": "success",
         }
 
     if error == "not_found":
         return {
-            "flash_message": "Sản phẩm không tồn tại hoặc đã bị xoá.",
+            "flash_message": "Product was not found or has already been removed.",
             "flash_type": "warning",
         }
 
     if error == "invalid_category":
         return {
-            "flash_message": "Danh mục không tồn tại hoặc đã bị xoá.",
+            "flash_message": "Selected category was not found or has already been removed.",
             "flash_type": "danger",
         }
 
     if error == "invalid_product_type":
         return {
-            "flash_message": "Loại sản phẩm không hợp lệ với danh mục đã chọn.",
+            "flash_message": "Selected product type is not valid for this category.",
             "flash_type": "danger",
         }
 
@@ -70,21 +70,21 @@ def _build_flash_context(request: Request) -> dict:
         chatgpt_accounts = int(request.query_params.get("chatgpt_accounts", 0))
         blockers = []
         if orders:
-            blockers.append(f"{orders} order")
+            blockers.append(f"{orders} order records")
         if account_stocks:
-            blockers.append(f"{account_stocks} account stock")
+            blockers.append(f"{account_stocks} account stock rows")
         if chatgpt_accounts:
-            blockers.append(f"{chatgpt_accounts} legacy account")
+            blockers.append(f"{chatgpt_accounts} legacy accounts")
 
-        detail = ", ".join(blockers) if blockers else "dữ liệu liên quan"
+        detail = ", ".join(blockers) if blockers else "linked records"
         return {
-            "flash_message": f"Không thể xoá sản phẩm vì còn {detail}. Hãy tắt sản phẩm thay vì xoá cứng.",
+            "flash_message": f"Product cannot be deleted because {detail} still reference it. Disable the product instead of hard deleting it.",
             "flash_type": "danger",
         }
 
     if error == "delete_failed":
         return {
-            "flash_message": "Xoá sản phẩm thất bại do lỗi ràng buộc dữ liệu.",
+            "flash_message": "Product delete failed due to a data integrity constraint.",
             "flash_type": "danger",
         }
 

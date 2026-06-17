@@ -1,16 +1,17 @@
 {% extends "portal_base.html" %}
-{% block title %}Shupremium — AI Pricing & Tools{% endblock %}
+{% block title %}Shupremium - Overview{% endblock %}
 
 {% block content %}
 <div class="page-stack">
     <section class="hero-section fade-up">
-        <h1 class="page-title">Find the right AI model<br>at the right price.</h1>
+        <p class="page-eyebrow" style="justify-content:center;">Overview</p>
+        <h1 class="page-title">AI pricing, balance checks,<br>and key operations in one workspace.</h1>
         <p class="page-subtitle">
-            Compare pricing across providers, check your balance, and manage API keys — all in one place.
+            Browse live pricing catalogs, resolve keys, verify balance, and review usage flows without switching tools.
         </p>
         <div class="hero-actions">
-            <a href="/pricing" class="button button--lg">Explore pricing</a>
-            <a href="/check" class="button-secondary button--lg">Check balance</a>
+            <a href="/pricing" class="button button--lg">Open Pricing Explorer</a>
+            <a href="/keys" class="button-secondary button--lg">Open Key Tools</a>
         </div>
     </section>
 
@@ -22,11 +23,11 @@
                     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
                 </svg>
             </div>
-            <h2 class="feature-card__title">Compare model pricing</h2>
-            <p class="feature-card__desc">Browse current rates for AI models across all available sources. Filter by
-                provider, type, or pricing mode.</p>
+            <h2 class="feature-card__title">Pricing Explorer</h2>
+            <p class="feature-card__desc">Search model catalogs across enabled sources. Compare provider, pricing mode,
+                endpoint coverage, and group-specific rates.</p>
             <a href="/pricing" class="feature-card__link">
-                View pricing
+                Open explorer
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round">
                     <path d="M5 12h14M12 5l7 7-7 7" />
@@ -42,11 +43,11 @@
                     <path d="M2 10h20" />
                 </svg>
             </div>
-            <h2 class="feature-card__title">Check your balance</h2>
-            <p class="feature-card__desc">See how much credit you have left on any API key. Just pick a source and paste
-                your key.</p>
+            <h2 class="feature-card__title">Balance Check</h2>
+            <p class="feature-card__desc">Validate remaining credit on a specific key before routing traffic, rotating
+                credentials, or raising spend limits.</p>
             <a href="/check" class="feature-card__link">
-                Check now
+                Check balance
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round">
                     <path d="M5 12h14M12 5l7 7-7 7" />
@@ -62,9 +63,9 @@
                         d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
                 </svg>
             </div>
-            <h2 class="feature-card__title">Manage API keys</h2>
-            <p class="feature-card__desc">Check which group your key belongs to and switch it when you need a different
-                pricing tier.</p>
+            <h2 class="feature-card__title">Key Tools</h2>
+            <p class="feature-card__desc">Resolve key-to-group mapping, update tier selection, and confirm what public
+                pricing policy is applied to each credential.</p>
             <a href="/keys" class="feature-card__link">
                 Open key tools
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -80,9 +81,9 @@
         <div class="panel-heading">
             <div>
                 <h2 class="panel-title">Available sources</h2>
-                <p class="panel-copy">These are the pricing sources you can browse right now.</p>
+                <p class="panel-copy">These connectors are currently visible to the public pricing workspace.</p>
             </div>
-            <a href="/pricing" class="button-secondary">View all pricing</a>
+            <a href="/pricing" class="button-secondary">Browse all sources</a>
         </div>
         <div class="chip-cloud">
             {% for item in featured_servers %}
@@ -93,21 +94,22 @@
     {% endif %}
 
     <section class="fade-up">
-        <h2 class="section-title" style="text-align:center; margin-bottom: var(--space-6);">How it works</h2>
+        <h2 class="section-title" style="text-align:center; margin-bottom: var(--space-6);">How the workspace flows</h2>
         <div class="steps">
             <div class="step">
-                <h3 class="step__title">Browse pricing</h3>
-                <p class="step__desc">Pick a source and compare model rates side by side. Filter by type, provider, or
-                    price range.</p>
+                <h3 class="step__title">Explore models</h3>
+                <p class="step__desc">Start with a pricing source, then inspect model cost, billing mode, public
+                    endpoints, and group visibility.</p>
             </div>
             <div class="step">
-                <h3 class="step__title">Check your balance</h3>
-                <p class="step__desc">Paste an API key to see your remaining credit before making any changes.</p>
+                <h3 class="step__title">Validate keys</h3>
+                <p class="step__desc">Resolve the active key mapping, confirm the applied group chain, and update it when
+                    you need a different runtime policy.</p>
             </div>
             <div class="step">
-                <h3 class="step__title">Manage your keys</h3>
-                <p class="step__desc">Inspect your current group assignment and switch to a different tier when needed.
-                </p>
+                <h3 class="step__title">Review activity</h3>
+                <p class="step__desc">Use balance and logs to verify spend, trace usage, and confirm the next action
+                    before routing more traffic.</p>
             </div>
         </div>
     </section>

@@ -1,44 +1,45 @@
 {% extends "control/base.html" %}
-{% block title %}Tổng quan{% endblock %}
+{% block title %}Overview{% endblock %}
 
 {% block content %}
 <div class="page-shell">
     <section class="page-header">
         <div>
-            <p class="page-eyebrow">Điều hành hệ thống</p>
-            <h1 class="page-title">Tổng quan Pricing Hub</h1>
-            <p class="page-subtitle">Theo dõi server đang bật, translation cache, và các lần sync gần nhất.</p>
+            <p class="page-eyebrow">Runtime overview</p>
+            <h1 class="page-title">Pricing Runtime Overview</h1>
+            <p class="page-subtitle">Track enabled connectors, cached translations, and the most recent runtime sync
+                attempts.</p>
         </div>
         <div class="page-actions">
-            <a href="/control/servers" class="btn-admin">Quản lý máy chủ</a>
+            <a href="/control/servers" class="btn-admin">Open Connectors</a>
         </div>
     </section>
 
     <section class="stats-grid">
         <article class="stat-card">
-            <span class="stat-card__label">Enabled servers</span>
+            <span class="stat-card__label">Enabled connectors</span>
             <div class="stat-card__value">{{ enabled_server_count }}</div>
-            <div class="stat-card__copy">Nguồn dữ liệu đang bật cho pricing, logs, và key lookup.</div>
+            <div class="stat-card__copy">Connectors currently exposed for pricing, logs, balance, and key resolution.</div>
         </article>
         <article class="stat-card">
             <span class="stat-card__label">Cached translations</span>
             <div class="stat-card__value">{{ cached_translation_count }}</div>
-            <div class="stat-card__copy">Số label nhóm đã lưu trong translation cache.</div>
+            <div class="stat-card__copy">Translated group labels cached for public pricing pages.</div>
         </article>
         <article class="stat-card">
             <span class="stat-card__label">Recent syncs</span>
             <div class="stat-card__value">{{ recent_sync_logs | length }}</div>
-            <div class="stat-card__copy">Số lần đồng bộ gần nhất đang hiển thị bên dưới.</div>
+            <div class="stat-card__copy">Latest sync runs currently shown in the activity table below.</div>
         </article>
     </section>
 
     <section class="split-grid">
         <article class="admin-card">
-            <h2 class="section-title">Tác vụ nhanh</h2>
-            <p class="section-copy">Các thao tác quản trị cần dùng thường xuyên.</p>
+            <h2 class="section-title">Quick actions</h2>
+            <p class="section-copy">High-frequency runtime tasks for connector operations.</p>
 
             <div class="actions-row mt-4">
-                <a href="/control/servers" class="btn-admin secondary">Mở danh sách máy chủ</a>
+                <a href="/control/servers" class="btn-admin secondary">Open connector inventory</a>
             </div>
 
             <form method="POST" action="/control/translations/refresh" class="mt-4">
@@ -47,18 +48,18 @@
         </article>
 
         <article class="table-card">
-            <h2 class="section-title">Sync gần đây</h2>
-            <p class="section-copy">Theo dõi trạng thái và thời lượng của từng lần sync.</p>
+            <h2 class="section-title">Recent sync runs</h2>
+            <p class="section-copy">Review trigger source, duration, and result for recent connector sync jobs.</p>
 
             {% if recent_sync_logs %}
             <div class="table-wrap mt-3">
                 <table class="admin-table">
                     <thead>
                         <tr>
-                            <th>Thời gian</th>
-                            <th>Server</th>
-                            <th>Source</th>
-                            <th>Trạng thái</th>
+                            <th>Created</th>
+                            <th>Source ID</th>
+                            <th>Trigger</th>
+                            <th>Status</th>
                             <th>Models</th>
                             <th>Groups</th>
                             <th>Duration</th>
@@ -95,7 +96,7 @@
                 </table>
             </div>
             {% else %}
-            <div class="empty-state">Chưa có lịch sử đồng bộ.</div>
+            <div class="empty-state">No sync history has been recorded yet.</div>
             {% endif %}
         </article>
     </section>

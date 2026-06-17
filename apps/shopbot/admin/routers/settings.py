@@ -49,7 +49,7 @@ _EDITABLE_KEYS = [
 
 _AI_PROVIDERS = [
     {"value": "openai", "label": "OpenAI"},
-    {"value": "openai_compatible", "label": "Tương thích OpenAI (Ollama, LM Studio...)"},
+    {"value": "openai_compatible", "label": "OpenAI Compatible (Ollama, LM Studio, custom gateways)"},
     {"value": "anthropic", "label": "Anthropic"},
     {"value": "gemini", "label": "Google Gemini"},
 ]
@@ -68,7 +68,7 @@ _AI_MODELS = {
 
 @router.get("", response_class=HTMLResponse)
 async def settings_page(request: Request):
-    flash_message = "Đã lưu cài đặt thành công." if request.query_params.get("saved") == "1" else None
+    flash_message = "Settings saved successfully." if request.query_params.get("saved") == "1" else None
     templates = get_templates()
     return templates.TemplateResponse(
         "settings.html",

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form, entity_state_checkbox %}
-{% block title %}Danh mục{% endblock %}
+{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form %}
+{% block title %}Categories{% endblock %}
 {% block content %}
 
 <div class="page-header animate-fade-up">
@@ -11,9 +11,9 @@
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                 </svg>
             </span>
-            Danh mục sản phẩm
+            Categories
         </h1>
-        <p class="page-subtitle">Quản lý danh mục và phân loại sản phẩm trong hệ thống.</p>
+        <p class="page-subtitle">Manage product taxonomy, icon grouping, and ordering for the commerce catalog.</p>
     </div>
     <div class="page-actions">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
@@ -21,12 +21,11 @@
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Thêm danh mục
+            Create Category
         </button>
     </div>
 </div>
 
-<!-- KPI Row -->
 <div class="kpi-grid animate-fade-up">
     <div class="stat-card">
         <div class="stat-icon emerald">
@@ -34,7 +33,7 @@
         </div>
         <div class="stat-content">
             <div class="stat-value">{{ categories|length }}</div>
-            <div class="stat-label">Tổng danh mục</div>
+            <div class="stat-label">Total categories</div>
         </div>
     </div>
     <div class="stat-card">
@@ -43,7 +42,7 @@
         </div>
         <div class="stat-content">
             <div class="stat-value">{{ categories | selectattr('cat_type', 'eq', 'key_api') | list | length }}</div>
-            <div class="stat-label">Key API</div>
+            <div class="stat-label">API key categories</div>
         </div>
     </div>
     <div class="stat-card">
@@ -52,12 +51,11 @@
         </div>
         <div class="stat-content">
             <div class="stat-value">{{ categories | selectattr('is_active') | list | length }}</div>
-            <div class="stat-label">Đang bật</div>
+            <div class="stat-label">Enabled</div>
         </div>
     </div>
 </div>
 
-<!-- Categories Table -->
 <div class="table-card animate-fade-up">
     {% if categories %}
     <table class="table table-responsive-cards">
@@ -65,11 +63,11 @@
             <tr>
                 <th style="width: 60px;">#</th>
                 <th style="width: 70px;">Icon</th>
-                <th>Tên & Mô tả</th>
-                <th style="width: 130px;">Loại</th>
-                <th style="width: 90px;">Thứ tự</th>
-                <th style="width: 110px;">Trạng thái</th>
-                <th style="width: 160px;">Thao tác</th>
+                <th>Name & Summary</th>
+                <th style="width: 130px;">Type</th>
+                <th style="width: 90px;">Sort</th>
+                <th style="width: 110px;">State</th>
+                <th style="width: 160px;">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -82,21 +80,21 @@
                 <td data-label="Icon">
                     <span class="cell-icon-lg">{{ c.icon }}</span>
                 </td>
-                <td data-label="Tên & Mô tả">
+                <td data-label="Name & Summary">
                     <div class="cell-name">{{ c.name }}</div>
-                    <div class="cell-meta cell-truncate" style="max-width:320px;">{{ c.description or '— Không có mô tả' }}</div>
+                    <div class="cell-meta cell-truncate" style="max-width:320px;">{{ c.description or 'No description added.' }}</div>
                 </td>
-                <td data-label="Loại">
+                <td data-label="Type">
                     {% if c.cat_type == 'key_api' %}
-                    <span class="badge badge-warning">🔑 Key API</span>
+                    <span class="badge badge-warning">API Key</span>
                     {% else %}
-                    <span class="badge badge-secondary">🗂️ Tổng quát</span>
+                    <span class="badge badge-secondary">General</span>
                     {% endif %}
                 </td>
-                <td data-label="Thứ tự">
+                <td data-label="Sort">
                     <span class="cell-sort">{{ c.sort_order }}</span>
                 </td>
-                <td data-label="Trạng thái">{{ entity_state_badge(c.is_active) }}</td>
+                <td data-label="State">{{ entity_state_badge(c.is_active) }}</td>
                 <td data-label="">
                     <div class="actions">
                         {{ entity_toggle_form('/categories/' ~ c.id ~ '/toggle-active', c.is_active, next_url) }}
@@ -105,8 +103,8 @@
                             class="btn btn-sm btn-outline-primary"
                             data-edit-modal-url="/categories/{{ c.id }}/edit-modal"
                             data-edit-modal-init="initializeCategoriesEditModal"
-                        >Sửa</a>
-                        <a href="/categories/{{ c.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Xóa</a>
+                        >Edit</a>
+                        <a href="/categories/{{ c.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Delete</a>
                     </div>
                 </td>
             </tr>
@@ -116,14 +114,13 @@
     {% else %}
     <div class="empty-state">
         <div class="icon">📁</div>
-        <h4>Chưa có danh mục nào</h4>
-        <p>Tạo danh mục đầu tiên để phân loại sản phẩm.</p>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">Thêm danh mục đầu tiên</button>
+        <h4>No categories created yet</h4>
+        <p>Create the first category to structure products in the storefront.</p>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">Create First Category</button>
     </div>
     {% endif %}
 </div>
 
-<!-- Add Modal -->
 <div class="modal fade" id="addModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -131,43 +128,43 @@
                 <div class="modal-header">
                     <h5 class="modal-title">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem; color: var(--primary);"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                        Thêm danh mục mới
+                        Create Category
                     </h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" style="display: grid; gap: 1rem;">
                     <div class="form-group">
-                        <label class="form-label">Tên danh mục <span style="color: var(--danger);">*</span></label>
-                        <input name="name" class="form-control" required placeholder="Ví dụ: API ChatGPT">
+                        <label class="form-label">Category name <span style="color: var(--danger);">*</span></label>
+                        <input name="name" class="form-control" required placeholder="Example: GPT API Keys">
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                         <div class="form-group">
-                            <label class="form-label">Icon (Emoji)</label>
+                            <label class="form-label">Icon</label>
                             <input name="icon" class="form-control" value="📦" placeholder="📦" style="font-size: 1.25rem; text-align: center;">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Loại danh mục</label>
+                            <label class="form-label">Category type</label>
                             <select name="cat_type" class="form-select">
-                                <option value="general">🗂️ Tổng quát</option>
-                                <option value="key_api">🔑 Key API</option>
+                                <option value="general">General</option>
+                                <option value="key_api">API Key</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Mô tả</label>
-                        <textarea name="description" class="form-control" rows="2" placeholder="Mô tả ngắn về danh mục..."></textarea>
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" rows="2" placeholder="Short operator-facing summary for this category..."></textarea>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Thứ tự hiển thị</label>
+                        <label class="form-label">Sort order</label>
                         <input name="sort_order" type="number" class="form-control" value="0">
-                        <div class="form-text">Số nhỏ hơn sẽ hiển thị trước (0 = mặc định).</div>
+                        <div class="form-text">Lower values appear first. Use `0` as the default.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-primary">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                        Tạo danh mục
+                        Create Category
                     </button>
                 </div>
             </form>
@@ -181,7 +178,7 @@
 
 <script>
 function confirmDelete() {
-    return confirm('Bạn có chắc muốn xóa danh mục này? Hành động này không thể hoàn tác.');
+    return confirm('Delete this category? This action cannot be undone.');
 }
 
 function initializeCategoriesEditModal() {}
