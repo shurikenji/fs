@@ -5,14 +5,180 @@
 
 {% block content %}
 {% set form = source_form or {} %}
-<div class="page-stack">
+<div
+    class="page-stack"
+    x-data="pricingSourcesPage({{ 'true' if form else 'false' }})"
+    x-init="init()"
+>
+    <script id="pricing-sources-catalog" type="application/json">{{ sources|tojson }}</script>
+    <script id="pricing-source-initial-form" type="application/json">{{ form|tojson }}</script>
+    <template x-teleport="body">
+        <div
+            x-show="modalOpen"
+            x-transition.opacity
+            class="modal-backdrop"
+            @click.self="closeModal()"
+            @keydown.escape.window="closeModal()"
+            style="display:none;"
+        >
+            <div class="modal-dialog pricing-source-modal" x-show="modalOpen" x-transition @click.stop>
+                <div class="modal-header">
+                    <div>
+                        <h2 class="panel-title" x-text="modalTitle"></h2>
+                        <p class="panel-copy" style="margin-top:6px;">Update connector metadata, endpoint paths, and public visibility flags without leaving the source registry.</p>
+                    </div>
+                    <button class="button-ghost" type="button" @click="closeModal()" style="height:28px; padding:0 8px; font-size:18px; line-height:1;">&times;</button>
+                </div>
+
+                <form method="POST" action="/control/pricing/sources/save" class="modal-body">
+                    <div class="modal-note">
+                        All changes continue to post to the existing pricing runtime admin endpoint and keep the current sync/import workflow unchanged.
+                    </div>
+
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">Source ID</label>
+                            <input class="control" type="text" name="source_id" x-model="sf.source_id" required :readonly="sf.isEdit" :style="sf.isEdit && 'opacity:0.6'">
+                        </div>
+                        <div>
+                            <label class="field-label">Display name</label>
+                            <input class="control" type="text" name="name" x-model="sf.name" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Source type</label>
+                            <select class="control select-control" name="source_type" x-model="sf.source_type">
+                                {% for option in server_types %}
+                                <option value="{{ option.value }}">{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-grid-3">
+                        <div class="field-span-2">
+                            <label class="field-label">Upstream base URL</label>
+                            <input class="control code-text" type="url" name="upstream_base_url" x-model="sf.upstream_base_url" required>
+                        </div>
+                        <div>
+                            <label class="field-label">Public base URL</label>
+                            <input class="control code-text" type="url" name="public_base_url" x-model="sf.public_base_url">
+                        </div>
+                    </div>
+
+                    <div class="modal-grid-4">
+                        <div>
+                            <label class="field-label">Sort order</label>
+                            <input class="control" type="number" name="sort_order" x-model="sf.sort_order">
+                        </div>
+                        <div>
+                            <label class="field-label">Quota multiple</label>
+                            <input class="control" type="number" step="0.01" min="0.01" name="quota_multiple" x-model="sf.quota_multiple">
+                        </div>
+                        <div>
+                            <label class="field-label">Balance rate</label>
+                            <input class="control" type="number" step="0.01" min="0.01" name="balance_rate" x-model="sf.balance_rate">
+                        </div>
+                        <div>
+                            <label class="field-label">Auth mode</label>
+                            <select class="control select-control" name="auth_mode" x-model="sf.auth_mode">
+                                {% for option in auth_modes %}
+                                <option value="{{ option.value }}">{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="modal-grid-4">
+                        <div>
+                            <label class="field-label">Auth user header</label>
+                            <input class="control code-text" type="text" name="auth_user_header" x-model="sf.auth_user_header">
+                        </div>
+                        <div>
+                            <label class="field-label">Auth user value</label>
+                            <input class="control" type="text" name="auth_user_value" x-model="sf.auth_user_value">
+                        </div>
+                        <div>
+                            <label class="field-label">Auth token</label>
+                            <input class="control code-text" type="text" name="auth_token" x-model="sf.auth_token">
+                        </div>
+                        <div>
+                            <label class="field-label">Auth cookie</label>
+                            <input class="control code-text" type="text" name="auth_cookie" x-model="sf.auth_cookie">
+                        </div>
+                    </div>
+
+                    <div class="modal-grid-4">
+                        <div>
+                            <label class="field-label">Pricing path</label>
+                            <input class="control code-text" type="text" name="pricing_path" x-model="sf.pricing_path">
+                        </div>
+                        <div>
+                            <label class="field-label">Ratio config path</label>
+                            <input class="control code-text" type="text" name="ratio_config_path" x-model="sf.ratio_config_path">
+                        </div>
+                        <div>
+                            <label class="field-label">Log path</label>
+                            <input class="control code-text" type="text" name="log_path" x-model="sf.log_path">
+                        </div>
+                        <div>
+                            <label class="field-label">Token search path</label>
+                            <input class="control code-text" type="text" name="token_search_path" x-model="sf.token_search_path">
+                        </div>
+                    </div>
+
+                    <div class="modal-grid-2">
+                        <div>
+                            <label class="field-label">Groups path</label>
+                            <input class="control code-text" type="text" name="groups_path" x-model="sf.groups_path" placeholder="/api/user/self/groups">
+                        </div>
+                        <div>
+                            <label class="field-label">Manual groups</label>
+                            <input class="control code-text" type="text" name="manual_groups" x-model="sf.manual_groups" placeholder='["default","premium"] or comma list'>
+                        </div>
+                    </div>
+
+                    <div class="modal-grid-2">
+                        <div>
+                            <label class="field-label">Hidden groups JSON</label>
+                            <textarea class="control textarea-control code-text" name="hidden_groups" rows="4" x-model="sf.hidden_groups"></textarea>
+                        </div>
+                        <div>
+                            <label class="field-label">Excluded models JSON</label>
+                            <textarea class="control textarea-control code-text" name="excluded_models" rows="4" x-model="sf.excluded_models"></textarea>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="field-label">Notes</label>
+                        <textarea class="control textarea-control" name="notes" rows="4" x-model="sf.notes"></textarea>
+                    </div>
+
+                    <div class="modal-toggle-grid">
+                        <label><input type="checkbox" name="enabled" :checked="sf.enabled"> Enabled</label>
+                        <label><input type="checkbox" name="supports_group_chain" :checked="sf.supports_group_chain"> Supports group chain</label>
+                        <label><input type="checkbox" name="ratio_config_enabled" :checked="sf.ratio_config_enabled"> Ratio config enabled</label>
+                        <label><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Public pricing enabled</label>
+                        <label><input type="checkbox" name="public_balance_enabled" :checked="sf.public_balance_enabled"> Public balance enabled</label>
+                        <label><input type="checkbox" name="public_keys_enabled" :checked="sf.public_keys_enabled"> Public keys enabled</label>
+                        <label><input type="checkbox" name="public_logs_enabled" :checked="sf.public_logs_enabled"> Public logs enabled</label>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button type="button" class="button-secondary" @click="closeModal()">Cancel</button>
+                        <button type="submit" class="button" x-text="sf.isEdit ? 'Save Changes' : 'Create Source'"></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </template>
+
     <section class="page-head">
         <div>
             <h1 class="page-title">Pricing Sources</h1>
             <p class="page-subtitle">Control-plane source of truth for pricing connectors, advanced metadata, and runtime sync actions.</p>
         </div>
         <div class="page-actions">
-            <a class="button-secondary" href="/control/pricing/sources">New source</a>
+            <a class="button-secondary" href="/control/pricing/sources" @click.prevent="openCreate()">New source</a>
             <form method="POST" action="/control/pricing/sources/import-runtime">
                 <button type="submit" class="button-secondary">Import Runtime</button>
             </form>
@@ -89,7 +255,7 @@
                         </td>
                         <td>
                             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                                <a class="button-secondary" href="/control/pricing/sources?edit={{ source.id }}">Edit</a>
+                                <a class="button-secondary" href="/control/pricing/sources?edit={{ source.id }}" @click.prevent="openEdit('{{ source.id }}')">Edit</a>
                                 <a class="button-secondary" href="/control/pricing/sources/{{ source.id }}/groups">Groups</a>
                                 <a class="button-secondary" href="/control/pricing/sources/{{ source.id }}/models">Models</a>
                                 <form method="POST" action="/control/pricing/sources/{{ source.id }}/sync">
@@ -107,148 +273,258 @@
             </table>
         </div>
     </section>
-
-    <section class="shell-card">
-        <div class="panel-heading">
-            <div>
-                <h2 class="panel-title">{% if form %}Edit pricing source{% else %}Create pricing source{% endif %}</h2>
-                <p class="panel-copy">All fields here are pushed into pricing runtime through the internal admin bridge.</p>
-            </div>
-        </div>
-        <form method="POST" action="/control/pricing/sources/save" style="display:grid; gap:24px;">
-            <div style="display:grid; gap:16px; grid-template-columns: repeat(3, minmax(0, 1fr));">
-                <div>
-                    <label class="field-label">Source ID</label>
-                    <input class="control" type="text" name="source_id" value="{{ form.id or '' }}" {% if form %}readonly{% endif %} required>
-                </div>
-                <div>
-                    <label class="field-label">Display name</label>
-                    <input class="control" type="text" name="name" value="{{ form.name or '' }}" required>
-                </div>
-                <div>
-                    <label class="field-label">Source type</label>
-                    <select class="control select-control" name="source_type">
-                        {% for option in server_types %}
-                        <option value="{{ option.value }}" {% if (form.source_type or 'newapi') == option.value %}selected{% endif %}>{{ option.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div style="display:grid; gap:16px; grid-template-columns: repeat(3, minmax(0, 1fr));">
-                <div style="grid-column: span 2;">
-                    <label class="field-label">Upstream base URL</label>
-                    <input class="control code-text" type="url" name="upstream_base_url" value="{{ form.upstream_base_url or '' }}" required>
-                </div>
-                <div>
-                    <label class="field-label">Public base URL</label>
-                    <input class="control code-text" type="url" name="public_base_url" value="{{ form.public_base_url or '' }}">
-                </div>
-            </div>
-
-            <div style="display:grid; gap:16px; grid-template-columns: repeat(4, minmax(0, 1fr));">
-                <div>
-                    <label class="field-label">Sort order</label>
-                    <input class="control" type="number" name="sort_order" value="{{ form.sort_order or 0 }}">
-                </div>
-                <div>
-                    <label class="field-label">Quota multiple</label>
-                    <input class="control" type="number" step="0.01" min="0.01" name="quota_multiple" value="{{ form.quota_multiple or 1.0 }}">
-                </div>
-                <div>
-                    <label class="field-label">Balance rate</label>
-                    <input class="control" type="number" step="0.01" min="0.01" name="balance_rate" value="{{ form.balance_rate or 1.0 }}">
-                </div>
-                <div>
-                    <label class="field-label">Auth mode</label>
-                    <select class="control select-control" name="auth_mode">
-                        {% for option in auth_modes %}
-                        <option value="{{ option.value }}" {% if (form.auth_mode or 'header') == option.value %}selected{% endif %}>{{ option.label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-
-            <div style="display:grid; gap:16px; grid-template-columns: repeat(4, minmax(0, 1fr));">
-                <div>
-                    <label class="field-label">Auth user header</label>
-                    <input class="control code-text" type="text" name="auth_user_header" value="{{ form.auth_user_header or '' }}">
-                </div>
-                <div>
-                    <label class="field-label">Auth user value</label>
-                    <input class="control" type="text" name="auth_user_value" value="{{ form.auth_user_value or '' }}">
-                </div>
-                <div>
-                    <label class="field-label">Auth token</label>
-                    <input class="control code-text" type="text" name="auth_token" value="{{ form.auth_token or '' }}">
-                </div>
-                <div>
-                    <label class="field-label">Auth cookie</label>
-                    <input class="control code-text" type="text" name="auth_cookie" value="{{ form.auth_cookie or '' }}">
-                </div>
-            </div>
-
-            <div style="display:grid; gap:16px; grid-template-columns: repeat(4, minmax(0, 1fr));">
-                <div>
-                    <label class="field-label">Pricing path</label>
-                    <input class="control code-text" type="text" name="pricing_path" value="{{ form.pricing_path or '/api/pricing' }}">
-                </div>
-                <div>
-                    <label class="field-label">Ratio config path</label>
-                    <input class="control code-text" type="text" name="ratio_config_path" value="{{ form.ratio_config_path or '/api/ratio_config' }}">
-                </div>
-                <div>
-                    <label class="field-label">Log path</label>
-                    <input class="control code-text" type="text" name="log_path" value="{{ form.log_path or '/api/log/self' }}">
-                </div>
-                <div>
-                    <label class="field-label">Token search path</label>
-                    <input class="control code-text" type="text" name="token_search_path" value="{{ form.token_search_path or '/api/token/search' }}">
-                </div>
-            </div>
-
-            <div style="display:grid; gap:16px; grid-template-columns: repeat(2, minmax(0, 1fr));">
-                <div>
-                    <label class="field-label">Groups path</label>
-                    <input class="control code-text" type="text" name="groups_path" value="{{ form.groups_path or '' }}" placeholder="/api/user/self/groups">
-                </div>
-                <div>
-                    <label class="field-label">Manual groups</label>
-                    <input class="control code-text" type="text" name="manual_groups" value="{{ form.manual_groups or '' }}" placeholder='["default","premium"] or comma list'>
-                </div>
-            </div>
-
-            <div style="display:grid; gap:16px; grid-template-columns: repeat(2, minmax(0, 1fr));">
-                <div>
-                    <label class="field-label">Hidden groups JSON</label>
-                    <textarea class="control textarea-control code-text" name="hidden_groups" rows="4">{{ form.hidden_groups or '[]' }}</textarea>
-                </div>
-                <div>
-                    <label class="field-label">Excluded models JSON</label>
-                    <textarea class="control textarea-control code-text" name="excluded_models" rows="4">{{ form.excluded_models or '[]' }}</textarea>
-                </div>
-            </div>
-
-            <div>
-                <label class="field-label">Notes</label>
-                <textarea class="control textarea-control" name="notes" rows="4">{{ form.notes or '' }}</textarea>
-            </div>
-
-            <div style="display:flex; gap:18px; flex-wrap:wrap;">
-                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="enabled" {% if (form.enabled or not form) %}checked{% endif %}> Enabled</label>
-                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="supports_group_chain" {% if form.supports_group_chain %}checked{% endif %}> Supports group chain</label>
-                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="ratio_config_enabled" {% if form.ratio_config_enabled %}checked{% endif %}> Ratio config enabled</label>
-                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="public_pricing_enabled" {% if form.public_pricing_enabled %}checked{% endif %}> Public pricing enabled</label>
-                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="public_balance_enabled" {% if form.public_balance_enabled %}checked{% endif %}> Public balance enabled</label>
-                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="public_keys_enabled" {% if form.public_keys_enabled %}checked{% endif %}> Public keys enabled</label>
-                <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" name="public_logs_enabled" {% if form.public_logs_enabled %}checked{% endif %}> Public logs enabled</label>
-            </div>
-
-            <div style="display:flex; gap:12px; justify-content:flex-end;">
-                <a class="button-secondary" href="/control/pricing/sources">Reset</a>
-                <button type="submit" class="button">{% if form %}Save changes{% else %}Create source{% endif %}</button>
-            </div>
-        </form>
-    </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<style>
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(34, 40, 49, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+}
+.modal-dialog {
+    width: min(96vw, 740px);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    animation: modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pricing-source-modal {
+    width: min(96vw, 1120px);
+}
+@keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6) var(--space-4);
+    border-bottom: 1px solid var(--border);
+}
+.modal-body {
+    display: grid;
+    gap: var(--space-4);
+    padding: var(--space-5) var(--space-6) var(--space-6);
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+.modal-note {
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-muted);
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+.modal-grid-2 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+.modal-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+.modal-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3);
+}
+.field-span-2 {
+    grid-column: span 2;
+}
+.modal-toggle-grid {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+}
+.modal-toggle-grid label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+@media (max-width: 900px) {
+    .modal-grid-3,
+    .modal-grid-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 700px) {
+    .modal-grid-2,
+    .modal-grid-3,
+    .modal-grid-4 {
+        grid-template-columns: 1fr;
+    }
+    .field-span-2 {
+        grid-column: auto;
+    }
+}
+</style>
+
+<script>
+function pricingSourcesPage(hasInitialEdit) {
+    const defaultSourceType = {{ (server_types[0].value if server_types else "newapi")|tojson }};
+    const defaultAuthMode = {{ (auth_modes[0].value if auth_modes else "header")|tojson }};
+    const pageUrl = '/control/pricing/sources';
+    const sources = JSON.parse(document.getElementById('pricing-sources-catalog')?.textContent || '[]');
+    const initialForm = JSON.parse(document.getElementById('pricing-source-initial-form')?.textContent || '{}');
+
+    const asText = (value, fallback = '') => {
+        if (value === null || value === undefined) return fallback;
+        return String(value);
+    };
+
+    const asNumberText = (value, fallback) => {
+        if (value === null || value === undefined || value === '') return String(fallback);
+        return String(value);
+    };
+
+    const asBool = (value, fallback = false) => {
+        if (value === null || value === undefined || value === '') return fallback;
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'number') return value !== 0;
+        const normalized = String(value).toLowerCase();
+        return !['0', 'false', 'off', 'no', ''].includes(normalized);
+    };
+
+    const asListText = (value, fallback = '[]') => {
+        if (value === null || value === undefined || value === '') return fallback;
+        if (Array.isArray(value)) return JSON.stringify(value);
+        return String(value);
+    };
+
+    const emptySource = () => ({
+        isEdit: false,
+        source_id: '',
+        name: '',
+        source_type: defaultSourceType,
+        upstream_base_url: '',
+        public_base_url: '',
+        sort_order: '0',
+        quota_multiple: '1.0',
+        balance_rate: '1.0',
+        auth_mode: defaultAuthMode,
+        auth_user_header: '',
+        auth_user_value: '',
+        auth_token: '',
+        auth_cookie: '',
+        pricing_path: '/api/pricing',
+        ratio_config_path: '/api/ratio_config',
+        log_path: '/api/log/self',
+        token_search_path: '/api/token/search',
+        groups_path: '',
+        manual_groups: '',
+        hidden_groups: '[]',
+        excluded_models: '[]',
+        notes: '',
+        enabled: true,
+        supports_group_chain: false,
+        ratio_config_enabled: false,
+        public_pricing_enabled: false,
+        public_balance_enabled: false,
+        public_keys_enabled: false,
+        public_logs_enabled: false
+    });
+
+    const normalizeSource = (raw, isEdit) => {
+        const source = raw || {};
+        const base = emptySource();
+        return {
+            ...base,
+            isEdit: !!isEdit,
+            source_id: asText(source.source_id ?? source.id),
+            name: asText(source.name),
+            source_type: asText(source.source_type, base.source_type),
+            upstream_base_url: asText(source.upstream_base_url),
+            public_base_url: asText(source.public_base_url),
+            sort_order: asNumberText(source.sort_order, 0),
+            quota_multiple: asNumberText(source.quota_multiple, 1.0),
+            balance_rate: asNumberText(source.balance_rate, 1.0),
+            auth_mode: asText(source.auth_mode, base.auth_mode),
+            auth_user_header: asText(source.auth_user_header),
+            auth_user_value: asText(source.auth_user_value),
+            auth_token: asText(source.auth_token),
+            auth_cookie: asText(source.auth_cookie),
+            pricing_path: asText(source.pricing_path, base.pricing_path),
+            ratio_config_path: asText(source.ratio_config_path, base.ratio_config_path),
+            log_path: asText(source.log_path, base.log_path),
+            token_search_path: asText(source.token_search_path, base.token_search_path),
+            groups_path: asText(source.groups_path),
+            manual_groups: asText(source.manual_groups),
+            hidden_groups: asListText(source.hidden_groups),
+            excluded_models: asListText(source.excluded_models),
+            notes: asText(source.notes),
+            enabled: asBool(source.enabled, base.enabled),
+            supports_group_chain: asBool(source.supports_group_chain),
+            ratio_config_enabled: asBool(source.ratio_config_enabled),
+            public_pricing_enabled: asBool(source.public_pricing_enabled),
+            public_balance_enabled: asBool(source.public_balance_enabled),
+            public_keys_enabled: asBool(source.public_keys_enabled),
+            public_logs_enabled: asBool(source.public_logs_enabled)
+        };
+    };
+
+    const sourceMap = Object.fromEntries((sources || []).map((source) => [asText(source.id), source]));
+
+    return {
+        modalOpen: false,
+        modalTitle: 'Create Pricing Source',
+        sf: emptySource(),
+
+        init() {
+            if (hasInitialEdit) {
+                this.sf = normalizeSource(initialForm, true);
+                this.modalTitle = 'Edit Pricing Source: ' + (this.sf.name || this.sf.source_id);
+                this.modalOpen = true;
+            }
+        },
+
+        closeModal() {
+            this.modalOpen = false;
+            this.sf = emptySource();
+            window.history.replaceState({}, '', pageUrl);
+        },
+
+        openCreate() {
+            this.sf = emptySource();
+            this.modalTitle = 'Create Pricing Source';
+            this.modalOpen = true;
+            window.history.replaceState({}, '', pageUrl);
+        },
+
+        openEdit(sourceId) {
+            const source = sourceMap[asText(sourceId)];
+            if (!source) {
+                window.location.href = pageUrl + '?edit=' + encodeURIComponent(sourceId);
+                return;
+            }
+            this.sf = normalizeSource(source, true);
+            this.modalTitle = 'Edit Pricing Source: ' + (this.sf.name || this.sf.source_id);
+            this.modalOpen = true;
+            window.history.replaceState({}, '', pageUrl + '?edit=' + encodeURIComponent(this.sf.source_id));
+        }
+    };
+}
+</script>
 {% endblock %}
