@@ -1320,6 +1320,11 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 1024px) {
     .app-layout { grid-template-columns: 1fr; }
 
+    .app-sidebar__backdrop {
+        left: min(300px, 88vw);
+        inset: 0 0 0 min(300px, 88vw);
+    }
+
     .app-sidebar {
         position: fixed;
         inset: 0 auto 0 0;
@@ -1438,6 +1443,11 @@ a { color: inherit; text-decoration: none; }
     .public-header { padding: var(--space-3); }
     .public-main { padding: var(--space-4) var(--space-3); }
     .page-stack { gap: var(--space-4); }
+
+    .app-sidebar__backdrop {
+        left: min(280px, 92vw);
+        inset: 0 0 0 min(280px, 92vw);
+    }
 
     .app-sidebar {
         width: min(280px, 92vw);
