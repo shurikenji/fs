@@ -1,6 +1,8 @@
 # Nginx Config Reference
 
-Thư mục `snippets/` chứa **bản tham chiếu** của các nginx snippet đang dùng trên ARM VPS.
+Updated: 2026-06-23
+
+Thư mục `snippets/` chứa **bản tham chiếu** của các nginx snippet đang dùng trên host role `arm`.
 
 Đây **không phải** file deploy tự động — mục đích là:
 - Lưu trữ trong Git để track thay đổi
@@ -15,13 +17,17 @@ Thư mục `snippets/` chứa **bản tham chiếu** của các nginx snippet đ
 
 ## Đồng bộ với VPS
 
-Khi thay đổi snippet trên VPS, copy lại vào đây:
+Khi thay đổi snippet trên VPS, copy lại vào đây. Dùng host/IP hiện tại của role `arm`, không hard-code tên Oracle instance cũ:
 ```bash
-scp ubuntu@instance-20260114-0319:/etc/nginx/snippets/{ssl-params,proxy-params,security-headers}.conf ops/nginx/snippets/
+ARM_HOST=ubuntu@<arm-host-or-ip>
+scp "$ARM_HOST":/etc/nginx/snippets/{ssl-params,proxy-params,security-headers}.conf ops/nginx/snippets/
 ```
 
 Khi muốn push snippet mới lên VPS:
 ```bash
-scp ops/nginx/snippets/*.conf ubuntu@instance-20260114-0319:/tmp/
-ssh ubuntu@instance-20260114-0319 'sudo cp /tmp/{ssl-params,proxy-params,security-headers}.conf /etc/nginx/snippets/ && sudo nginx -t && sudo nginx -s reload'
+ARM_HOST=ubuntu@<arm-host-or-ip>
+scp ops/nginx/snippets/*.conf "$ARM_HOST":/tmp/
+ssh "$ARM_HOST" 'sudo cp /tmp/{ssl-params,proxy-params,security-headers}.conf /etc/nginx/snippets/ && sudo nginx -t && sudo nginx -s reload'
 ```
+
+For the Singapore migration, test snippets with `sudo nginx -t` on the new host before DNS cutover.

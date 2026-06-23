@@ -1,123 +1,128 @@
-                        +----------------------------------+
-                          |          User / Admin            |
-                          +----------------------------------+
-                                |                     |
-                                | public              | admin
-                                v                     v
-                     +------------------+    +------------------------+
-                     |   pricing-hub    |    |   platform-control     |
-                     |  public portal   |    |   admin shell / CP     |
-                     |   :8080 ARM VPS  |    |   :8090 ARM VPS        |
-                     +------------------+    +------------------------+
-                              |                         |        |
-                              | runtime cache           |        |
-                              | + public APIs           |        |
-                              v                         |        |
-                    +-----------------------+           |        |
-                    | pricing-hub DB        |           |        |
-                    | data/hub.db           |           |        |
-                    +-----------------------+           |        |
-                                                        |        |
-                                  +---------------------+        +------------------+
-                                  |                                         |
-                                  v                                         v
-                        +-------------------+                    +-------------------+
-                        | proxy-operator    |                    | shopbot           |
-                        | :8091 ARM VPS     |                    | riêng VPS Ubuntu  |
-                        +-------------------+                    | bot + admin + DB  |
-                                  |                              +-------------------+
-                                  |
-                                  v
-                        +-------------------+
-                        | proxy-gateway /   |
-                        | proxy-service     |
-                        | gpt1..gpt5 sv1..2 |
-                        +-------------------+
-Các phần chính
+# Current Architecture
 
-platform-control
-Vai trò: admin shell trung tâm, control plane.
-Chạy trên ARM VPS, local config mặc định là :8090 trong config.py.
-Đây là nơi quản lý:
-proxy runtime metadata
-service sources
-portal modules
-pricing admin parity mới
-linked launch sang shopbot
-DB riêng: data/platform_control.db
-Gọi sang:
-proxy-operator qua PROXY_OPERATOR_URL
-pricing-hub qua PRICING_HUB_URL
-shopbot qua signed launch token
-pricing-hub
-Vai trò: public portal/runtime cho pricing, balance, keys, logs, status.
-Chạy trên ARM VPS, local config mặc định :8080 trong config.py.
-Đây không còn là admin source-of-truth nữa, mà là runtime/execution layer.
-Giữ:
-pricing cache
-groups cache
-translations
-public routes/API
-key/log/balance tooling
-DB riêng: data/hub.db
-Đồng bộ state từ platform-control qua internal bridge token.
-proxy-gateway / proxy-service
-Vai trò: phục vụ traffic proxy khách hàng.
-Chạy trên ARM VPS.
-Đang có các endpoint sống:
-gpt1..gpt5
-sv1..sv2
-Trong repo proxy-gateway hiện có:
-proxy-service: runtime proxy thực tế
-proxy-operator: control runtime mới
-proxy-operator
-Vai trò: apply desired state xuống proxy runtime.
-Chạy trên ARM VPS :8091.
-Được platform-control gọi để:
-sync runtime
-thao tác nginx/cert/proxy state
-Đây là lớp vận hành proxy, không phải UI cho user.
-shopbot
-Vai trò: commerce runtime riêng, gồm Telegram bot + admin + DB.
-Chạy trên VPS Ubuntu riêng.
-DB riêng: shopbot.db
-Tách hẳn khỏi control plane và portal.
-platform-control chỉ launch sang admin của shopbot bằng SSO token bridge, xác nhận trong admin_launch.py.
-Ranh giới dữ liệu
+Updated: 2026-06-23
 
-platform-control DB:
-source of truth cho admin metadata, visibility, runtime settings
-pricing-hub DB:
-source of truth cho runtime cache/public-facing derived data
-shopbot DB:
-source of truth cho order, wallet, customer, fulfillment
-Proxy runtime:
-state triển khai chạy qua proxy-operator + proxy-service
-Luồng chính
+## Overview
 
-Admin vào platform-control
-platform-control sửa source/settings/visibility
-platform-control push/import sang pricing-hub
-pricing-hub cập nhật runtime cache/public behavior
-platform-control sync proxy qua proxy-operator
-platform-control launch sang shopbot khi cần admin commerce
-Phần còn legacy/chuyển tiếp
+```text
+                         Public users
+                              |
+                              v
+                    +-------------------+
+                    | portal            |
+                    | shupremium.com    |
+                    | ARM role :8080    |
+                    +---------+---------+
+                              |
+                              v
+                    +-------------------+
+                    | portal DB/cache   |
+                    | shared/portal     |
+                    +-------------------+
 
-balance-checker cũ vẫn có thể còn chạy trên VPS Oracle free-tier như một runtime legacy bên ngoài repo, nhưng code của nó đã được archive và không còn là thành phần active của monorepo.
-admin-panel cũ đã bị loại khỏi runtime và source tree, không còn là admin chính.
-Kiến trúc theo domain/runtime
+Admins
+  |
+  v
++-----------------------+        +---------------------+
+| platform-control      |------->| proxy-operator      |
+| admin.shupremium.com  |        | ARM role :8091      |
+| ARM role :8090        |        +----------+----------+
++-----------+-----------+                   |
+            |                               v
+            |                    +---------------------+
+            |                    | proxy-service       |
+            |                    | gpt1..gpt5 sv1..2  |
+            |                    +---------------------+
+            |
+            | signed launch token
+            v
++-----------------------+
+| shopbot               |
+| separate Shopbot VPS  |
+| Telegram + admin + DB |
++-----------------------+
+```
 
-text
+## Runtime ownership
 
-admin.shupremium.com
-  -> platform-control
-  -> linked admin sang shopbot
+### `platform-control`
 
-shupremium.com
-  -> pricing-hub public portal/runtime
+`platform-control` is the central admin shell and control plane. It owns admin-facing intent for:
 
-gpt1..gpt5 / sv1..sv2
-  -> proxy-service runtime
+- service source registry
+- pricing runtime settings
+- proxy endpoint registry
+- portal module visibility
+- deploy job history
+- linked launch into Shopbot admin
 
-bot.shupremium.com
-  -> shopbot admin/runtime trên VPS riêng
+It runs on the ARM host role, normally on port `8090`, behind `admin.shupremium.com`.
+
+### `portal`
+
+`portal` is the public runtime for `shupremium.com`. It owns public-facing derived state:
+
+- pricing pages and pricing APIs
+- balance checker
+- key/log lookup tools
+- proxy status display
+- local pricing cache and snapshots
+- public-safe model/group presentation
+
+It is not the admin source of truth. It imports or receives state from `platform-control` through internal token-protected endpoints.
+
+### `proxy-gateway`
+
+`proxy-gateway` contains:
+
+- `proxy-operator`: control endpoint used by `platform-control`
+- `proxy-service`: generated PM2 proxy processes serving customer traffic
+
+Nginx/certificate/proxy changes should flow through `proxy-operator` or the deploy scripts, not by ad-hoc edits unless it is an incident response.
+
+### `shopbot`
+
+`shopbot` is intentionally isolated on its own VPS. It owns:
+
+- Telegram bot runtime
+- payment polling
+- orders, products, users, wallets, fulfillment
+- Shopbot admin UI
+- its own SQLite DB
+
+`platform-control` does not write Shopbot DB directly. It only opens Shopbot admin through a short-lived signed launch token.
+
+## Data boundaries
+
+| Store | Owner | Content |
+| --- | --- | --- |
+| `shared/platform-control/data/platform_control.db` | `platform-control` | Admin/control-plane intent |
+| `shared/portal/data/hub.db` | `portal` | Runtime cache, snapshots, public derived data |
+| `shared/shopbot/data/*` | `shopbot` | Orders, users, wallets, fulfillment |
+| PM2/nginx/proxy runtime | `proxy-gateway` | Active customer proxy processes and routing |
+
+## Internal contracts
+
+- `X-Control-Plane-Token` protects platform-control internal APIs consumed by portal.
+- `X-Pricing-Admin-Token` protects portal internal pricing admin APIs consumed by platform-control.
+- Shopbot admin launch uses a separate shared secret and short TTL token.
+- Shopbot internal portal APIs use their own internal token boundary.
+
+## Host roles and migration state
+
+| Role | Apps | Notes |
+| --- | --- | --- |
+| `arm` | `portal`, `platform-control`, `proxy-gateway` | Runs the public portal, admin shell, proxy operator, and generated proxy services. A Singapore Oracle ARM host is being prepared for cutover. |
+| `shopbot` | `shopbot` | Runs Telegram commerce and payment polling separately from the ARM proxy/admin plane. |
+
+The expected role file on each host is `/etc/shupremium-host-role`.
+
+Do not hard-code Oracle instance names in architecture docs. During a VPS migration, the source of truth is the host role file, `/srv/shupremium-stack` layout, PM2/systemd health, and DNS records.
+
+## Deprecated or archived components
+
+- `archive/services/balance-checker` is archived source only.
+- Old standalone Shopbot path under `/home/ubuntu/shopbot` is no longer canonical.
+- Old manual portal/platform deploy paths are no longer canonical once the `/srv/shupremium-stack` layout is active.
+- `admin-panel` is not the primary admin shell; `platform-control` is.
+- `docs/implementation-plan-v4.md` is obsolete; `docs/implementation-plan.md` is the active roadmap.

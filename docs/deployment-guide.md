@@ -1,34 +1,91 @@
 # Deployment Guide
 
-This document describes the current monorepo deploy model for `shupremium-stack`. The goal is to keep runtime state outside the repo checkout, deploy each app independently by git ref, and prevent bad releases from becoming current.
+Updated: 2026-06-23
 
-## 1. Recommended Strategy
+This is the current deploy guide for `shupremium-stack`. The production contract is:
 
-Use one private Git repository for the whole stack and deploy by `app + git ref`.
+- Git is source of truth.
+- Deploy is per app and per host role.
+- Runtime state stays outside releases.
+- Rollback is symlink-based.
+- Manual folder copy/scp deploy is not the normal path.
+- GitHub must be treated as public until confirmed otherwise; never commit runtime secrets or copied production data.
 
-- each VPS clones the same repo into `/srv/shupremium-stack/repo`
-- each deploy creates a timestamped release under `/srv/shupremium-stack/releases`
-- `current/<app>` is a symlink to the active release
-- `.env`, `data`, `venv`, and operator secrets stay under `/srv/shupremium-stack/shared`
+## Hosts and roles
 
-Docker is intentionally not part of this phase. The main problem being solved here is deploy hygiene and rollback safety, not container orchestration.
+| Host | Role file | Apps |
+| --- | --- | --- |
+| ARM VPS | `/etc/shupremium-host-role = arm` | `portal`, `platform-control`, `proxy-gateway` |
+| Shopbot VPS | `/etc/shupremium-host-role = shopbot` | `shopbot` |
 
-## 2. VPS Layout
+Set role:
+
+```bash
+echo arm | sudo tee /etc/shupremium-host-role
+echo shopbot | sudo tee /etc/shupremium-host-role
+```
+
+Only set the role that matches the current VPS.
+
+## ARM VPS baseline
+
+Recommended baseline for the ARM host role:
+
+- Ubuntu `22.04` aarch64 for lowest migration risk with the current Python 3.10/nginx/PM2 stack.
+- Node.js 20 LTS, npm, PM2, Python venv, nginx, certbot, and certbot Cloudflare DNS plugin.
+- Oracle VCN or NSG ingress: TCP `22`, `80`, and `443` only.
+- UFW on the VPS: allow `OpenSSH`, `80/tcp`, and `443/tcp`.
+
+Do not expose internal app ports publicly:
+
+| Port | Owner | Exposure |
+| --- | --- | --- |
+| `8080` | `portal` | localhost/nginx only |
+| `8090` | `platform-control` | localhost/nginx only |
+| `8091` | `proxy-operator` | localhost/internal admin only |
+| proxy service ports | generated `proxy-service` processes | localhost/nginx only |
+
+Safe UFW sequence:
+
+```bash
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+sudo ufw status verbose
+```
+
+PM2 persistence after processes are healthy:
+
+```bash
+pm2 startup systemd -u ubuntu --hp /home/ubuntu
+# Run the sudo command printed by PM2, then:
+pm2 save
+sudo systemctl enable pm2-ubuntu
+```
+
+Oracle VCN rules are separate from UFW. Both layers must allow `22`, `80`, and `443`, otherwise SSH or public HTTPS can still fail.
+
+## Canonical layout
 
 ```text
 /srv/shupremium-stack/
   repo/
+    .git/
+    apps/
+    services/
+    ops/
   releases/
-    20260405-120001/
+    <timestamp>/
       portal/
       platform-control/
       proxy-gateway/
       shopbot/
   current/
-    portal -> /srv/shupremium-stack/releases/<ts>/portal
-    platform-control -> /srv/shupremium-stack/releases/<ts>/platform-control
-    proxy-gateway -> /srv/shupremium-stack/releases/<ts>/proxy-gateway
-    shopbot -> /srv/shupremium-stack/releases/<ts>/shopbot
+    portal -> /srv/shupremium-stack/releases/<timestamp>/portal
+    platform-control -> /srv/shupremium-stack/releases/<timestamp>/platform-control
+    proxy-gateway -> /srv/shupremium-stack/releases/<timestamp>/proxy-gateway
+    shopbot -> /srv/shupremium-stack/releases/<timestamp>/shopbot
   shared/
     portal/
       .env
@@ -49,45 +106,39 @@ Docker is intentionally not part of this phase. The main problem being solved he
       deploy-audit.jsonl
 ```
 
-## 3. Bootstrap
+Do not store `.env`, DB files, runtime data, virtualenvs, or `node_modules` in `repo/` or in Git.
 
-On each VPS:
+## Bootstrap a VPS
 
 ```bash
 sudo mkdir -p /srv/shupremium-stack
-sudo chown -R $USER:$USER /srv/shupremium-stack
-git clone <PRIVATE_GITHUB_URL> /srv/shupremium-stack/repo
+sudo chown -R "$USER:$USER" /srv/shupremium-stack
+git clone https://github.com/shurikenji/fs.git /srv/shupremium-stack/repo
+cd /srv/shupremium-stack/repo
+bash ops/deploy/bootstrap-host.sh
 ```
 
-Create the host role file:
+Bootstrap creates the top-level deploy directories. It does not invent production secrets.
+If the repo is later moved to private GitHub, replace the clone URL with the new private remote.
 
-- ARM host:
+For a new ARM migration host, set the role before first deploy:
 
 ```bash
 echo arm | sudo tee /etc/shupremium-host-role
 ```
 
-- Shopbot host:
+Keep the old ARM host serving traffic until the new host passes local and DNS-resolved checks.
 
-```bash
-echo shopbot | sudo tee /etc/shupremium-host-role
-```
+## Shared runtime preparation
 
-Run bootstrap:
-
-```bash
-cd /srv/shupremium-stack/repo
-bash ops/deploy/bootstrap-host.sh
-```
-
-## 4. Shared Runtime Preparation
+Prepare the matching shared directory before the first deploy.
 
 ### Portal
 
 ```bash
 mkdir -p /srv/shupremium-stack/shared/portal/data
-cp /path/to/current-portal/.env /srv/shupremium-stack/shared/portal/.env
-cp -a /path/to/current-portal/data/. /srv/shupremium-stack/shared/portal/data/
+cp /path/to/known-good-portal.env /srv/shupremium-stack/shared/portal/.env
+cp -a /path/to/known-good-portal-data/. /srv/shupremium-stack/shared/portal/data/
 python3 -m venv /srv/shupremium-stack/shared/portal/venv
 ```
 
@@ -95,8 +146,8 @@ python3 -m venv /srv/shupremium-stack/shared/portal/venv
 
 ```bash
 mkdir -p /srv/shupremium-stack/shared/platform-control/data
-cp /path/to/current-platform-control/.env /srv/shupremium-stack/shared/platform-control/.env
-cp -a /path/to/current-platform-control/data/. /srv/shupremium-stack/shared/platform-control/data/
+cp /path/to/known-good-platform-control.env /srv/shupremium-stack/shared/platform-control/.env
+cp -a /path/to/known-good-platform-control-data/. /srv/shupremium-stack/shared/platform-control/data/
 python3 -m venv /srv/shupremium-stack/shared/platform-control/venv
 ```
 
@@ -104,149 +155,166 @@ python3 -m venv /srv/shupremium-stack/shared/platform-control/venv
 
 ```bash
 mkdir -p /srv/shupremium-stack/shared/shopbot/data
-cp /path/to/current-shopbot/.env /srv/shupremium-stack/shared/shopbot/.env
+cp /path/to/known-good-shopbot.env /srv/shupremium-stack/shared/shopbot/.env
+cp -a /path/to/known-good-shopbot-data/. /srv/shupremium-stack/shared/shopbot/data/
 python3 -m venv /srv/shupremium-stack/shared/shopbot/venv
+```
+
+Shopbot production unit should point to the current symlink:
+
+```ini
+WorkingDirectory=/srv/shupremium-stack/current/shopbot
+ExecStart=/srv/shupremium-stack/shared/shopbot/venv/bin/python -m bot.main
 ```
 
 ### Proxy Gateway
 
 ```bash
 mkdir -p /srv/shupremium-stack/shared/proxy-gateway/proxy-operator
-cp /path/to/current-proxy-operator/.env /srv/shupremium-stack/shared/proxy-gateway/proxy-operator/.env
+cp /path/to/known-good-proxy-operator.env /srv/shupremium-stack/shared/proxy-gateway/proxy-operator/.env
 ```
 
-## 5. Deploy Commands
+Node dependencies are installed inside releases during deploy; do not copy `node_modules` into Git.
 
-### ARM host
+## DNS and TLS for ARM cutover
+
+Wildcard certificate is expected at:
+
+```text
+/etc/letsencrypt/live/shupremium-wildcard/fullchain.pem
+/etc/letsencrypt/live/shupremium-wildcard/privkey.pem
+```
+
+Cloudflare credentials should live outside the repo, for example:
+
+```text
+/home/ubuntu/.secrets/cloudflare.ini
+```
+
+Example wildcard issue command:
+
+```bash
+sudo certbot certonly --dns-cloudflare \
+  --dns-cloudflare-credentials /home/ubuntu/.secrets/cloudflare.ini \
+  -d shupremium.com -d '*.shupremium.com' \
+  --cert-name shupremium-wildcard \
+  --non-interactive --agree-tos -m admin@shupremium.com
+```
+
+Do not switch Cloudflare DNS to the new ARM IP until the new host passes local checks. Before DNS cutover, test public hostnames against the new IP:
+
+```bash
+NEW_ARM_IP=<new-singapore-ip>
+curl --resolve shupremium.com:443:$NEW_ARM_IP -I https://shupremium.com/
+curl --resolve admin.shupremium.com:443:$NEW_ARM_IP -I https://admin.shupremium.com/
+curl --resolve gpt1.shupremium.com:443:$NEW_ARM_IP -I https://gpt1.shupremium.com/
+```
+
+## Deploy commands
+
+### ARM VPS
 
 ```bash
 cd /srv/shupremium-stack/repo
+git fetch origin
+git pull --ff-only origin main
 bash ops/deploy/deploy-portal.sh main
 bash ops/deploy/deploy-platform-control.sh main
 bash ops/deploy/deploy-proxy-gateway.sh main
 ```
 
-### Shopbot host
+### Shopbot VPS
 
 ```bash
 cd /srv/shupremium-stack/repo
+git fetch origin
+git pull --ff-only origin main
 bash ops/deploy/deploy-shopbot.sh main
 ```
 
-## 6. Deploy Pipeline
-
-All deploy scripts now follow the same flow:
-
-1. `extract`
-2. `prepare`
-3. `validate`
-4. `switch`
-5. `restart`
-6. `smoke`
-
-The important change is `validate` before the symlink switch.
-
-### Prepare phase
-
-- Python apps:
-  - symlink shared `.env` and `data`
-  - create or reuse shared `venv`
-  - install `requirements.txt`
-- Proxy gateway:
-  - symlink shared operator `.env`
-  - run `npm ci --omit=dev` for `proxy-operator`
-  - run `npm ci --omit=dev` for `proxy-service`
-
-### Validate phase
-
-- `portal` and `platform-control`
-  - run `pip check` in the shared `venv`
-  - load `.env`
-  - import `app.app:create_app`
-  - instantiate the FastAPI app without starting `uvicorn`
-- `shopbot`
-  - run `pip check` in the shared `venv`
-  - load `.env`
-  - import `bot.main`
-  - instantiate `admin.app:create_admin_app()`
-  - do not start Telegram polling
-- `proxy-gateway`
-  - run `npm ls --omit=dev --depth=0` in `proxy-operator` and `proxy-service`
-  - run `node --check` for `proxy-operator/src/server.js`
-  - run `node --check` for `proxy-service/src/index.js`
-  - run `require.resolve()` checks for key packages in both Node apps
-
-If validation fails, deploy stops before `current/<app>` is changed.
-
-### Restart and smoke phases
-
-- `portal`, `platform-control`: restart PM2 process, then hit manifest-defined smoke URLs
-- `shopbot`: restart and verify the `systemd` unit only
-- `proxy-gateway`: restart `proxy-operator`, reload PM2 ecosystem for `proxy-service`, then probe each discovered proxy port via `/_internal/health`
-
-If restart or smoke fails after the symlink switch, deploy attempts rollback to the previous release and records that result in the audit log.
-
-## 7. Audit Logging
-
-Each deploy appends JSONL records to:
-
-```text
-/srv/shupremium-stack/shared/_ops/deploy-audit.jsonl
-```
-
-Each record includes:
-
-- `timestamp`
-- `app`
-- `host_role`
-- `runtime_kind`
-- `git_ref`
-- `release_dir`
-- `previous_release`
-- `phase`
-- `status`
-- `duration_ms`
-- `message`
-
-Expected phases:
-
-- `deploy`
-- `prepare`
-- `validate`
-- `switch`
-- `restart`
-- `smoke`
-- `rollback`
-
-This log is intended for deploy traceability, not application logging.
-
-## 8. Health Verification
-
-Use the repo script:
+If the host has convenience symlinks:
 
 ```bash
+cd ~/shupremium-repo
+bash ops/deploy/deploy-shopbot.sh main
+```
+
+## Deploy pipeline
+
+Every deploy follows the same high-level flow:
+
+1. Resolve git ref.
+2. Extract only the app subtree with `git archive`.
+3. Prepare shared `.env`, `data`, venv, and dependencies.
+4. Validate import/dependency health before switching `current`.
+5. Switch `current/<app>` symlink.
+6. Restart PM2 or systemd runtime.
+7. Run smoke checks.
+8. Attempt rollback if restart/smoke fails after switch.
+9. Remove old releases, keeping the most recent 5 by default.
+
+## Validation behavior
+
+Python apps:
+
+- shared `.env` and `data` are symlinked into the release
+- shared `venv` is created/reused
+- `requirements.txt` is installed
+- `pip check` runs
+- app import checks run without starting public servers or Telegram polling
+
+Proxy gateway:
+
+- operator `.env` is symlinked from `shared`
+- `npm ci --omit=dev` runs for `proxy-operator`
+- `npm ci --omit=dev` runs for `proxy-service`
+- `node --check` validates key JS entrypoints
+- `npm ls --omit=dev --depth=0` validates installed packages
+
+## Health checks
+
+Run the host-wide verifier:
+
+```bash
+cd /srv/shupremium-stack/repo
 bash ops/scripts/verify-all-health.sh
 ```
 
-Behavior:
-
-- reads the current host role from `/etc/shupremium-host-role` unless one is passed explicitly
-- loads active apps from `ops/deploy/app-manifest.sh`
-- verifies only apps assigned to the current host role
-- reuses runtime smoke logic from the deploy library
-- for `proxy-gateway`, discovers ports from the active `proxy-service/ecosystem.config.js`
-- for `shopbot`, checks the `systemd` unit only
-
-Examples:
+Explicit host role:
 
 ```bash
 bash ops/scripts/verify-all-health.sh arm
 bash ops/scripts/verify-all-health.sh shopbot
 ```
 
-## 9. Rollback
+Manual spot checks:
 
-Rollback to the previous release:
+```bash
+readlink -f /srv/shupremium-stack/current/portal
+readlink -f /srv/shupremium-stack/current/platform-control
+readlink -f /srv/shupremium-stack/current/proxy-gateway
+readlink -f /srv/shupremium-stack/current/shopbot
+```
+
+ARM runtime:
+
+```bash
+pm2 ls
+curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8090/ -o /dev/null
+curl -fsS http://127.0.0.1:8091/health
+```
+
+Shopbot runtime:
+
+```bash
+systemctl status shopbot --no-pager
+journalctl -u shopbot -n 80 --no-pager
+```
+
+## Rollback
+
+Rollback to previous release:
 
 ```bash
 cd /srv/shupremium-stack/repo
@@ -256,63 +324,51 @@ bash ops/deploy/rollback-app.sh portal
 Rollback to a specific release:
 
 ```bash
-bash ops/deploy/rollback-app.sh portal /srv/shupremium-stack/releases/20260405-120001/portal
+bash ops/deploy/rollback-app.sh portal /srv/shupremium-stack/releases/<timestamp>/portal
 ```
 
-Manual rollback uses the same restart and smoke checks as deploy. If the target release fails, the script attempts to restore the release that was current before rollback started.
+Rollback uses the same restart and smoke logic as deploy. If rollback target also fails, inspect the audit log and runtime manager before attempting another switch.
 
-## 10. Runtime Notes
+## Deploy audit log
 
-- `portal` and `platform-control` stay on PM2
-- `proxy-gateway` uses PM2 for both the operator and the generated proxy-service apps
-- `shopbot` stays on `systemd` by design
+Deploy and rollback append JSONL records to:
 
-Do not migrate `shopbot` to PM2 as part of routine deploy work unless a separate runtime migration project is explicitly planned.
+```text
+/srv/shupremium-stack/shared/_ops/deploy-audit.jsonl
+```
 
-## 11. Troubleshooting
+Each record includes app, host role, runtime kind, git ref, release path, previous release, phase, status, duration, and message.
 
-### Dependency install failures
+Inspect recent deploys:
 
-- Python:
-  - check `requirements.txt`
-  - inspect shared `venv`
-  - rerun deploy after fixing the dependency graph
-- Node:
-  - inspect `package-lock.json`
-  - verify `npm ci --omit=dev` works in both `proxy-operator` and `proxy-service`
+```bash
+tail -n 50 /srv/shupremium-stack/shared/_ops/deploy-audit.jsonl
+```
 
-### Validation failures
+## Shopbot MBBank v3 settings
 
-- check the deploy audit log for the failing phase
-- verify shared `.env` exists and is readable
-- for Python apps, test the same import path manually inside the shared `venv`
-- for proxy apps, rerun `node --check` and `npm ls --omit=dev --depth=0`
+Scanner settings:
 
-### Restart failures
+```env
+MB_API_URL=https://api.apicanhan.com/transactions/MB
+MB_API_KEY=<provider-api-key>
+```
 
-- verify PM2 or `systemd` is healthy on the target host
-- inspect the active `current/<app>` symlink
-- confirm the release still points to valid shared files and directories
+Runtime request built by code:
 
-### Smoke-check failures
+```text
+https://api.apicanhan.com/transactions/MB/<ApiKey>/?version=3
+```
 
-- run `bash ops/scripts/verify-all-health.sh <host-role>`
-- inspect the app-specific health endpoint or PM2 status
-- for `proxy-gateway`, inspect the current `proxy-service/ecosystem.config.js`
+Do not set `MB_API_URL` to a URL containing `?key=`, `username`, `password`, `accountNo`, or `version=3`. Username/password are deprecated for scanner. Account number/name/bank ID remain required for VietQR rendering.
 
-### Rollback behavior
+## Production safety checklist
 
-- deploy rollback is only attempted after `switch` when `restart` or `smoke` fails
-- validate failures do not need rollback because the current symlink was never changed
-- manual rollback writes the same audit records as a deploy-triggered rollback
-
-## 12. Why Monorepo Still Works Across Two VPS Hosts
-
-Monorepo is only the code layout. Deploy remains split by app and host role:
-
-- one repository
-- different host roles
-- different deploy scripts
-- shared deploy primitives
-
-That is simpler than the old manual tarball flow because release creation, restart, smoke checks, rollback, and audit logging all now follow one model.
+- Confirm host role before deploy.
+- Confirm `git status` in `/srv/shupremium-stack/repo` is clean or intentionally dirty.
+- Confirm shared `.env` and DB paths before first deploy.
+- Do not copy local app folders into `current/`.
+- Do not overwrite `shared/` state during code deploy.
+- Use deploy scripts, not manual PM2/systemd start commands, for normal releases.
+- After deploy, run `ops/scripts/verify-all-health.sh`.
+- If payment or pricing changed, run focused verification scripts before deploy.

@@ -67,3 +67,14 @@ coverage/
 **/.git/
 
 .gitnexus
+
+# Local agent/session files
+_local_cleanup/
+.claude/settings.json
+.claude/settings.local.json
+.claude/plans/
+.agents/
+_plan_lines.json
+key.py
+vps-*.md
+docs/portal-arm-cutover-runbook.md

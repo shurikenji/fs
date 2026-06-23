@@ -17,3 +17,10 @@ CLAUDE.md
 .gitnexus/
 .agents
 fetch.txt
+
+# Local agent/session files
+.claude/settings.local.json
+.claude/plans/
+key.py
+_plan_lines.json
+vps-*.md

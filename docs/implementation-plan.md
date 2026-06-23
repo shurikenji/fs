@@ -1,144 +1,103 @@
-# Shupremium V4 Implementation Plan
+# Current State And Roadmap
 
-## Summary
+Updated: 2026-06-23
 
-- `shupremium.com` is the single public portal shell.
-- `admin.shupremium.com` is the control-plane entrypoint for infrastructure and linked admin launch.
-- `shopbot` remains isolated on its own VPS and keeps ownership of commerce data and admin writes.
-- `proxy-gateway` remains isolated on the ARM VPS and is still driven by `proxy-operator`.
-- archived `balance-checker` is outside the active monorepo stack; any surviving Oracle instance is legacy external runtime only.
+This replaces older rollout notes. The V4 migration is no longer a pending manual copy/scp rollout; the active target is the monorepo deploy model under `/srv/shupremium-stack`.
 
-## Runtime Layout
+The current public GitHub repo must be treated as public. All docs and examples must stay sanitized.
 
-### 1. Public Portal
+## Current state
 
-- Runtime: `pricing-hub`
-- Domain: `shupremium.com`
-- Public routes:
-  - `/`
-  - `/pricing`
-  - `/check`
-  - `/keys`
-  - `/logs`
-  - `/status`
-- Source of truth:
-  - pricing data is cached locally in portal DB
-  - balance sources and proxy status are fetched from `platform-control` public APIs and stored as local JSON snapshots for fallback
+| Component | State | Canonical runtime |
+| --- | --- | --- |
+| `portal` | Active public runtime | ARM VPS, PM2, `/srv/shupremium-stack/current/portal` |
+| `platform-control` | Active admin shell | ARM VPS, PM2, `/srv/shupremium-stack/current/platform-control` |
+| `proxy-gateway` | Active proxy plane | ARM VPS, PM2, `/srv/shupremium-stack/current/proxy-gateway` |
+| `shopbot` | Active commerce runtime | Shopbot VPS, systemd, `/srv/shupremium-stack/current/shopbot` |
+| `balance-checker` | Archived legacy code | Not in active deploy manifest |
 
-### 2. Admin Shell
+## Current migration state
 
-- Runtime: `platform-control`
-- Domain: `admin.shupremium.com`
-- Responsibilities:
-  - service source registry
-  - proxy endpoint registry
-  - portal module registry
-  - deploy job history
-  - proxy sync and wildcard certificate triggers
-  - linked launch into `shopbot admin`
+- The existing ARM role is live and serving portal/admin/proxy traffic.
+- A new Singapore Oracle ARM VPS is being prepared as the replacement ARM role host.
+- DNS cutover is pending and must wait for VCN/UFW, nginx, wildcard cert, PM2 persistence, and local health checks.
+- The target OS for the new ARM host is Ubuntu 22.04 aarch64.
+- GitHub remains public for now, so `_local_cleanup/`, secrets, DBs, generated data, `node_modules`, logs, and design exports must remain out of Git.
 
-### 3. Shopbot
+## Completed direction
 
-- Runtime: `shopbot`
-- Domain: internal or directly exposed only as needed
-- Responsibilities:
-  - Telegram bot
-  - payment polling
-  - orders, products, users, wallets, fulfillment
-  - business admin
-  - read-only portal APIs
-  - launch-token consumer endpoint for linked admin entry
+- Monorepo is the source of truth.
+- Deploy is app-specific, release-based, and rollback-capable.
+- Runtime state is separated into `/srv/shupremium-stack/shared`.
+- `platform-control` is the admin/control-plane entry point.
+- `portal` serves public Shupremium pages and runtime cache.
+- `shopbot` remains isolated on its own VPS and owns commerce data.
+- `proxy-gateway` remains on the ARM VPS and is managed through `proxy-operator`.
+- MBBank scanner integration in Shopbot uses MBBank v3:
+  - base URL: `https://api.apicanhan.com/transactions/MB`
+  - runtime URL: `{base_url}/{ApiKey}/?version=3`
+  - scanner no longer uses MB username/password/account number
+  - VietQR still uses MB account number/name/bank ID
 
-### 4. Proxy Plane
+## Near-term priorities
 
-- Runtime: `proxy-gateway` plus `proxy-operator`
-- Domain pattern:
-  - `gpt*.shupremium.com`
-  - `sv*.shupremium.com`
-- Responsibilities:
-  - runtime proxy processes
-  - nginx and certificate handling
-  - rollback-safe desired-state apply flow
+1. Finish Singapore ARM host setup without switching DNS early.
+2. Keep the public GitHub repo sanitized until it is moved private, and keep the same hygiene after that.
+3. Verify the new ARM host with `ops/scripts/verify-all-health.sh`, PM2 persistence, nginx, and `curl --resolve`.
+4. Keep Shopbot deploys through `ops/deploy/deploy-shopbot.sh`, not through the old standalone path.
+5. Continue UI/content alignment from the redesign across portal and platform-control.
+6. Continue pricing cleanup by separating parser, pricing engine, translation/catalog, and public presenter responsibilities.
 
-## Admin Linking Model
+## Future refactor targets
 
-- `platform-control` issues a short-lived signed launch token.
-- Admin clicks `Open Shopbot Admin` from `admin.shupremium.com/control`.
-- Browser auto-posts the token to `shopbot` at `/sso/consume`.
-- `shopbot` verifies:
-  - signature
-  - issuer
-  - nonce presence
-  - short TTL
-- If valid, `shopbot` creates its own local session.
-- If invalid or expired, `shopbot` falls back to normal login.
+### Pricing pipeline
 
-This keeps:
+Current risk: parser/profile detection, pricing conversion, translation, and public output are still tightly coupled.
 
-- separate cookies
-- separate session stores
-- separate deployment cadence
-- no direct DB access from control plane to shopbot
+Target:
 
-## Public Data Flow
+- raw upstream parser layer
+- provider/profile detection layer
+- pricing engine layer
+- catalog/translation layer
+- public presenter layer
+- focused tests for each source payload shape
 
-### Pricing
+### Deploy tooling
 
-- `platform-control` publishes service source registry.
-- `pricing-hub` imports enabled sources into its local DB.
-- portal pricing, keys, and logs keep using the existing pricing-hub stack and local cache.
+Current deploy tooling is usable and should stay script-based for now.
 
-### Balance
+Target:
 
-- portal reads `/api/public/balance-sources` from `platform-control`
-- successful responses are written to local snapshot files
-- if control plane is down, portal uses the latest local snapshot
-- if no snapshot exists yet, portal falls back to enabled local pricing servers
+- keep deploy scripts as the only production release path
+- improve smoke coverage for proxy-service generated processes
+- keep audit log review simple
+- document every manual production exception in `memory.md`
 
-### Status
+### Secret hygiene
 
-- portal reads `/api/public/status` from `platform-control`
-- successful responses are written to local snapshot files
-- if control plane is down, portal shows the latest cached snapshot
+Current rule:
 
-## Deploy Order
+- real `.env`, provider tokens, API keys, cookies, SQLite DBs, logs, and local agent session files must never be committed.
+- current GitHub visibility is public, so every committed file must be safe to expose.
 
-1. Deploy `shopbot` with `ADMIN_LAUNCH_SECRET` and `PLATFORM_ADMIN_URL`.
-2. Deploy `platform-control` with `SHOPBOT_ADMIN_URL`, `SHOPBOT_LAUNCH_SECRET`, and TTL config.
-3. Verify linked launch from `platform-control` to `shopbot`.
-4. Deploy portal changes in `pricing-hub`.
-5. Point `shupremium.com` at the portal runtime.
-6. Do not route or deploy `balance-checker` from the monorepo anymore; if an old Oracle instance still exists, treat it as external legacy runtime.
+Target:
 
-## Required Environment
+- all docs use placeholders only
+- scratch scripts stay outside Git or use `.example` files only
+- public GitHub history containing old secrets should be treated as compromised until those secrets are rotated
+- `_local_cleanup/` is a local quarantine only and must not be pushed.
 
-### platform-control
+## Acceptance checks for future changes
 
-- `SHOPBOT_ADMIN_URL`
-- `SHOPBOT_LAUNCH_SECRET`
-- `SHOPBOT_LAUNCH_TTL_SECONDS`
+- The touched app has focused local verification.
+- GitNexus impact/context was used before code-symbol edits.
+- `gitnexus_detect_changes()` matches the expected scope before commit.
+- Deploy goes through the relevant `ops/deploy/deploy-*.sh`.
+- Runtime state under `shared/` is not overwritten.
+- Health check passes after deploy:
 
-### shopbot
-
-- `PLATFORM_ADMIN_URL`
-- `ADMIN_LAUNCH_SECRET`
-- `ADMIN_LAUNCH_TTL_SECONDS`
-- existing `PORTAL_INTERNAL_TOKEN`
-- existing `PORTAL_SESSION_SECRET`
-
-### pricing-hub
-
-- `CONTROL_PLANE_URL`
-- `CONTROL_PLANE_SYNC_ENABLED=true`
-- `CONTROL_PLANE_TOKEN` only if internal source import is enabled
-
-## Acceptance Checks
-
-- Portal home loads on `/` and pricing moves to `/pricing`.
-- Balance checker works from `/check` without hardcoded server list.
-- Proxy status page loads on `/status`.
-- `platform-control` dashboard shows `Open Shopbot Admin`.
-- Clicking `Open Shopbot Admin` logs into shopbot without re-entering password.
-- Invalid or expired launch token is rejected by shopbot.
-- Restarting portal or control plane does not affect `shopbot` bot/admin runtime.
-- Proxy sync flow still runs only through `proxy-operator`.
+```bash
+cd /srv/shupremium-stack/repo
+bash ops/scripts/verify-all-health.sh
+```
