@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml"
         href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23155e63'/%3E%3Ccircle cx='32' cy='32' r='9' fill='none' stroke='white' stroke-width='5'/%3E%3Cpath d='M32 13v8M32 43v8M13 32h8M43 32h8M19 19l5.5 5.5M39.5 39.5L45 45M45 19l-5.5 5.5M24.5 39.5L19 45' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
     <meta name="csrf-token" content="{{ csrf_token(request) }}">
-    <link rel="stylesheet" href="/static/css/app.css?v=20260404-2">
+    <link rel="stylesheet" href="/static/css/app.css?v=20260623-responsive">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     {% block head %}{% endblock %}
 </head>
@@ -117,7 +117,7 @@
         <div class="app-frame">
             <header class="topbar">
                 <div class="topbar__left">
-                    <button class="nav-toggle" @click="sidebarOpen = !sidebarOpen" style="display:none;">
+                    <button class="nav-toggle" @click="sidebarOpen = !sidebarOpen">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
                     </button>
                     <span style="font-weight:700; font-size:15px; letter-spacing:-0.02em;">{% block page_title %}Dashboard{% endblock %}</span>
@@ -159,38 +159,7 @@
     </div>
 
     <style>
-        @media (max-width: 900px) {
-            .app-layout { grid-template-columns: 1fr; }
-            .app-sidebar {
-                position: fixed;
-                z-index: 50;
-                left: 0;
-                top: 0;
-                width: var(--sidebar-width);
-                transform: translateX(-100%);
-                transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-            }
-            .app-sidebar.is-open { transform: translateX(0); }
-            .nav-toggle { display: inline-flex !important; }
-        }
-        .status-banner.is-success { border-color: var(--success-border); background: var(--success-bg); }
-        .status-banner.is-success .status-banner__dot { background: var(--success); }
-        .status-banner.is-error { border-color: var(--danger-border); background: var(--danger-bg); }
-        .status-banner.is-error .status-banner__dot { background: var(--danger); }
-        .status-banner__dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-        .status-banner {
-            display: flex;
-            align-items: center;
-            gap: var(--space-3);
-            padding: var(--space-3) var(--space-4);
-            border-radius: var(--radius-sm);
-            font-size: 14px;
-        }
+        .nav-toggle { display: none; }
     </style>
 
     <script>
