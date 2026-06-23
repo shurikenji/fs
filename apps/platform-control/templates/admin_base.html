@@ -160,15 +160,27 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            // CSRF token injection
             const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            if (!csrf) return;
-            document.querySelectorAll('form[method="POST"]').forEach((form) => {
-                if (form.querySelector('input[name="csrf_token"]')) return;
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'csrf_token';
-                input.value = csrf;
-                form.appendChild(input);
+            if (csrf) {
+                document.querySelectorAll('form[method="POST"]').forEach((form) => {
+                    if (form.querySelector('input[name="csrf_token"]')) return;
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'csrf_token';
+                    input.value = csrf;
+                    form.appendChild(input);
+                });
+            }
+
+            // Scroll gradient indicator for .table-wrap
+            function checkScrollEnd(el) {
+                const atEnd = el.scrollWidth - el.scrollLeft <= el.clientWidth + 2;
+                el.dataset.scrollEnd = atEnd ? 'true' : 'false';
+            }
+            document.querySelectorAll('.table-wrap').forEach((wrap) => {
+                checkScrollEnd(wrap);
+                wrap.addEventListener('scroll', () => checkScrollEnd(wrap), { passive: true });
             });
         });
     </script>
