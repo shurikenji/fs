@@ -181,6 +181,7 @@
             document.querySelectorAll('.table-wrap').forEach((wrap) => {
                 checkScrollEnd(wrap);
                 wrap.addEventListener('scroll', () => checkScrollEnd(wrap), { passive: true });
+                window.addEventListener('resize', () => checkScrollEnd(wrap), { passive: true });
             });
         });
     </script>

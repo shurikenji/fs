@@ -37,11 +37,11 @@
                         <input class="control" id="ai_model" name="ai_model" list="ai_model_suggestions" value="{{ all_settings.get('ai_model', '') }}">
                         <datalist id="ai_model_suggestions"></datalist>
                     </div>
-                    <div class="field-span-2">
+                    <div class="field-span-full">
                         <label class="field-label">AI API key</label>
                         <input class="control" type="password" name="ai_api_key" value="{{ all_settings.get('ai_api_key', '') }}">
                     </div>
-                    <div class="field-span-2">
+                    <div class="field-span-full">
                         <label class="field-label">AI base URL</label>
                         <input class="control code-text" id="ai_base_url" name="ai_base_url" value="{{ all_settings.get('ai_base_url', '') }}" placeholder="Optional custom endpoint">
                     </div>
