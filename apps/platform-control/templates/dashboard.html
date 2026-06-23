@@ -116,10 +116,10 @@
                     <input type="hidden" name="log_path" x-model="sf.log_path">
                     <input type="hidden" name="token_search_path" x-model="sf.token_search_path">
                     <input type="hidden" name="notes" x-model="sf.notes">
-                    <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="enabled" :checked="sf.enabled"> Enabled</label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Public pricing</label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="public_balance_enabled" :checked="sf.public_balance_enabled"> Public balance</label>
+                    <div class="modal-toggle-grid">
+                        <label><input type="checkbox" name="enabled" :checked="sf.enabled"> Enabled</label>
+                        <label><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Public pricing</label>
+                        <label><input type="checkbox" name="public_balance_enabled" :checked="sf.public_balance_enabled"> Public balance</label>
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
@@ -160,9 +160,9 @@
                         <label class="field-label">Description</label>
                         <textarea class="control textarea-control" name="description" x-model="mf.description" placeholder="Short module guidance"></textarea>
                     </div>
-                    <div style="display:flex; gap:16px; align-items:center;">
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="enabled" :checked="mf.enabled"> Enabled</label>
-                        <label style="display:flex; align-items:center; gap:6px; font-size:13px;"><input type="checkbox" name="is_public" :checked="mf.is_public"> Public</label>
+                    <div class="modal-toggle-grid">
+                        <label><input type="checkbox" name="enabled" :checked="mf.enabled"> Enabled</label>
+                        <label><input type="checkbox" name="is_public" :checked="mf.is_public"> Public</label>
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
