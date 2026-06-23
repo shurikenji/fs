@@ -61,6 +61,31 @@ def _resolve_alert_level(balance_dollar: float, thresholds: tuple[float, ...]) -
     return min(breached)
 
 
+def _resolve_crossed_threshold(
+    current_balance: float,
+    previous_balance: float | None,
+    thresholds: tuple[float, ...],
+) -> float | None:
+    if previous_balance is None:
+        return None
+
+    crossed = [
+        threshold
+        for threshold in thresholds
+        if previous_balance > threshold and current_balance <= threshold
+    ]
+    if not crossed:
+        return None
+    return min(crossed)
+
+
+def _resolve_next_threshold(threshold: float, thresholds: tuple[float, ...]) -> float | None:
+    lower_thresholds = [value for value in thresholds if value < threshold]
+    if not lower_thresholds:
+        return None
+    return max(lower_thresholds)
+
+
 def _parse_remain_quota(token_data: dict) -> int | None:
     remain_quota = token_data.get("remain_quota")
     if remain_quota is None:
@@ -80,27 +105,26 @@ def _parse_float(value: object) -> float | None:
         return None
 
 
-def _next_stored_level(previous_level: float | None, current_level: float | None) -> float | None:
-    if current_level is None:
-        return None
-    if previous_level is None:
-        return current_level
-    if current_level < previous_level:
-        return current_level
-    if current_level > previous_level:
-        return current_level
-    return previous_level
-
-
-def _build_alert_message(*, masked_key_value: str, balance_dollar: float, threshold: float, server_name: str) -> str:
-    return (
-        "⚠️ API key của bạn sắp hết số dư\n\n"
-        f"🔑 Key: <code>{masked_key_value}</code>\n"
-        f"💵 Số dư còn lại: <b>{format_dollar(balance_dollar)}</b>\n"
-        f"📉 Đã chạm ngưỡng cảnh báo: <b>{format_dollar(threshold)}</b>\n"
-        f"🖥 Server: <b>{server_name}</b>\n\n"
-        "Bạn nên nạp thêm để tránh gián đoạn sử dụng."
-    )
+def _build_alert_message(
+    *,
+    masked_key_value: str,
+    balance_dollar: float,
+    threshold: float,
+    next_threshold: float | None,
+    server_name: str,
+) -> str:
+    lines = [
+        "⚠️ API key của bạn sắp hết số dư",
+        "",
+        f"🔑 Key: <code>{masked_key_value}</code>",
+        f"💵 Số dư còn lại: <b>{format_dollar(balance_dollar)}</b>",
+        f"📉 Đã rơi xuống dưới ngưỡng: <b>{format_dollar(threshold)}</b>",
+        f"🖥 Server: <b>{server_name}</b>",
+    ]
+    if next_threshold is not None:
+        lines.append(f"⏭ Ngưỡng cảnh báo tiếp theo: <b>{format_dollar(next_threshold)}</b>")
+    lines.extend(["", "Bạn nên nạp thêm để tránh gián đoạn sử dụng."])
+    return "\n".join(lines)
 
 
 async def start_key_alert_poller(bot: Bot) -> None:
@@ -187,16 +211,30 @@ async def _check_user_key(bot: Bot, *, user_key: dict, server: dict, thresholds:
 
     multiple = float(server.get("quota_multiple") or 1.0)
     balance_dollar = _quota_to_dollar_value(remain_quota, multiple)
+    previous_balance = (
+        _parse_float(previous_state.get("last_seen_balance_dollar")) if previous_state else None
+    )
     current_level = _resolve_alert_level(balance_dollar, thresholds)
+    crossed_threshold = _resolve_crossed_threshold(balance_dollar, previous_balance, thresholds)
+    retry_threshold = (
+        current_level
+        if previous_state
+        and previous_state.get("last_error") == "notify_failed"
+        and current_level is not None
+        and (previous_level is None or current_level < previous_level)
+        else None
+    )
+    alert_threshold = crossed_threshold if crossed_threshold is not None else retry_threshold
 
-    should_send = current_level is not None and (previous_level is None or current_level < previous_level)
+    should_send = alert_threshold is not None
     sent_at: str | None = None
     last_error: str | None = None
     if should_send:
         message = _build_alert_message(
             masked_key_value=masked_key_value,
             balance_dollar=balance_dollar,
-            threshold=current_level,
+            threshold=alert_threshold,
+            next_threshold=_resolve_next_threshold(alert_threshold, thresholds),
             server_name=str(server["name"]),
         )
         delivered = await notify_user(int(user_key["user_id"]), message, bot=bot)
@@ -205,9 +243,9 @@ async def _check_user_key(bot: Bot, *, user_key: dict, server: dict, thresholds:
         else:
             last_error = "notify_failed"
 
-    stored_level = previous_level if should_send and last_error else _next_stored_level(previous_level, current_level)
+    stored_level = None if current_level is None else previous_level
     if should_send and sent_at is not None:
-        stored_level = current_level
+        stored_level = alert_threshold
 
     await upsert_api_key_alert_state(
         user_id=int(user_key["user_id"]),

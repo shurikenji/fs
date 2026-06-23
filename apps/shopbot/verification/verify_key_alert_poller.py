@@ -69,6 +69,9 @@ async def main() -> None:
             await set_setting("key_alert_enabled", "true")
             await set_setting("key_alert_thresholds", "5,3,1")
 
+            assert key_alert_poller._resolve_crossed_threshold(9.97, None, (100.0, 50.0, 1.0)) is None
+            assert key_alert_poller._resolve_crossed_threshold(9.97, 120.0, (100.0, 50.0, 1.0)) == 50.0
+
             notifications: list[str] = []
             fake_client = _FakeClient([2_000_000, 1_800_000, 1_200_000, 500_000, 3_500_000, 450_000])
 
@@ -89,11 +92,14 @@ async def main() -> None:
                 await key_alert_poller._poll_cycle(bot=object())
                 await key_alert_poller._poll_cycle(bot=object())
 
-                assert len(notifications) == 4
-                assert "$4.00" in notifications[0]
-                assert "$2.40" in notifications[1]
+                assert len(notifications) == 3
+                assert "$4.00" not in "\n".join(notifications)
+                assert "$2.40" in notifications[0]
+                assert "$3.00" in notifications[0]
+                assert "$1.00" in notifications[1]
+                assert "$0.90" in notifications[2]
                 assert "$1.00" in notifications[2]
-                assert "$0.90" in notifications[3]
+                assert "Đã rơi xuống dưới ngưỡng" in notifications[0]
 
                 state = await get_api_key_alert_state(
                     user_id=user["id"],
