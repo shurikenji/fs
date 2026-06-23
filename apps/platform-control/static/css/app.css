@@ -189,8 +189,7 @@ a { color: inherit; text-decoration: none; }
     position: fixed;
     inset: 0;
     z-index: 40;
-    background: rgba(34, 40, 49, 0.22);
-    backdrop-filter: blur(4px);
+    background: rgba(34, 40, 49, 0.08);
 }
 
 .app-sidebar {
@@ -204,10 +203,11 @@ a { color: inherit; text-decoration: none; }
     padding: var(--space-5);
     border-right: 1px solid var(--border);
     background: var(--surface);
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 .app-sidebar__brand {
+    flex: 0 0 auto;
     padding: var(--space-1) 0 var(--space-4);
     border-bottom: 1px solid var(--border);
     margin-bottom: var(--space-2);
@@ -259,7 +259,14 @@ a { color: inherit; text-decoration: none; }
 .sidebar-nav {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     gap: var(--space-1);
+    min-height: 0;
+    margin-right: calc(var(--space-1) * -1);
+    padding-right: var(--space-1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
 }
 
 .sidebar-nav__section {
@@ -319,7 +326,8 @@ a { color: inherit; text-decoration: none; }
 }
 
 .sidebar-support {
-    margin-top: auto;
+    flex: 0 0 auto;
+    margin-top: var(--space-3);
     min-width: 0;
     padding: var(--space-4);
     border: 1px solid var(--border-accent);
