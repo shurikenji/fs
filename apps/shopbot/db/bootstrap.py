@@ -88,6 +88,8 @@ _INSERT_TRIGGER_COLUMNS: dict[str, tuple[str, ...]] = {
     "api_key_registry": ("first_seen_at", "last_seen_at"),
     "api_key_valuation_events": ("created_at",),
     "api_key_alert_states": ("last_checked_at", "created_at", "updated_at"),
+    "key_backup_snapshots": ("fetched_at", "created_at"),
+    "key_backup_items": ("created_at",),
     "spend_ledger": ("created_at",),
     "user_server_spend_summary": ("created_at", "updated_at"),
     "admin_notification_events": ("created_at", "updated_at"),

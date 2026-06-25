@@ -14,6 +14,7 @@ from bot.services.notifier import notify_user
 from bot.utils.formatting import format_dollar, mask_api_key
 from bot.utils.time_utils import to_db_time_string
 from db.queries.api_key_alerts import get_api_key_alert_state, upsert_api_key_alert_state
+from db.queries.key_backup import find_backup_item_for_user_key
 from db.queries.logs import add_log
 from db.queries.servers import get_active_servers
 from db.queries.settings import get_setting, get_setting_int
@@ -180,8 +181,15 @@ async def _check_user_key(bot: Bot, *, user_key: dict, server: dict, thresholds:
     )
     previous_level = _parse_float(previous_state.get("last_alert_threshold")) if previous_state else None
 
-    client = get_api_client(server)
-    token = await client.search_token(server, api_key)
+    token = await find_backup_item_for_user_key(
+        int(server["id"]),
+        user_key.get("api_token_id"),
+        user_key.get("label"),
+        api_key,
+    )
+    if not token:
+        client = get_api_client(server)
+        token = await client.search_token(server, api_key)
     if not token:
         await upsert_api_key_alert_state(
             user_id=int(user_key["user_id"]),

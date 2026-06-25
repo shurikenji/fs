@@ -327,6 +327,44 @@ CREATE TABLE IF NOT EXISTS api_key_alert_states (
 );
 CREATE INDEX IF NOT EXISTS idx_akas_user_server ON api_key_alert_states(user_id, server_id, updated_at);
 
+-- KEY BACKUP SNAPSHOTS
+CREATE TABLE IF NOT EXISTS key_backup_snapshots (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    server_id       INTEGER NOT NULL REFERENCES api_servers(id),
+    total_keys      INTEGER DEFAULT 0,
+    total_balance   REAL DEFAULT 0,
+    status          TEXT DEFAULT 'success',
+    error_message   TEXT,
+    fetched_at      TEXT DEFAULT (datetime('now', '+7 hours')),
+    created_at      TEXT DEFAULT (datetime('now', '+7 hours'))
+);
+CREATE INDEX IF NOT EXISTS idx_kbs_server ON key_backup_snapshots(server_id, fetched_at);
+
+-- KEY BACKUP ITEMS
+CREATE TABLE IF NOT EXISTS key_backup_items (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_id     INTEGER NOT NULL REFERENCES key_backup_snapshots(id) ON DELETE CASCADE,
+    server_id       INTEGER NOT NULL REFERENCES api_servers(id),
+    token_id        INTEGER,
+    token_name      TEXT,
+    key_value       TEXT,
+    key_masked      TEXT,
+    status          INTEGER DEFAULT 1,
+    remain_quota    INTEGER DEFAULT 0,
+    used_quota      INTEGER DEFAULT 0,
+    total_quota     INTEGER DEFAULT 0,
+    balance_dollar  REAL DEFAULT 0,
+    group_name      TEXT,
+    unlimited_quota INTEGER DEFAULT 0,
+    expired_time    INTEGER DEFAULT -1,
+    created_time    INTEGER,
+    accessed_time   INTEGER,
+    raw_json        TEXT,
+    created_at      TEXT DEFAULT (datetime('now', '+7 hours'))
+);
+CREATE INDEX IF NOT EXISTS idx_kbi_snapshot ON key_backup_items(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_kbi_server ON key_backup_items(server_id, token_id);
+
 -- SPEND LEDGER
 CREATE TABLE IF NOT EXISTS spend_ledger (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -456,6 +494,9 @@ _DEFAULT_SETTINGS = [
     ("key_alert_enabled", "true", "Bật/tắt cảnh báo Telegram khi API key sắp hết số dư"),
     ("key_alert_poll_interval_min", "15", "Chu kỳ quét cảnh báo API key (phút)"),
     ("key_alert_thresholds", "5,3,1", "Các mốc cảnh báo API key theo USD"),
+    ("key_backup_enabled", "true", "Enable automatic key backup polling"),
+    ("key_backup_interval_min", "10", "Key backup polling interval in minutes"),
+    ("key_backup_retention_days", "7", "Days to retain key backup history"),
     # Custom dollar settings
     ("quota_per_dollar", "500000", "Quota tương đương $1 (hằng số quy đổi)"),
     ("custom_dollar_min_wallet", "1", "$ tối thiểu nhập custom - thanh toán ví"),

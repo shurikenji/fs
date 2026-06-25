@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Key Backup{% endblock %}
+{% block content %}
+
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                    <path d="M7 17h10"></path>
+                </svg>
+            </span>
+            Key Backup
+        </h1>
+        <p class="page-subtitle">Monitor upstream token inventory snapshots across every configured API source.</p>
+    </div>
+    <div class="page-actions">
+        <form method="POST" action="/key-backup/trigger">
+            <button class="btn btn-primary" type="submit">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                    <polyline points="21 3 21 9 15 9"></polyline>
+                </svg>
+                Backup Now
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="kpi-grid animate-fade-up">
+    <div class="stat-card">
+        <div class="stat-content">
+            <div class="stat-value">{{ summary.servers }}</div>
+            <div class="stat-label">Sources</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-content">
+            <div class="stat-value">{{ summary.snapshots }}</div>
+            <div class="stat-label">With backups</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-content">
+            <div class="stat-value">{{ "{:,}".format(summary.total_keys) }}</div>
+            <div class="stat-label">Tracked keys</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-content">
+            <div class="stat-value">${{ "%.2f"|format(summary.total_balance) }}</div>
+            <div class="stat-label">Total balance</div>
+        </div>
+    </div>
+</div>
+
+<div class="table-card animate-fade-up">
+    {% if rows %}
+    <table class="table table-responsive-cards">
+        <thead>
+            <tr>
+                <th>Source</th>
+                <th style="width: 120px;">State</th>
+                <th style="width: 140px;">Keys</th>
+                <th style="width: 160px;">Balance</th>
+                <th style="width: 180px;">Last backup</th>
+                <th style="width: 210px;">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            {% set server = row.server %}
+            {% set snapshot = row.snapshot %}
+            <tr>
+                <td data-label="Source">
+                    <div class="cell-name">{{ server.name }}</div>
+                    <div class="cell-meta"><code class="cell-code--subtle">{{ server.base_url }}</code></div>
+                </td>
+                <td data-label="State">
+                    {% if row.status == 'success' %}
+                    <span class="badge badge-success">Success</span>
+                    {% elif row.status == 'error' %}
+                    <span class="badge badge-danger">Error</span>
+                    {% else %}
+                    <span class="badge badge-secondary">No backup</span>
+                    {% endif %}
+                </td>
+                <td data-label="Keys">
+                    <strong>{{ "{:,}".format(row.total_keys) }}</strong>
+                </td>
+                <td data-label="Balance">
+                    <span class="cell-price">${{ "%.2f"|format(row.total_balance) }}</span>
+                </td>
+                <td data-label="Last backup">
+                    {% if snapshot %}
+                    <div>{{ snapshot.fetched_at|time_vn }}</div>
+                    {% if snapshot.error_message %}
+                    <div class="cell-meta text-danger">{{ snapshot.error_message }}</div>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted">Never</span>
+                    {% endif %}
+                </td>
+                <td data-label="Actions">
+                    <div class="actions">
+                        <a class="btn btn-sm btn-outline-primary" href="/key-backup/{{ server.id }}">Details</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="/key-backup/history/{{ server.id }}">History</a>
+                        <form method="POST" action="/key-backup/trigger/{{ server.id }}">
+                            <button class="btn btn-sm btn-primary" type="submit">Backup</button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">[]</div>
+        <h4>No API sources configured</h4>
+        <p>Create an API source before running key backup.</p>
+        <a href="/servers" class="btn btn-primary">Open API Sources</a>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}

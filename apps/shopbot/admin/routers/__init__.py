@@ -6,6 +6,7 @@ from admin.routers.broadcast import router as broadcast_router
 from admin.routers.categories import router as categories_router
 from admin.routers.dashboard import router as dashboard_router
 from admin.routers.internal_portal import router as internal_portal_router
+from admin.routers.key_backup import router as key_backup_router
 from admin.routers.logs import router as logs_router
 from admin.routers.orders import router as orders_router
 from admin.routers.products import router as products_router
@@ -19,6 +20,7 @@ PROTECTED_ROUTERS = [
     dashboard_router,
     analytics_router,
     servers_router,
+    key_backup_router,
     categories_router,
     products_router,
     settings_router,

@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Key Backup - {{ server.name }}{% endblock %}
+{% block content %}
+
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>
+            <span class="icon">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="2" width="20" height="8" rx="2"></rect>
+                    <rect x="2" y="14" width="20" height="8" rx="2"></rect>
+                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                </svg>
+            </span>
+            {{ server.name }}
+        </h1>
+        <p class="page-subtitle">Latest backed-up token inventory for this API source.</p>
+    </div>
+    <div class="page-actions">
+        <a href="/key-backup" class="btn btn-outline-secondary">Overview</a>
+        <form method="POST" action="/key-backup/trigger/{{ server.id }}">
+            <button class="btn btn-primary" type="submit">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
+                    <polyline points="21 3 21 9 15 9"></polyline>
+                </svg>
+                Backup Now
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="kpi-grid animate-fade-up">
+    <div class="stat-card">
+        <div class="stat-content">
+            <div class="stat-value">{{ snapshot.total_keys if snapshot else 0 }}</div>
+            <div class="stat-label">Keys in latest backup</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-content">
+            <div class="stat-value">${{ "%.2f"|format(snapshot.total_balance if snapshot else 0) }}</div>
+            <div class="stat-label">Latest total balance</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-content">
+            <div class="stat-value">{{ items|selectattr('shopbot_match')|list|length }}</div>
+            <div class="stat-label">Shopbot matches</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-content">
+            <div class="stat-value">{{ history|length }}</div>
+            <div class="stat-label">History rows</div>
+        </div>
+    </div>
+</div>
+
+{% if not show_history %}
+<form method="GET" action="/key-backup/{{ server.id }}" class="d-flex gap-2 mb-3 animate-fade-up" style="flex-wrap: wrap;">
+    <input name="search" class="form-control" style="max-width: 320px;" placeholder="Search key, name, group, token ID" value="{{ search }}">
+    <button type="submit" class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        Search
+    </button>
+    {% if search %}
+    <a href="/key-backup/{{ server.id }}" class="btn btn-outline-secondary">Reset</a>
+    {% endif %}
+    <a href="/key-backup/history/{{ server.id }}" class="btn btn-outline-secondary">History</a>
+</form>
+
+<div class="table-card animate-fade-up">
+    {% if items %}
+    <table class="table table-responsive-cards" id="keyBackupTable">
+        <thead>
+            <tr>
+                <th data-sort="text">Key</th>
+                <th data-sort="text">Name</th>
+                <th data-sort="number" style="width: 95px;">Status</th>
+                <th data-sort="number" style="width: 130px;">Balance</th>
+                <th data-sort="number" style="width: 130px;">Used</th>
+                <th data-sort="number" style="width: 130px;">Total</th>
+                <th data-sort="text" style="width: 130px;">Group</th>
+                <th data-sort="number" style="width: 130px;">Last active</th>
+                <th style="width: 110px;">Shopbot</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            {% set display_key = item.key_masked or item.key_value or '-' %}
+            <tr>
+                <td data-label="Key" data-value="{{ display_key }}">
+                    <code class="cell-code--subtle">{{ display_key }}</code>
+                    {% if item.token_id %}
+                    <div class="cell-meta">Token #{{ item.token_id }}</div>
+                    {% endif %}
+                </td>
+                <td data-label="Name" data-value="{{ item.token_name or '' }}">{{ item.token_name or '-' }}</td>
+                <td data-label="Status" data-value="{{ item.status }}">
+                    {% if item.status == 1 %}
+                    <span class="badge badge-success">Enabled</span>
+                    {% else %}
+                    <span class="badge badge-secondary">{{ item.status }}</span>
+                    {% endif %}
+                </td>
+                <td data-label="Balance" data-value="{{ item.balance_dollar }}">
+                    <span class="cell-price">${{ "%.2f"|format(item.balance_dollar or 0) }}</span>
+                </td>
+                <td data-label="Used" data-value="{{ item.used_quota }}">{{ "{:,}".format(item.used_quota or 0) }}</td>
+                <td data-label="Total" data-value="{{ item.total_quota }}">{{ "{:,}".format(item.total_quota or 0) }}</td>
+                <td data-label="Group" data-value="{{ item.group_name or '' }}">{{ item.group_name or '-' }}</td>
+                <td data-label="Last active" data-value="{{ item.accessed_time or 0 }}">
+                    {{ item.accessed_time or '-' }}
+                </td>
+                <td data-label="Shopbot">
+                    {% if item.shopbot_match %}
+                    <span class="badge badge-success">Matched</span>
+                    {% else %}
+                    <span class="badge badge-secondary">External</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">--</div>
+        <h4>No keys found</h4>
+        <p>Run a backup or adjust the search query.</p>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="table-card animate-fade-up">
+    <div class="d-flex justify-content-between align-items-center mb-3" style="gap: 1rem; flex-wrap: wrap;">
+        <h4 class="m-0">Backup History</h4>
+        {% if show_history %}
+        <a class="btn btn-outline-secondary" href="/key-backup/{{ server.id }}">Latest keys</a>
+        {% endif %}
+    </div>
+    {% if history %}
+    <table class="table table-responsive-cards">
+        <thead>
+            <tr>
+                <th>Fetched at</th>
+                <th style="width: 120px;">Status</th>
+                <th style="width: 120px;">Keys</th>
+                <th style="width: 140px;">Balance</th>
+                <th>Error</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in history %}
+            <tr>
+                <td data-label="Fetched at">{{ row.fetched_at|time_vn }}</td>
+                <td data-label="Status">
+                    {% if row.status == 'success' %}
+                    <span class="badge badge-success">Success</span>
+                    {% else %}
+                    <span class="badge badge-danger">Error</span>
+                    {% endif %}
+                </td>
+                <td data-label="Keys">{{ row.total_keys }}</td>
+                <td data-label="Balance">${{ "%.2f"|format(row.total_balance or 0) }}</td>
+                <td data-label="Error">{{ row.error_message or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <div class="icon">--</div>
+        <h4>No backup history</h4>
+        <p>Run the first backup to create a snapshot.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('#keyBackupTable th[data-sort]').forEach((header, index) => {
+    header.style.cursor = 'pointer';
+    header.addEventListener('click', () => {
+        const table = header.closest('table');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const direction = header.dataset.direction === 'asc' ? 'desc' : 'asc';
+        const sortType = header.dataset.sort;
+        table.querySelectorAll('th[data-sort]').forEach(th => delete th.dataset.direction);
+        header.dataset.direction = direction;
+
+        rows.sort((a, b) => {
+            const leftCell = a.children[index];
+            const rightCell = b.children[index];
+            const leftRaw = leftCell?.dataset?.value || leftCell?.textContent || '';
+            const rightRaw = rightCell?.dataset?.value || rightCell?.textContent || '';
+            const left = sortType === 'number' ? Number(leftRaw || 0) : leftRaw.toLowerCase();
+            const right = sortType === 'number' ? Number(rightRaw || 0) : rightRaw.toLowerCase();
+            if (left < right) return direction === 'asc' ? -1 : 1;
+            if (left > right) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+
+        rows.forEach(row => tbody.appendChild(row));
+    });
+});
+</script>
+{% endblock %}
