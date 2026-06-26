@@ -107,6 +107,11 @@ class MyKeyInputCB(CallbackData, prefix="mki"):
     cat_id: int
 
 
+class KeyAlertTopupCB(CallbackData, prefix="kat"):
+    """Mở thẳng màn chọn gói nạp cho key từ cảnh báo số dư thấp."""
+    key_id: int
+
+
 class CustomAmountCB(CallbackData, prefix="ca"):
     """Trigger nhập số $ custom cho key mới/topup."""
     cat_id: int

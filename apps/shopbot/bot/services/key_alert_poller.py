@@ -8,6 +8,7 @@ import logging
 
 from aiogram import Bot
 
+from bot.keyboards.inline_kb import key_alert_topup_kb
 from bot.services.api_clients import get_api_client
 from bot.services.key_valuation import hash_api_key, normalize_api_key
 from bot.services.notifier import notify_user
@@ -19,6 +20,7 @@ from db.queries.logs import add_log
 from db.queries.servers import get_active_servers
 from db.queries.settings import get_setting, get_setting_int
 from db.queries.user_keys import get_active_user_keys_for_alerts
+from db.queries.users import get_user_by_id
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +128,32 @@ def _build_alert_message(
         lines.append(f"⏭ Ngưỡng cảnh báo tiếp theo: <b>{format_dollar(next_threshold)}</b>")
     lines.extend(["", "Bạn nên nạp thêm để tránh gián đoạn sử dụng."])
     return "\n".join(lines)
+
+
+async def _notify_user_with_markup(
+    user_id: int,
+    text: str,
+    *,
+    bot: Bot,
+    reply_markup=None,
+) -> bool:
+    if not hasattr(bot, "send_message"):
+        return await notify_user(user_id, text, bot=bot)
+
+    user = await get_user_by_id(user_id)
+    if not user or not user.get("telegram_id"):
+        return False
+
+    try:
+        await bot.send_message(
+            chat_id=int(user["telegram_id"]),
+            text=text,
+            reply_markup=reply_markup,
+        )
+        return True
+    except Exception as exc:
+        logger.error("Cannot send key alert to %s: %s", user_id, exc)
+        return False
 
 
 async def start_key_alert_poller(bot: Bot) -> None:
@@ -245,7 +273,12 @@ async def _check_user_key(bot: Bot, *, user_key: dict, server: dict, thresholds:
             next_threshold=_resolve_next_threshold(alert_threshold, thresholds),
             server_name=str(server["name"]),
         )
-        delivered = await notify_user(int(user_key["user_id"]), message, bot=bot)
+        delivered = await _notify_user_with_markup(
+            int(user_key["user_id"]),
+            message,
+            bot=bot,
+            reply_markup=key_alert_topup_kb(int(user_key["id"])),
+        )
         if delivered:
             sent_at = to_db_time_string()
         else:

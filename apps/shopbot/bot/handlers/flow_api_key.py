@@ -23,7 +23,7 @@ from bot.callback_data.factories import (
     KeyActionCB, ServerSelectCB, ProductPageCB,
     ProductSelectCB, PaymentMethodCB, OrderCancelCB,
     MyKeySelectCB, MyKeysPageCB, MyKeySearchCB, MyKeyInputCB, CustomAmountCB,
-    BackServersCB, BackKeyInputCB, BackCustomAmountCB,
+    KeyAlertTopupCB, BackServersCB, BackKeyInputCB, BackCustomAmountCB,
 )
 from bot.keyboards.inline_kb import (
     categories_kb, servers_kb, products_kb, payment_method_kb,
@@ -41,7 +41,11 @@ from bot.services.payment_poller import process_wallet_payment
 logger = logging.getLogger(__name__)
 
 from db.queries.categories import get_active_categories, get_category_by_id
-from db.queries.products import get_active_products_by_category, get_product_by_id
+from db.queries.products import (
+    get_active_key_topup_products_by_server,
+    get_active_products_by_category,
+    get_product_by_id,
+)
 from db.queries.servers import get_active_servers, get_server_by_id
 from db.queries.orders import create_order, get_order_by_id
 from db.queries.user_keys import (
@@ -156,6 +160,81 @@ async def _show_key_products_for_server(
             page=0,
             per_page=per_page,
             action=action,
+        ),
+        parse_mode="HTML",
+    )
+    return True
+
+
+async def _load_topup_products_for_key(
+    server_id: int,
+    cat_id: int | None = None,
+) -> tuple[int, list[dict]]:
+    if cat_id:
+        products = await get_active_products_by_category(
+            cat_id,
+            server_id=server_id,
+            product_type="key_topup",
+        )
+        if products:
+            return int(cat_id), products
+
+    products = await get_active_key_topup_products_by_server(server_id)
+    if not products:
+        return int(cat_id or 0), []
+
+    resolved_cat_id = int(products[0].get("category_id") or cat_id or 0)
+    if not resolved_cat_id:
+        return 0, products
+
+    same_category_products = [
+        product
+        for product in products
+        if int(product.get("category_id") or 0) == resolved_cat_id
+    ]
+    return resolved_cat_id, same_category_products
+
+
+async def _show_topup_products_for_key(
+    callback: CallbackQuery,
+    *,
+    key_row: dict,
+    state: FSMContext,
+    cat_id: int | None = None,
+    from_alert: bool = False,
+) -> bool:
+    server_id = int(key_row["server_id"])
+    resolved_cat_id, products = await _load_topup_products_for_key(server_id, cat_id)
+    await state.update_data(
+        existing_key=key_row["api_key"],
+        current_server_id=server_id,
+        current_cat_id=resolved_cat_id,
+        key_action="topup",
+    )
+
+    if not products:
+        back_target = (
+            "main"
+            if from_alert or not resolved_cat_id
+            else BackServersCB(cat_id=resolved_cat_id, action="topup")
+        )
+        await callback.message.edit_text(
+            "📦 Chưa có gói nạp cho server này.",
+            reply_markup=back_only_kb(back_target),
+        )
+        return False
+
+    per_page = await get_setting_int("pagination_size", 6)
+    await callback.message.edit_text(
+        f"💳 <b>Nạp key</b>: <code>{mask_api_key(key_row['api_key'])}</code>\n\nChọn gói nạp:",
+        reply_markup=products_kb(
+            products,
+            cat_id=resolved_cat_id,
+            srv_id=server_id,
+            ptype="key_topup",
+            page=0,
+            per_page=per_page,
+            action="topup",
         ),
         parse_mode="HTML",
     )
@@ -338,36 +417,39 @@ async def select_my_key(
         await callback.answer("❌ Key không tồn tại.", show_alert=True)
         return
 
-    await state.update_data(
-        existing_key=key_row["api_key"],
-        current_server_id=key_row["server_id"],
-    )
-
     fsm_data = await state.get_data()
-    cat_id = fsm_data.get("current_cat_id", 0)
-    server_id = key_row["server_id"]
-
-    # Hiện gói topup
-    products = await get_active_products_by_category(
-        cat_id, server_id=server_id, product_type="key_topup"
+    cat_id = int(fsm_data.get("current_cat_id") or 0)
+    await _show_topup_products_for_key(
+        callback,
+        key_row=key_row,
+        state=state,
+        cat_id=cat_id,
     )
-    if not products:
-        await callback.message.edit_text(
-            "📦 Chưa có gói nạp cho server này.",
-            reply_markup=back_only_kb(BackServersCB(cat_id=cat_id, action="topup")),
-        )
-        await callback.answer()
+    await callback.answer()
+
+
+@router.callback_query(KeyAlertTopupCB.filter())
+async def key_alert_topup(
+    callback: CallbackQuery,
+    callback_data: KeyAlertTopupCB,
+    state: FSMContext,
+    db_user: dict,
+) -> None:
+    """Mở thẳng màn chọn gói nạp từ cảnh báo số dư thấp."""
+    key_row = await get_user_key_by_id(callback_data.key_id)
+    if (
+        not key_row
+        or key_row["user_id"] != db_user["id"]
+        or not key_row.get("is_active", 1)
+    ):
+        await callback.answer("❌ Key không còn khả dụng.", show_alert=True)
         return
 
-    per_page = await get_setting_int("pagination_size", 6)
-    await callback.message.edit_text(
-        f"💳 <b>Nạp key</b>: <code>{mask_api_key(key_row['api_key'])}</code>\n\nChọn gói nạp:",
-        reply_markup=products_kb(
-            products, cat_id=cat_id, srv_id=server_id,
-            ptype="key_topup", page=0, per_page=per_page,
-            action="topup",
-        ),
-        parse_mode="HTML",
+    await _show_topup_products_for_key(
+        callback,
+        key_row=key_row,
+        state=state,
+        from_alert=True,
     )
     await callback.answer()
 

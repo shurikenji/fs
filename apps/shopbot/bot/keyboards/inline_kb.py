@@ -26,6 +26,7 @@ from bot.callback_data.factories import (
     MyKeysPageCB,
     MyKeySearchCB,
     MyKeyInputCB,
+    KeyAlertTopupCB,
     CustomAmountCB,
     WalletActionCB,
     WalletTopupAmountCB,
@@ -443,6 +444,17 @@ def my_key_search_results_kb(
 
 
 # ── Wallet ──────────────────────────────────────────────────────────────────
+
+def key_alert_topup_kb(key_id: int) -> InlineKeyboardMarkup:
+    """Inline keyboard dưới cảnh báo số dư thấp để mở thẳng màn chọn gói nạp."""
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="💳 Nạp ngay",
+        callback_data=KeyAlertTopupCB(key_id=key_id),
+    )
+    builder.adjust(1)
+    return builder.as_markup()
+
 
 def wallet_menu_kb() -> InlineKeyboardMarkup:
     """Inline keyboard ví: nạp tiền / lịch sử."""

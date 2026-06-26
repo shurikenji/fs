@@ -113,6 +113,22 @@ async def main() -> None:
                 key_alert_poller.get_api_client = original_get_api_client
                 key_alert_poller.notify_user = original_notify_user
 
+            sent_messages: list[dict] = []
+
+            class _FakeBot:
+                async def send_message(self, **kwargs) -> None:
+                    sent_messages.append(kwargs)
+
+            delivered = await key_alert_poller._notify_user_with_markup(
+                user["id"],
+                "test alert",
+                bot=_FakeBot(),
+                reply_markup=key_alert_poller.key_alert_topup_kb(123),
+            )
+            assert delivered is True
+            assert sent_messages[0]["chat_id"] == 51001
+            assert sent_messages[0]["reply_markup"].inline_keyboard[0][0].callback_data == "kat:123"
+
             print("\n=== KEY ALERT POLLER VERIFICATION PASSED ===")
         finally:
             await close_db()

@@ -66,6 +66,18 @@ async def get_active_products_by_category(
     return await _fetch_products_with_real_stock(query, params)
 
 
+async def get_active_key_topup_products_by_server(server_id: int) -> list[dict]:
+    """Lấy các gói nạp key active theo server, giữ thứ tự category/product."""
+    query = f"""
+        {_PRODUCT_WITH_CATEGORY_QUERY}
+        WHERE p.server_id = ?
+          AND p.product_type = 'key_topup'
+          AND p.is_active = 1
+        ORDER BY cat_sort_order ASC, cat_sort_name ASC, p.sort_order ASC, p.id ASC
+    """
+    return await _fetch_products_with_real_stock(query, (server_id,))
+
+
 async def get_product_by_id(product_id: int) -> Optional[dict]:
     """Lấy sản phẩm theo ID."""
     return await _fetch_product_with_real_stock("p.id = ?", (product_id,))
