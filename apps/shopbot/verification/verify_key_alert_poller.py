@@ -13,6 +13,7 @@ if str(ROOT_DIR) not in sys.path:
 from bot.config import settings
 from db.database import close_db
 from db.models import init_db
+from db.queries._helpers import execute_commit
 from db.queries.api_key_alerts import get_api_key_alert_state
 from db.queries.servers import create_server
 from db.queries.settings import set_setting
@@ -68,6 +69,7 @@ async def main() -> None:
 
             await set_setting("key_alert_enabled", "true")
             await set_setting("key_alert_thresholds", "5,3,1")
+            await set_setting("key_alert_first_seen_grace_min", "60")
 
             assert key_alert_poller._resolve_crossed_threshold(9.97, None, (100.0, 50.0, 1.0)) is None
             assert key_alert_poller._resolve_crossed_threshold(9.97, 120.0, (100.0, 50.0, 1.0)) == 50.0
@@ -92,13 +94,14 @@ async def main() -> None:
                 await key_alert_poller._poll_cycle(bot=object())
                 await key_alert_poller._poll_cycle(bot=object())
 
-                assert len(notifications) == 3
-                assert "$4.00" not in "\n".join(notifications)
-                assert "$2.40" in notifications[0]
-                assert "$3.00" in notifications[0]
-                assert "$1.00" in notifications[1]
-                assert "$0.90" in notifications[2]
+                assert len(notifications) == 4
+                assert "$4.00" in notifications[0]
+                assert "$5.00" in notifications[0]
+                assert "$2.40" in notifications[1]
+                assert "$3.00" in notifications[1]
                 assert "$1.00" in notifications[2]
+                assert "$0.90" in notifications[3]
+                assert "$1.00" in notifications[3]
                 assert "Đã rơi xuống dưới ngưỡng" in notifications[0]
 
                 state = await get_api_key_alert_state(
@@ -108,7 +111,56 @@ async def main() -> None:
                 )
                 assert state is not None
                 assert float(state["last_alert_threshold"]) == 1.0
-                print("[OK] key alert poller sends only when crossing new thresholds and resets after top-up")
+                print("[OK] key alert poller sends first low alert for new keys, crosses thresholds, and resets after top-up")
+            finally:
+                key_alert_poller.get_api_client = original_get_api_client
+                key_alert_poller.notify_user = original_notify_user
+
+            old_notifications: list[str] = []
+
+            async def _fake_old_notify_user(user_id: int, text: str, *, bot=None) -> bool:
+                _ = user_id, bot
+                old_notifications.append(text)
+                return True
+
+            old_user_key = {
+                "id": 99001,
+                "user_id": user["id"],
+                "server_id": server_id,
+                "api_key": "sk-old-low-balance-1234567890",
+                "api_token_id": None,
+                "label": None,
+                "created_at": "2020-01-01 00:00:00",
+            }
+            await execute_commit(
+                """DELETE FROM api_key_alert_states
+                   WHERE user_id = ? AND server_id = ? AND api_key_hash = ?""",
+                (
+                    user["id"],
+                    server_id,
+                    key_alert_poller.hash_api_key("sk-old-low-balance-1234567890"),
+                ),
+            )
+            original_get_api_client = key_alert_poller.get_api_client
+            original_notify_user = key_alert_poller.notify_user
+            key_alert_poller.get_api_client = lambda server: _FakeClient([450_000])
+            key_alert_poller.notify_user = _fake_old_notify_user
+            try:
+                await key_alert_poller._check_user_key(
+                    object(),
+                    user_key=old_user_key,
+                    server={
+                        "id": server_id,
+                        "name": "Alert Server",
+                        "base_url": "https://example.com",
+                        "user_id_header": "new-api-user",
+                        "access_token": "secret",
+                        "quota_multiple": 1.0,
+                    },
+                    thresholds=(5.0, 3.0, 1.0),
+                )
+                assert old_notifications == []
+                print("[OK] key alert poller does not send first low alert for old keys without state")
             finally:
                 key_alert_poller.get_api_client = original_get_api_client
                 key_alert_poller.notify_user = original_notify_user

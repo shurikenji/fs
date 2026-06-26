@@ -494,6 +494,7 @@ _DEFAULT_SETTINGS = [
     ("key_alert_enabled", "true", "Bật/tắt cảnh báo Telegram khi API key sắp hết số dư"),
     ("key_alert_poll_interval_min", "15", "Chu kỳ quét cảnh báo API key (phút)"),
     ("key_alert_thresholds", "5,3,1", "Các mốc cảnh báo API key theo USD"),
+    ("key_alert_first_seen_grace_min", "60", "Số phút cho phép cảnh báo lần đầu với key mới đã thấp số dư"),
     ("key_backup_enabled", "true", "Enable automatic key backup polling"),
     ("key_backup_interval_min", "10", "Key backup polling interval in minutes"),
     ("key_backup_retention_days", "7", "Days to retain key backup history"),
