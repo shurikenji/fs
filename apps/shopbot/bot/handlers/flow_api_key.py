@@ -218,14 +218,16 @@ async def _show_topup_products_for_key(
             if from_alert or not resolved_cat_id
             else BackServersCB(cat_id=resolved_cat_id, action="topup")
         )
-        await callback.message.edit_text(
+        send_result = callback.message.answer if from_alert else callback.message.edit_text
+        await send_result(
             "📦 Chưa có gói nạp cho server này.",
             reply_markup=back_only_kb(back_target),
         )
         return False
 
     per_page = await get_setting_int("pagination_size", 6)
-    await callback.message.edit_text(
+    send_products = callback.message.answer if from_alert else callback.message.edit_text
+    await send_products(
         f"💳 <b>Nạp key</b>: <code>{mask_api_key(key_row['api_key'])}</code>\n\nChọn gói nạp:",
         reply_markup=products_kb(
             products,
