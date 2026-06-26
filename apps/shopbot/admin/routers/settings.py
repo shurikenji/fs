@@ -21,6 +21,8 @@ _EDITABLE_KEYS = [
     "poll_interval",
     "key_alert_poll_interval_min",
     "key_alert_thresholds",
+    "key_backup_interval_min",
+    "key_backup_retention_days",
     "order_expire_min",
     "vietqr_template",
     "bot_name",
@@ -98,6 +100,7 @@ async def settings_save(request: Request):
         "admin_notify_service_completed",
         "admin_notify_order_refunded",
         "key_alert_enabled",
+        "key_backup_enabled",
     ):
         await set_setting(key, "true" if form.get(key) else "false")
     return RedirectResponse("/settings?saved=1", status_code=303)

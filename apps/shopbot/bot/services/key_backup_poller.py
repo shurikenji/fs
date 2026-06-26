@@ -48,6 +48,10 @@ def _quota_to_dollar_value(quota: int, multiple: float) -> float:
     return max(0.0, float(quota) / float(divisor))
 
 
+def _ensure_sk_prefix(key: str) -> str:
+    return key if key.startswith("sk-") else f"sk-{key}"
+
+
 def _extract_items_payload(response_payload: dict[str, Any]) -> dict[str, Any]:
     data = response_payload.get("data")
     if not isinstance(data, dict):
@@ -90,10 +94,10 @@ def _normalize_key_fields(raw_key: object) -> tuple[str | None, str | None]:
     if not key:
         return None, None
     if "*" in key:
-        return None, key
+        return None, _ensure_sk_prefix(key)
 
-    normalized = key if key.startswith("sk-") else f"sk-{key}"
-    return key, mask_api_key(normalized)
+    normalized = _ensure_sk_prefix(key)
+    return normalized, mask_api_key(normalized)
 
 
 def _normalize_token_item(token: dict[str, Any], *, quota_multiple: float) -> dict[str, Any]:

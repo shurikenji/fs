@@ -34,6 +34,10 @@ def _bare_key(value: str) -> str:
     return key[3:] if key.startswith("sk-") else key
 
 
+def _normalized_key_fragment(value: str) -> str:
+    return _bare_key(value).strip().lower()
+
+
 def match_masked_key(full_key: str | None, masked_key: str | None) -> bool:
     """Match full shopbot keys against full or masked upstream key values."""
     if not full_key or not masked_key:
@@ -49,6 +53,29 @@ def match_masked_key(full_key: str | None, masked_key: str | None) -> bool:
     prefix = masked[:star_start]
     suffix = masked[star_end + 1 :]
     return bool(prefix or suffix) and bare.startswith(prefix) and bare.endswith(suffix)
+
+
+def key_search_matches(keyword: str | None, *values: object) -> bool:
+    """Search full or masked key-like fields with sk-prefix and prefix/suffix tolerance."""
+    normalized_keyword = _clean_text(keyword)
+    if not normalized_keyword:
+        return True
+
+    keyword_lower = normalized_keyword.lower()
+    keyword_key = _normalized_key_fragment(normalized_keyword)
+    for value in values:
+        text = _clean_text(value)
+        if not text:
+            continue
+
+        text_lower = text.lower()
+        text_key = _normalized_key_fragment(text)
+        if keyword_lower in text_lower or (keyword_key and keyword_key in text_key):
+            return True
+        if match_masked_key(normalized_keyword, text) or match_masked_key(text, normalized_keyword):
+            return True
+
+    return False
 
 
 def _item_matches_user_key(item: dict, user_key: dict) -> bool:

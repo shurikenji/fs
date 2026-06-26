@@ -12,6 +12,7 @@ from db.queries.key_backup import (
     get_backup_history,
     get_latest_items_by_server,
     get_latest_snapshot_per_server,
+    key_search_matches,
 )
 from db.queries.servers import get_all_servers, get_server_by_id
 
@@ -51,7 +52,7 @@ def _redirect_with_flash(path: str, trigger: str, message: str) -> RedirectRespo
 
 
 def _apply_item_search(items: list[dict], search: str) -> list[dict]:
-    keyword = search.strip().lower()
+    keyword = search.strip()
     if not keyword:
         return items
 
@@ -63,7 +64,7 @@ def _apply_item_search(items: list[dict], search: str) -> list[dict]:
             item.get("group_name"),
             item.get("token_id"),
         )
-        return any(keyword in _clean_text(field).lower() for field in fields)
+        return key_search_matches(keyword, *fields)
 
     return [item for item in items if _matches(item)]
 

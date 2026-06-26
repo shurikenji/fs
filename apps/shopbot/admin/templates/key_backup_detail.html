@@ -91,7 +91,7 @@
         </thead>
         <tbody>
             {% for item in items %}
-            {% set display_key = item.key_masked or item.key_value or '-' %}
+            {% set display_key = item.key_value or item.key_masked or '-' %}
             <tr>
                 <td data-label="Key" data-value="{{ display_key }}">
                     <code class="cell-code--subtle">{{ display_key }}</code>

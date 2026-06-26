@@ -305,6 +305,37 @@
                                     <div class="form-text">Separate multiple thresholds with commas.</div>
                                 </div>
                             </div>
+                            <div class="col-12">
+                                <div style="height: 1px; background: var(--border-light); margin: 0.25rem 0;"></div>
+                            </div>
+                            <div class="col-12">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.35rem;">
+                                    <h4 style="margin: 0; font-size: 0.95rem; font-weight: 700; color: var(--text-primary);">Key Backup Snapshots</h4>
+                                    <span style="font-size: 0.75rem; color: var(--text-secondary); background: var(--background-subtle); border: 1px solid var(--border-light); border-radius: 999px; padding: 0.2rem 0.6rem;">Inventory cache</span>
+                                </div>
+                                <p style="margin: 0; color: var(--text-secondary); font-size: 0.84rem;">Fetch all upstream tokens on a separate cadence so alerts and admin views can read local snapshot data first.</p>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check" style="padding: 0.6rem 0.75rem; background: var(--background-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
+                                    <input type="checkbox" class="form-check-input" id="key_backup_enabled" name="key_backup_enabled" value="true"
+                                        {% if all_settings.get('key_backup_enabled', 'true') == 'true' %}checked{% endif %}>
+                                    <label class="form-check-label" for="key_backup_enabled" style="font-size: 0.875rem; font-weight: 500;">Enable upstream key backup snapshots</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Key Backup Interval (minutes)</label>
+                                    <input name="key_backup_interval_min" type="number" min="1" class="form-control" value="{{ all_settings.get('key_backup_interval_min', '10') }}" placeholder="10">
+                                    <div class="form-text">Runs independently from Telegram alert polling.</div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label class="form-label">Backup Retention (days)</label>
+                                    <input name="key_backup_retention_days" type="number" min="1" class="form-control" value="{{ all_settings.get('key_backup_retention_days', '7') }}" placeholder="7">
+                                    <div class="form-text">Older snapshots are removed after successful backup cycles.</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
