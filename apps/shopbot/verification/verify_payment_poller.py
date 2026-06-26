@@ -13,14 +13,42 @@ if str(ROOT_DIR) not in sys.path:
 from bot.config import settings
 from db.database import close_db, get_db
 from db.models import init_db
+from db.queries.api_key_alerts import get_api_key_alert_state, upsert_api_key_alert_state
+from db.queries.categories import create_category
 from db.queries.orders import create_order, get_order_by_id
+from db.queries.products import create_product
+from db.queries.servers import create_server
 from db.queries.transactions import get_processed_transactions
+from db.queries.user_keys import get_user_keys
 from db.queries.users import create_user
 from db.queries.wallets import add_balance
 
 
 class _DummyBot:
     pass
+
+
+class _FakeKeyTopupClient:
+    def __init__(self, *, current_quota: int, token_id: int = 7701) -> None:
+        self.current_quota = current_quota
+        self.token_id = token_id
+        self.updated_to: int | None = None
+
+    async def search_token(self, server: dict, api_key: str) -> dict:
+        _ = server, api_key
+        return {"id": self.token_id, "remain_quota": self.current_quota}
+
+    async def update_token(
+        self,
+        *,
+        server: dict,
+        token_id: int,
+        new_quota: int,
+        current_data: dict,
+    ) -> bool:
+        _ = server, token_id, current_data
+        self.updated_to = new_quota
+        return True
 
 
 async def _set_order_created_at(order_id: int, created_at: str) -> None:
@@ -77,6 +105,7 @@ async def main() -> None:
             original_notify_admin_order_completed = payment_poller.notify_admin_order_completed
             original_notify_admin_service_paid = payment_poller.notify_admin_service_paid
             original_fetch_transactions = payment_poller.fetch_transactions
+            original_get_api_client = payment_poller.get_api_client
             original_process_order = payment_poller._process_order
 
             payment_poller.notify_user = _fake_notify_user
@@ -169,12 +198,113 @@ async def main() -> None:
                 assert "ORDABCD0004" in processed_orders
                 print("[OK] process_wallet_payment charges the wallet and routes successful orders through _process_order")
 
+                category_id = await create_category("Keys", sort_order=1)
+                server_id = await create_server(
+                    name="Alert Reset Server",
+                    base_url="https://example.com",
+                    user_id_header="new-api-user",
+                    access_token="secret",
+                    price_per_unit=30_000,
+                    quota_per_unit=5_000_000,
+                    quota_multiple=1.0,
+                )
+                product_id = await create_product(
+                    category_id=category_id,
+                    server_id=server_id,
+                    name="Topup $10",
+                    price_vnd=30_000,
+                    product_type="key_topup",
+                    quota_amount=5_000_000,
+                    dollar_amount=10.0,
+                )
+                topup_key = "sk-reset-alert-after-topup-1234567890"
+                topup_order_id = await create_order(
+                    order_code="ORDABCD0005",
+                    user_id=user["id"],
+                    product_type="key_topup",
+                    amount=30_000,
+                    payment_method="wallet",
+                    product_id=product_id,
+                    product_name="Topup $10",
+                    server_id=server_id,
+                    existing_key=topup_key,
+                )
+                topup_order = await get_order_by_id(topup_order_id)
+                assert topup_order is not None
+
+                import bot.services.key_alert_poller as key_alert_poller
+
+                await upsert_api_key_alert_state(
+                    user_id=user["id"],
+                    server_id=server_id,
+                    api_key_hash=key_alert_poller.hash_api_key(topup_key),
+                    masked_key="sk-reset********7890",
+                    last_seen_remain_quota=450_000,
+                    last_seen_balance_dollar=0.9,
+                    last_alert_threshold=1.0,
+                    last_alert_sent_at="2026-01-01 00:00:00",
+                )
+
+                topup_client = _FakeKeyTopupClient(current_quota=500_000)
+                payment_poller.get_api_client = lambda server: topup_client
+                await payment_poller._process_key_topup(_DummyBot(), topup_order)
+
+                completed_topup = await get_order_by_id(topup_order_id)
+                assert completed_topup is not None and completed_topup["status"] == "completed"
+                assert topup_client.updated_to == 5_500_000
+
+                recovered_state = await get_api_key_alert_state(
+                    user_id=user["id"],
+                    server_id=server_id,
+                    api_key_hash=key_alert_poller.hash_api_key(topup_key),
+                )
+                assert recovered_state is not None
+                assert int(recovered_state["last_seen_remain_quota"]) == 5_500_000
+                assert float(recovered_state["last_seen_balance_dollar"]) == 11.0
+                assert recovered_state["last_alert_threshold"] is None
+
+                alert_notifications: list[str] = []
+
+                async def _fake_alert_notify_user(user_id: int, text: str, *, bot=None) -> bool:
+                    _ = user_id, bot
+                    alert_notifications.append(text)
+                    return True
+
+                original_key_alert_get_api_client = key_alert_poller.get_api_client
+                original_key_alert_notify_user = key_alert_poller.notify_user
+                key_alert_poller.get_api_client = lambda server: _FakeKeyTopupClient(current_quota=450_000)
+                key_alert_poller.notify_user = _fake_alert_notify_user
+                try:
+                    user_key_rows = await get_user_keys(user["id"], server_id=server_id)
+                    assert user_key_rows
+                    await key_alert_poller._check_user_key(
+                        object(),
+                        user_key=user_key_rows[0],
+                        server={
+                            "id": server_id,
+                            "name": "Alert Reset Server",
+                            "base_url": "https://example.com",
+                            "user_id_header": "new-api-user",
+                            "access_token": "secret",
+                            "quota_multiple": 1.0,
+                        },
+                        thresholds=(100.0, 50.0, 10.0, 1.0),
+                    )
+                    assert len(alert_notifications) == 1
+                    assert "$0.90" in alert_notifications[0]
+                    assert "$1.00" in alert_notifications[0]
+                finally:
+                    key_alert_poller.get_api_client = original_key_alert_get_api_client
+                    key_alert_poller.notify_user = original_key_alert_notify_user
+                print("[OK] key topup completion resets alert baseline so fast re-drains alert again")
+
                 print("\n=== PAYMENT POLLER VERIFICATION PASSED ===")
             finally:
                 payment_poller.notify_user = original_notify_user
                 payment_poller.notify_admin_order_completed = original_notify_admin_order_completed
                 payment_poller.notify_admin_service_paid = original_notify_admin_service_paid
                 payment_poller.fetch_transactions = original_fetch_transactions
+                payment_poller.get_api_client = original_get_api_client
                 payment_poller._process_order = original_process_order
         finally:
             await close_db()

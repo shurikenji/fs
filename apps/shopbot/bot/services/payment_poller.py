@@ -19,7 +19,7 @@ from bot.services.admin_order_notifications import (
     notify_admin_order_completed,
     notify_admin_service_paid,
 )
-from bot.services.key_valuation import KeyValuationService
+from bot.services.key_valuation import KeyValuationService, hash_api_key, normalize_api_key
 from bot.services.mbbank import extract_order_code, fetch_transactions
 from bot.services.spend_ledger import SpendLedgerService
 from bot.services.refund_service import refund_order
@@ -27,6 +27,7 @@ from bot.services.notifier import notify_user
 from bot.utils.formatting import format_vnd, mask_api_key, quota_to_dollar
 from bot.utils.time_utils import get_now_vn, to_db_time_string, to_gmt7
 from db.queries.account_stocks import mark_account_sold
+from db.queries.api_key_alerts import upsert_api_key_alert_state
 from db.queries.logs import add_log
 from db.queries.orders import (
     get_order_by_code,
@@ -57,6 +58,32 @@ _CREATED_KEY_FIELDS = (
 
 class _MaskedDeliveryDataError(RuntimeError):
     """Raised when upstream creates a token but only returns masked key data."""
+
+
+def _quota_to_alert_dollar_value(quota: int, multiple: float) -> float:
+    divisor = 500000 * (multiple if multiple > 0 else 1.0)
+    return max(0.0, float(quota) / float(divisor))
+
+
+async def _mark_key_alert_recovered_after_topup(
+    *,
+    order: Order,
+    server: dict,
+    api_key: str,
+    remain_quota: int,
+) -> None:
+    normalized_key = normalize_api_key(api_key)
+    multiple = float(server.get("quota_multiple") or 1.0)
+    await upsert_api_key_alert_state(
+        user_id=int(order["user_id"]),
+        server_id=int(server["id"]),
+        api_key_hash=hash_api_key(normalized_key),
+        masked_key=mask_api_key(normalized_key),
+        last_seen_remain_quota=int(remain_quota),
+        last_seen_balance_dollar=_quota_to_alert_dollar_value(int(remain_quota), multiple),
+        last_alert_threshold=None,
+        last_error=None,
+    )
 
 
 async def start_payment_poller(bot: Bot) -> None:
@@ -546,6 +573,25 @@ async def _process_key_topup(bot: Bot, order: Order) -> None:
         quota_before=current_quota,
         quota_after=new_quota,
     )
+    try:
+        await _mark_key_alert_recovered_after_topup(
+            order=order,
+            server=server,
+            api_key=existing_key,
+            remain_quota=new_quota,
+        )
+    except Exception as exc:
+        logger.error(
+            "Key alert recovery sync failed for order %s: %s",
+            order["order_code"],
+            exc,
+            exc_info=True,
+        )
+        await add_log(
+            f"Key alert recovery sync failed for order {order['order_code']}: {exc}",
+            level="error",
+            module="poller",
+        )
     await SpendLedgerService.record_order_completion(order)
     await add_log(
         (
