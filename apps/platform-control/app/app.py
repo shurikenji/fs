@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from html import escape
 import secrets
 from typing import Any, Awaitable, Callable
+from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -126,6 +127,88 @@ def _issue_shopbot_launch_token() -> str:
         "nonce": secrets.token_urlsafe(16),
     }
     return _shopbot_serializer().dumps(payload)
+
+
+def _shopbot_launch_action_url() -> str:
+    settings = get_settings()
+    shopbot_admin_url = settings.shopbot_admin_url.strip().rstrip("/")
+    if not shopbot_admin_url:
+        raise RuntimeError("SHOPBOT_ADMIN_URL is empty. Set it to the public Shopbot admin endpoint.")
+
+    parsed_shopbot_url = urlparse(shopbot_admin_url)
+    if parsed_shopbot_url.scheme not in {"http", "https"} or not parsed_shopbot_url.netloc:
+        raise RuntimeError("SHOPBOT_ADMIN_URL must be an absolute browser-accessible http(s) URL.")
+
+    public_base_url = settings.public_base_url.strip().rstrip("/")
+    parsed_public_url = urlparse(public_base_url)
+    if parsed_public_url.scheme and parsed_public_url.netloc:
+        same_public_origin = (
+            parsed_shopbot_url.scheme,
+            parsed_shopbot_url.netloc,
+        ) == (
+            parsed_public_url.scheme,
+            parsed_public_url.netloc,
+        )
+        public_root_path = parsed_shopbot_url.path.rstrip("/") in {"", "/"}
+        if same_public_origin and public_root_path:
+            raise RuntimeError(
+                "SHOPBOT_ADMIN_URL points back to PUBLIC_BASE_URL. "
+                "Set it to the public Shopbot admin endpoint, not the platform-control domain."
+            )
+
+    return f"{shopbot_admin_url}/sso/consume"
+
+
+def _render_shopbot_launch_config_error(message: str) -> HTMLResponse:
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Shopbot Admin Launch Configuration Error</title>
+        <style>
+            body {{
+                margin: 0;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                font-family: 'Inter', -apple-system, sans-serif;
+                background: #F0F2F5;
+                color: #222831;
+            }}
+            .card {{
+                width: min(92vw, 560px);
+                background: #FFFFFF;
+                border: 1px solid rgba(34,40,49,0.08);
+                border-radius: 20px;
+                padding: 32px;
+                box-shadow: 0 12px 40px rgba(34,40,49,0.08);
+            }}
+            h1 {{ margin: 0 0 10px; font-size: 1.5rem; font-weight: 700; }}
+            p {{ margin: 0 0 8px; color: #4A5568; line-height: 1.6; }}
+            code {{
+                display: block;
+                margin-top: 14px;
+                padding: 12px;
+                border-radius: 10px;
+                background: #F8FAFC;
+                color: #B42318;
+                white-space: normal;
+                overflow-wrap: anywhere;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <h1>Shopbot Admin launch is misconfigured</h1>
+            <p>The platform-control dashboard could not build a safe launch target.</p>
+            <code>{escape(message)}</code>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(html, status_code=503)
 
 
 def _describe_proxy_endpoint_error(exc: Exception) -> str:
@@ -348,10 +431,14 @@ def create_app() -> FastAPI:
         if redirect:
             return redirect
 
+        try:
+            action_url = _shopbot_launch_action_url()
+        except RuntimeError as exc:
+            return _render_shopbot_launch_config_error(str(exc))
+
         ip = _client_ip(request)
         await create_activity_log("LAUNCH_SHOPBOT", "Opened Shopbot Admin via SSO", ip)
 
-        action_url = f"{settings.shopbot_admin_url.rstrip('/')}/sso/consume"
         token = _issue_shopbot_launch_token()
         html = f"""
         <!DOCTYPE html>
