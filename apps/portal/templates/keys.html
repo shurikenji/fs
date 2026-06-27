@@ -177,6 +177,8 @@
             },
 
             displayGroupName(groupName) {
+                const displayNames = this.keyInfo?.group_display_names || {};
+                if (displayNames[groupName]) return displayNames[groupName];
                 const match = (this.keyInfo?.available_groups || []).find((group) => group.name === groupName);
                 return match?.display_name || groupName;
             },
@@ -250,6 +252,10 @@
                     } else if (this.keyInfo) {
                         this.keyInfo.token.groups = [...data.groups];
                         this.keyInfo.token.display_groups = [...data.display_groups];
+                        this.keyInfo.group_display_names = {
+                            ...(this.keyInfo.group_display_names || {}),
+                            ...(data.group_display_names || {}),
+                        };
                         this.message = 'Group policy saved successfully.';
                     }
                 } catch (e) {

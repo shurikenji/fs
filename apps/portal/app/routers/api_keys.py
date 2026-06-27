@@ -75,6 +75,29 @@ def _normalize_selected_groups(groups: list[str], selection_mode: str) -> list[s
     return cleaned
 
 
+def _build_group_display_names(
+    available_groups: list[dict[str, Any]],
+    selected_groups: list[str] | None = None,
+) -> dict[str, str]:
+    display_names: dict[str, str] = {}
+    for group in available_groups:
+        name = str(group.get("name") or "").strip()
+        if name:
+            display_names[name] = str(group.get("display_name") or "").strip() or sanitize_group_name(name)
+    for group in selected_groups or []:
+        name = str(group or "").strip()
+        if name:
+            display_names.setdefault(name, sanitize_group_name(name))
+    return display_names
+
+
+def _display_selected_groups(groups: list[str], display_names: dict[str, str]) -> list[str]:
+    return [
+        display_names.get(group) or sanitize_group_name(group)
+        for group in groups
+    ]
+
+
 def _build_update_payload(server_type: str, raw: dict[str, Any], groups: list[str]) -> dict[str, Any] | None:
     joined = ",".join(groups)
     remain_quota = raw.get("remain_quota")
@@ -172,7 +195,7 @@ async def api_key_resolve(body: KeyResolveRequest, request: Request):
         catalog_rows = filter_group_rows(catalog_rows, hidden_groups=hidden_groups)
         available_groups = [
             {
-                "name": str(group.get("name") or ""),
+                "name": str(group.get("name") or "").strip(),
                 "display_name": sanitize_group_name(
                     str(group.get("name") or ""),
                     str(group.get("label_en") or group.get("name") or ""),
@@ -194,12 +217,14 @@ async def api_key_resolve(body: KeyResolveRequest, request: Request):
             for group in public_pricing.groups
         ]
 
+    group_display_names = _build_group_display_names(available_groups, visible_groups)
     return {
         "token": {
             "groups": visible_groups,
-            "display_groups": [sanitize_group_name(group) for group in visible_groups],
+            "display_groups": _display_selected_groups(visible_groups, group_display_names),
         },
         "available_groups": available_groups,
+        "group_display_names": group_display_names,
         "supports_group_chain": bool(server.get("supports_group_chain")),
         "selection_mode": selection_mode,
         "has_hidden_groups": bool(hidden_selected_groups),
@@ -236,18 +261,33 @@ async def api_key_update(body: KeyUpdateRequest, request: Request):
 
     hidden_groups = hidden_group_names(server)
     visible_group_names: set[str] = set()
+    available_groups: list[dict[str, Any]] = []
     catalog_rows = await ensure_server_group_catalog(server)
     if catalog_rows:
-        visible_group_names = {
-            str(item.get("name") or "").strip()
-            for item in filter_group_rows(catalog_rows, hidden_groups=hidden_groups)
-            if str(item.get("name") or "").strip()
-        }
+        available_groups = [
+            {
+                "name": str(group.get("name") or "").strip(),
+                "display_name": sanitize_group_name(
+                    str(group.get("name") or ""),
+                    str(group.get("label_en") or group.get("name") or ""),
+                ),
+            }
+            for group in filter_group_rows(catalog_rows, hidden_groups=hidden_groups)
+            if str(group.get("name") or "").strip()
+        ]
+        visible_group_names = {group["name"] for group in available_groups}
     else:
         pricing = await fetch_pricing(body.server_id, allow_upstream=False)
         public_pricing = await build_public_pricing(pricing, server) if pricing else None
         if public_pricing:
-            visible_group_names = {group.name for group in public_pricing.groups}
+            available_groups = [
+                {
+                    "name": group.name,
+                    "display_name": sanitize_group_name(group.name, group.display_name),
+                }
+                for group in public_pricing.groups
+            ]
+            visible_group_names = {group["name"] for group in available_groups}
 
     if visible_group_names and any(group not in visible_group_names for group in groups):
         return JSONResponse({"error": "One or more groups are hidden or unavailable."}, status_code=400)
@@ -279,8 +319,10 @@ async def api_key_update(body: KeyUpdateRequest, request: Request):
             status_code=502,
         )
 
+    group_display_names = _build_group_display_names(available_groups, groups)
     return {
         "success": True,
         "groups": groups,
-        "display_groups": [sanitize_group_name(group) for group in groups],
+        "display_groups": _display_selected_groups(groups, group_display_names),
+        "group_display_names": group_display_names,
     }
