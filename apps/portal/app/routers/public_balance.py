@@ -28,6 +28,15 @@ class BalanceCheckRequest(BaseModel):
     server: str
 
 
+class BulkBalanceCheckItem(BaseModel):
+    api_key: str
+    server_id: str
+
+
+class BulkBalanceCheckRequest(BaseModel):
+    items: list[BulkBalanceCheckItem]
+
+
 def _is_quota_exhausted(raw: str) -> bool:
     """Check if the error message indicates quota exhausted (negative balance)."""
     return "\u989d\u5ea6\u5df2\u7528\u5c3d" in raw
@@ -39,6 +48,13 @@ def _normalize_error_message(raw: str) -> str:
     if _is_quota_exhausted(raw):
         return "Quota exhausted"
     return "Failed to check balance"
+
+
+def _mask_api_key(api_key: str) -> str:
+    key = api_key.strip()
+    if len(key) <= 12:
+        return key[:3] + "..."
+    return key[:6] + "..." + key[-4:]
 
 
 async def _fallback_balance_via_token_search(
@@ -109,36 +125,7 @@ async def _fallback_balance_via_token_search(
     }
 
 
-@router.get("/check", response_class=HTMLResponse)
-async def balance_page(request: Request):
-    templates = get_templates()
-    return templates.TemplateResponse(
-        "balance.html",
-        {
-            "request": request,
-            "servers": await load_public_balance_sources(),
-        },
-    )
-
-
-@router.post("/api/check-balance")
-async def check_balance(body: BalanceCheckRequest, request: Request):
-    await enforce_rate_limit(
-        request,
-        bucket="balance-check",
-        limit=12,
-        window_seconds=60,
-        detail="Too many balance checks. Please wait a moment and try again.",
-    )
-    api_key = body.api_key.strip()
-    if not _API_KEY_PATTERN.match(api_key):
-        raise HTTPException(status_code=400, detail="Invalid API key format. Must start with sk-.")
-
-    servers = await load_balance_runtime_sources()
-    selected = next((item for item in servers if str(item["id"]) == body.server), None)
-    if not selected:
-        raise HTTPException(status_code=400, detail="Invalid server")
-
+async def _check_balance_for_server(selected: dict, api_key: str) -> dict:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Accept": "application/json",
@@ -153,7 +140,7 @@ async def check_balance(body: BalanceCheckRequest, request: Request):
     except Exception as exc:
         raise HTTPException(
             status_code=502,
-            detail="Failed to reach the selected source. Please try again later.",
+            detail="Failed to reach the selected server. Please try again later.",
         ) from exc
 
     try:
@@ -193,5 +180,117 @@ async def check_balance(body: BalanceCheckRequest, request: Request):
             "usage_usd": f"{usage_value:.2f}",
             "balance_usd": f"{balance:.2f}",
             "has_payment_method": bool(subscription.get("has_payment_method") or False),
+        },
+    }
+
+
+@router.get("/check", response_class=HTMLResponse)
+async def balance_page(request: Request):
+    templates = get_templates()
+    return templates.TemplateResponse(
+        "balance.html",
+        {
+            "request": request,
+            "servers": await load_public_balance_sources(),
+        },
+    )
+
+
+@router.post("/api/check-balance")
+async def check_balance(body: BalanceCheckRequest, request: Request):
+    await enforce_rate_limit(
+        request,
+        bucket="balance-check",
+        limit=12,
+        window_seconds=60,
+        detail="Too many balance checks. Please wait a moment and try again.",
+    )
+    api_key = body.api_key.strip()
+    if not _API_KEY_PATTERN.match(api_key):
+        raise HTTPException(status_code=400, detail="Invalid API key format. Must start with sk-.")
+
+    servers = await load_balance_runtime_sources()
+    selected = next((item for item in servers if str(item["id"]) == body.server), None)
+    if not selected:
+        raise HTTPException(status_code=400, detail="Invalid server")
+
+    return await _check_balance_for_server(selected, api_key)
+
+
+@router.post("/api/check-balance-bulk")
+async def check_balance_bulk(body: BulkBalanceCheckRequest, request: Request):
+    await enforce_rate_limit(
+        request,
+        bucket="balance-check-bulk",
+        limit=5,
+        window_seconds=60,
+        detail="Too many bulk balance checks. Please wait a moment and try again.",
+    )
+
+    if not body.items:
+        raise HTTPException(status_code=400, detail="Add at least one key to check.")
+    if len(body.items) > 20:
+        raise HTTPException(status_code=400, detail="Bulk balance checks are limited to 20 keys.")
+
+    servers = await load_balance_runtime_sources()
+    server_map = {str(item["id"]): item for item in servers}
+    semaphore = asyncio.Semaphore(10)
+
+    async def run_item(index: int, item: BulkBalanceCheckItem) -> dict:
+        api_key = item.api_key.strip()
+        server_id = str(item.server_id).strip()
+        selected = server_map.get(server_id)
+        base = {
+            "index": index,
+            "server": selected["name"] if selected else "Unknown server",
+            "server_id": server_id,
+            "key_masked": _mask_api_key(api_key),
+            "balance_usd": None,
+            "limit_usd": None,
+            "usage_usd": None,
+            "error": None,
+        }
+
+        if not _API_KEY_PATTERN.match(api_key):
+            return {**base, "error": "Invalid API key format. Must start with sk-."}
+        if not selected:
+            return {**base, "error": "Invalid server"}
+
+        async with semaphore:
+            try:
+                payload = await _check_balance_for_server(selected, api_key)
+            except HTTPException as exc:
+                return {**base, "error": str(exc.detail)}
+            except Exception as exc:
+                logger.warning("Bulk balance check failed for server %s: %s", server_id, exc)
+                return {**base, "error": "Failed to check balance"}
+
+        data = payload.get("data") or {}
+        return {
+            **base,
+            "server": payload.get("server") or selected["name"],
+            "balance_usd": data.get("balance_usd"),
+            "limit_usd": data.get("limit_usd"),
+            "usage_usd": data.get("usage_usd"),
+        }
+
+    results = await asyncio.gather(
+        *(run_item(index, item) for index, item in enumerate(body.items, start=1))
+    )
+    valid_results = [item for item in results if not item.get("error")]
+    total_balance = 0.0
+    for item in valid_results:
+        try:
+            total_balance += float(item.get("balance_usd") or 0)
+        except (TypeError, ValueError):
+            pass
+
+    return {
+        "results": results,
+        "summary": {
+            "total_checks": len(results),
+            "valid_count": len(valid_results),
+            "error_count": len(results) - len(valid_results),
+            "total_balance_usd": f"{total_balance:.2f}",
         },
     }

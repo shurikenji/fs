@@ -15,15 +15,15 @@
         <div class="panel-heading">
             <div>
                 <h2 class="panel-title">Resolve key routing</h2>
-                <p class="panel-copy">Select a source, paste a key, and inspect the active group or ordered group chain.</p>
+                <p class="panel-copy">Select a server, paste a key, and inspect the active group or ordered group chain.</p>
             </div>
         </div>
 
         <div style="display: grid; gap: var(--space-4);">
             <div>
-                <label class="field-label">Runtime source</label>
+                <label class="field-label">Server</label>
                 <select class="select-control" x-model="serverId" @change="resetState()">
-                    <option value="">Choose a source</option>
+                    <option value="">Choose a server</option>
                     {% for s in servers %}
                     <option value="{{ s.id }}">{{ s.name }}</option>
                     {% endfor %}

@@ -1,7 +1,7 @@
 {% extends "admin_base.html" %}
 {% set active_page = "pricing-sources" %}
-{% block title %}Pricing Sources{% endblock %}
-{% block page_title %}Pricing Sources{% endblock %}
+{% block title %}Pricing Servers{% endblock %}
+{% block page_title %}Pricing Servers{% endblock %}
 
 {% block content %}
 {% set form = source_form or {} %}
@@ -25,7 +25,7 @@
                 <div class="modal-header">
                     <div>
                         <h2 class="panel-title" x-text="modalTitle"></h2>
-                        <p class="panel-copy" style="margin-top:6px;">Update connector metadata, endpoint paths, and public visibility flags without leaving the source registry.</p>
+                        <p class="panel-copy" style="margin-top:6px;">Update connector metadata, endpoint paths, and public visibility flags without leaving the server registry.</p>
                     </div>
                     <button class="button-ghost" type="button" @click="closeModal()" style="height:28px; padding:0 8px; font-size:18px; line-height:1;">&times;</button>
                 </div>
@@ -37,7 +37,7 @@
 
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Source ID</label>
+                            <label class="field-label">Server ID</label>
                             <input class="control" type="text" name="source_id" x-model="sf.source_id" required :readonly="sf.isEdit" :style="sf.isEdit && 'opacity:0.6'">
                         </div>
                         <div>
@@ -45,7 +45,7 @@
                             <input class="control" type="text" name="name" x-model="sf.name" required>
                         </div>
                         <div>
-                            <label class="field-label">Source type</label>
+                            <label class="field-label">Server type</label>
                             <select class="control select-control" name="source_type" x-model="sf.source_type">
                                 {% for option in server_types %}
                                 <option value="{{ option.value }}">{{ option.label }}</option>
@@ -165,7 +165,7 @@
 
                     <div class="modal-actions">
                         <button type="button" class="button-secondary" @click="closeModal()">Cancel</button>
-                        <button type="submit" class="button" x-text="sf.isEdit ? 'Save Changes' : 'Create Source'"></button>
+                        <button type="submit" class="button" x-text="sf.isEdit ? 'Save Changes' : 'Create Server'"></button>
                     </div>
                 </form>
             </div>
@@ -174,11 +174,11 @@
 
     <section class="page-head">
         <div>
-            <h1 class="page-title">Pricing Sources</h1>
-            <p class="page-subtitle">Control-plane source of truth for pricing connectors, advanced metadata, and runtime sync actions.</p>
+            <h1 class="page-title">Pricing Servers</h1>
+            <p class="page-subtitle">Control-plane server registry for pricing connectors, advanced metadata, and runtime sync actions.</p>
         </div>
         <div class="page-actions">
-            <a class="button-secondary" href="/control/pricing/sources" @click.prevent="openCreate()">New source</a>
+            <a class="button-secondary" href="/control/pricing/sources" @click.prevent="openCreate()">New server</a>
             <form method="POST" action="/control/pricing/sources/import-runtime">
                 <button type="submit" class="button-secondary">Import Runtime</button>
             </form>
@@ -198,8 +198,8 @@
     <section class="shell-card">
         <div class="panel-heading">
             <div>
-                <h2 class="panel-title">Registered sources</h2>
-                <p class="panel-copy">{{ sources|length }} control-plane sources available for pricing runtime import.</p>
+                <h2 class="panel-title">Registered servers</h2>
+                <p class="panel-copy">{{ sources|length }} control-plane servers available for pricing runtime import.</p>
             </div>
         </div>
         <div class="table-wrap">
@@ -261,7 +261,7 @@
                                 <form method="POST" action="/control/pricing/sources/{{ source.id }}/sync">
                                     <button type="submit" class="button-secondary">Sync</button>
                                 </form>
-                                <form method="POST" action="/control/pricing/sources/delete" onsubmit="return confirm('Delete this pricing source?');">
+                                <form method="POST" action="/control/pricing/sources/delete" onsubmit="return confirm('Delete this pricing server?');">
                                     <input type="hidden" name="source_id" value="{{ source.id }}">
                                     <button type="submit" class="button-ghost" style="color:var(--danger);">Delete</button>
                                 </form>
@@ -386,13 +386,13 @@ function pricingSourcesPage(hasInitialEdit) {
 
     return {
         modalOpen: false,
-        modalTitle: 'Create Pricing Source',
+        modalTitle: 'Create Pricing Server',
         sf: emptySource(),
 
         init() {
             if (hasInitialEdit) {
                 this.sf = normalizeSource(initialForm, true);
-                this.modalTitle = 'Edit Pricing Source: ' + (this.sf.name || this.sf.source_id);
+                this.modalTitle = 'Edit Pricing Server: ' + (this.sf.name || this.sf.source_id);
                 this.modalOpen = true;
             }
         },
@@ -405,7 +405,7 @@ function pricingSourcesPage(hasInitialEdit) {
 
         openCreate() {
             this.sf = emptySource();
-            this.modalTitle = 'Create Pricing Source';
+            this.modalTitle = 'Create Pricing Server';
             this.modalOpen = true;
             window.history.replaceState({}, '', pageUrl);
         },
@@ -417,7 +417,7 @@ function pricingSourcesPage(hasInitialEdit) {
                 return;
             }
             this.sf = normalizeSource(source, true);
-            this.modalTitle = 'Edit Pricing Source: ' + (this.sf.name || this.sf.source_id);
+            this.modalTitle = 'Edit Pricing Server: ' + (this.sf.name || this.sf.source_id);
             this.modalOpen = true;
             window.history.replaceState({}, '', pageUrl + '?edit=' + encodeURIComponent(this.sf.source_id));
         }

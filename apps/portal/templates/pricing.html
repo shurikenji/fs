@@ -7,7 +7,7 @@
         <p class="page-eyebrow" style="justify-content:center;">Pricing Explorer</p>
         <h1 class="page-title" style="max-width: 18ch; margin: 0 auto;">Pricing Explorer</h1>
         <p class="page-subtitle" style="max-width: 52ch; margin: var(--space-3) auto 0;">Inspect public model pricing by
-            source, group visibility, endpoint exposure, and billing mode.</p>
+            server, group visibility, endpoint exposure, and billing mode.</p>
 
         <div style="margin-top: var(--space-6); max-width: 560px; margin-left: auto; margin-right: auto;">
             <div class="search-bar">
@@ -44,9 +44,9 @@
 
         <div class="toolbar-grid">
             <div>
-                <label class="field-label">Pricing source</label>
+                <label class="field-label">Server</label>
                 <select class="select-control" x-model="selectedServer" @change="loadPricing()" autocomplete="off">
-                    <option value="">Choose a source</option>
+                    <option value="">Choose a server</option>
                     {% for s in servers %}
                     <option value="{{ s.id }}">{{ s.name }}</option>
                     {% endfor %}
@@ -104,7 +104,7 @@
     <div x-show="!loading && !selectedServer" class="status-banner is-info fade-up">
         <span class="status-banner__dot"></span>
         <div>
-            <strong>Choose a source to load pricing.</strong>
+            <strong>Choose a server to load pricing.</strong>
             <div class="panel-copy mt-1">The explorer waits for one connector before it requests model and group data.</div>
         </div>
     </div>
@@ -451,7 +451,7 @@
             },
 
             activeServerName() {
-                return this.pricing?.server_name || this.activeServer()?.name || 'No source selected';
+                return this.pricing?.server_name || this.activeServer()?.name || 'No server selected';
             },
 
             prettyMode(mode) {
@@ -517,7 +517,6 @@
                 this.selectedGroup = '';
                 this.selectedTag = '';
                 this.selectedMode = '';
-                this.searchQuery = '';
                 this.detailOpen = false;
                 this.detailModel = null;
             },

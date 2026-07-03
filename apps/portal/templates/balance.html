@@ -6,42 +6,156 @@
     <section class="fade-up" style="text-align: center;">
         <p class="page-eyebrow" style="justify-content:center;">Balance Check</p>
         <h1 class="page-title">Balance Check</h1>
-        <p class="page-subtitle" style="max-width: 44ch; margin: var(--space-3) auto 0;">
-            Query remaining credit for a specific key against the selected runtime source.
+        <p class="page-subtitle" style="max-width: 48ch; margin: var(--space-3) auto 0;">
+            Query remaining credit for one key or compare multiple keys across selected runtime servers.
         </p>
     </section>
 
-    <section class="shell-panel centered-form fade-up">
+    <section class="shell-panel fade-up">
         <div class="panel-heading">
             <div>
                 <h2 class="panel-title">Resolve balance</h2>
-                <p class="panel-copy">Select the connector, paste an API key, and run a direct balance lookup.</p>
+                <p class="panel-copy">Choose a checking mode, paste API keys, and run a direct balance lookup.</p>
             </div>
         </div>
 
-        <div style="display: grid; gap: var(--space-4);">
+        <div class="controls-row" style="gap: 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 4px; background: var(--bg-inset);">
+            <button type="button" class="button-secondary" style="border:0; white-space:nowrap;"
+                :style="mode === 'single' ? 'background: var(--surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;'"
+                @click="switchMode('single')">Check 1 Key</button>
+            <button type="button" class="button-secondary" style="border:0; white-space:nowrap;"
+                :style="mode === 'multi-key' ? 'background: var(--surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;'"
+                @click="switchMode('multi-key')">Multi-Key, 1 Server</button>
+            <button type="button" class="button-secondary" style="border:0; white-space:nowrap;"
+                :style="mode === 'multi-server' ? 'background: var(--surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;'"
+                @click="switchMode('multi-server')">Multi-Key, Multi-Server</button>
+        </div>
+
+        <div x-show="mode === 'single'" style="display: grid; gap: var(--space-4); margin-top: var(--space-5);">
+            <div class="toolbar-grid">
+                <div>
+                    <label class="field-label">Server</label>
+                    <select class="select-control" x-model="serverId">
+                        <option value="">Choose a server</option>
+                        <template x-for="server in servers" :key="server.id">
+                            <option :value="server.id" x-text="server.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <div>
+                    <label class="field-label">API key</label>
+                    <input type="text" class="control code-text" placeholder="Paste the key to validate (for example: sk-...)"
+                        x-model="apiKey">
+                </div>
+            </div>
+            <button class="button button--lg" style="width: 100%;" @click="checkSingle()"
+                :disabled="loading || !serverId || !apiKey">
+                <span x-text="loading ? 'Checking...' : 'Run balance check'"></span>
+            </button>
+        </div>
+
+        <div x-show="mode === 'multi-key'" style="display: grid; gap: var(--space-4); margin-top: var(--space-5);">
             <div>
-                <label class="field-label">Runtime source</label>
-                <select class="select-control" x-model="serverId">
-                    <option value="">Choose a source</option>
+                <label class="field-label">Server</label>
+                <select class="select-control" x-model="bulkServerId">
+                    <option value="">Choose a server</option>
                     <template x-for="server in servers" :key="server.id">
                         <option :value="server.id" x-text="server.name"></option>
                     </template>
                 </select>
             </div>
             <div>
-                <label class="field-label">API key</label>
-                <input type="text" class="control code-text" placeholder="Paste the key to validate (for example: sk-...)"
-                    x-model="apiKey">
+                <label class="field-label">API keys</label>
+                <textarea class="control textarea-control code-text" rows="8"
+                    placeholder="Paste one API key per line. Maximum 20 keys." x-model="bulkKeys"></textarea>
             </div>
-            <button class="button button--lg" style="width: 100%; margin-top: var(--space-2);" @click="checkBalance()"
-                :disabled="loading || !serverId || !apiKey">
+            <button class="button button--lg" style="width: 100%;" @click="checkBulkSingleServer()"
+                :disabled="loading || !bulkServerId || parsedBulkKeys().length === 0">
                 <span x-text="loading ? 'Checking...' : 'Run balance check'"></span>
             </button>
         </div>
+
+        <div x-show="mode === 'multi-server'" style="display: grid; gap: var(--space-4); margin-top: var(--space-5);">
+            <template x-if="!multiItems.length">
+                <div style="display: grid; gap: var(--space-4);">
+                    <div>
+                        <label class="field-label">API keys</label>
+                        <textarea class="control textarea-control code-text" rows="8"
+                            placeholder="Paste one API key per line. Maximum 20 keys." x-model="multiKeysText"></textarea>
+                    </div>
+                    <button type="button" class="button-secondary" @click="parseMultiServerKeys()"
+                        :disabled="!parseKeys(multiKeysText).length">Parse keys</button>
+                </div>
+            </template>
+
+            <template x-if="multiItems.length">
+                <div style="display: grid; gap: var(--space-4);">
+                    <div class="panel-heading" style="align-items:end;">
+                        <div>
+                            <h3 class="panel-title" style="font-size: 18px;">Key-server mapping</h3>
+                            <p class="panel-copy"><span x-text="multiItems.length"></span> keys ready for server assignment.</p>
+                        </div>
+                        <button type="button" class="button-ghost" @click="resetMultiServer()">Paste again</button>
+                    </div>
+
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Key</th>
+                                    <th>Server</th>
+                                    <th style="text-align:right;">Remove</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="(item, index) in multiItems" :key="item.id">
+                                    <tr>
+                                        <td x-text="index + 1"></td>
+                                        <td class="code-text" x-text="item.key_masked"></td>
+                                        <td>
+                                            <select class="select-control" x-model="item.server_id">
+                                                <option value="">Choose server</option>
+                                                <template x-for="server in servers" :key="server.id">
+                                                    <option :value="server.id" x-text="server.name"></option>
+                                                </template>
+                                            </select>
+                                        </td>
+                                        <td style="text-align:right;">
+                                            <button type="button" class="button-ghost" style="color: var(--danger);" @click="removeMultiItem(item.id)">Remove</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="controls-row" style="justify-content: space-between;">
+                        <div class="controls-row">
+                            <input type="text" class="control code-text" style="max-width: 320px;" placeholder="Add another key" x-model="newMultiKey">
+                            <button type="button" class="button-secondary" @click="addMultiKey()" :disabled="!newMultiKey.trim() || multiItems.length >= maxKeys">Add key</button>
+                        </div>
+                        <div class="controls-row">
+                            <select class="select-control" style="max-width: 240px;" x-model="assignServerId">
+                                <option value="">Set unassigned to server</option>
+                                <template x-for="server in servers" :key="server.id">
+                                    <option :value="server.id" x-text="server.name"></option>
+                                </template>
+                            </select>
+                            <button type="button" class="button-secondary" @click="setUnassignedServers()" :disabled="!assignServerId">Apply</button>
+                        </div>
+                    </div>
+
+                    <button class="button button--lg" style="width: 100%;" @click="checkBulkMultiServer()"
+                        :disabled="loading || !multiServerReady()">
+                        <span x-text="loading ? 'Checking...' : 'Run balance check'"></span>
+                    </button>
+                </div>
+            </template>
+        </div>
     </section>
 
-    <div x-show="error" class="status-banner is-error centered-form fade-up">
+    <div x-show="error" class="status-banner is-error fade-up">
         <span class="status-banner__dot"></span>
         <div>
             <strong>Balance lookup failed.</strong>
@@ -49,31 +163,62 @@
         </div>
     </div>
 
-    <section x-show="result && result.data" class="centered-form fade-up">
-        <div class="status-banner is-success" style="margin-bottom: var(--space-5);">
-            <span class="status-banner__dot"></span>
-            <div>
-                <strong x-text="'Source: ' + result.server"></strong>
-                <div class="panel-copy mt-1">The selected source returned a balance snapshot successfully.</div>
-            </div>
-        </div>
+    <section x-show="summary" class="metric-grid fade-up">
+        <article class="metric-card" style="text-align: center;">
+            <div class="metric-label">Total Balance</div>
+            <div class="metric-value" style="color: var(--success);" x-text="'$' + (summary?.total_balance_usd || '0.00')"></div>
+            <p class="metric-copy">Across successful checks</p>
+        </article>
+        <article class="metric-card" style="text-align: center;">
+            <div class="metric-label">Valid</div>
+            <div class="metric-value" x-text="summary?.valid_count || 0"></div>
+            <p class="metric-copy">Keys with balance data</p>
+        </article>
+        <article class="metric-card" style="text-align: center;">
+            <div class="metric-label">Errors</div>
+            <div class="metric-value" style="color: var(--warning);" x-text="summary?.error_count || 0"></div>
+            <p class="metric-copy">Keys needing attention</p>
+        </article>
+    </section>
 
-        <div class="metric-grid">
-            <article class="metric-card" style="text-align: center;">
-                <div class="metric-label">Balance</div>
-                <div class="metric-value" :style="'color: ' + (parseFloat(result.data.balance_usd) < 0 ? 'var(--danger)' : 'var(--success)')" x-text="'$' + result.data.balance_usd"></div>
-                <p class="metric-copy" x-text="parseFloat(result.data.balance_usd) < 0 ? 'Over limit' : 'Remaining credit'"></p>
-            </article>
-            <article class="metric-card" style="text-align: center;">
-                <div class="metric-label">Limit</div>
-                <div class="metric-value" x-text="'$' + result.data.limit_usd"></div>
-                <p class="metric-copy">Configured credit limit</p>
-            </article>
-            <article class="metric-card" style="text-align: center;">
-                <div class="metric-label">Used</div>
-                <div class="metric-value" style="color: var(--warning);" x-text="'$' + result.data.usage_usd"></div>
-                <p class="metric-copy">Reported usage to date</p>
-            </article>
+    <section x-show="results.length" class="shell-table fade-up">
+        <div class="panel-heading">
+            <div>
+                <h2 class="panel-title">Results</h2>
+                <p class="panel-copy">Each row shows the selected server, masked key, reported credit limit, usage, and remaining balance.</p>
+            </div>
+            <span class="tag is-accent"><span x-text="results.length"></span> checks</span>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Server</th>
+                        <th>Key</th>
+                        <th>Status</th>
+                        <th>Balance</th>
+                        <th>Limit</th>
+                        <th>Used</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="(row, index) in results" :key="row.index || index">
+                        <tr>
+                            <td x-text="row.index || index + 1"></td>
+                            <td x-text="row.server || '-'"></td>
+                            <td class="code-text" x-text="row.key_masked || '-'"></td>
+                            <td>
+                                <span class="tag is-accent" x-show="!row.error">success</span>
+                                <span class="tag is-warm" x-show="row.error" x-text="row.error"></span>
+                            </td>
+                            <td x-text="row.balance_usd ? '$' + row.balance_usd : '-'"></td>
+                            <td x-text="row.limit_usd ? '$' + row.limit_usd : '-'"></td>
+                            <td x-text="row.usage_usd ? '$' + row.usage_usd : '-'"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
         </div>
     </section>
 </div>
@@ -84,24 +229,89 @@
     function balanceApp() {
         return {
             servers: {{ servers | tojson }},
+            maxKeys: 20,
+            mode: 'single',
             serverId: '',
             apiKey: '',
+            bulkServerId: '',
+            bulkKeys: '',
+            multiKeysText: '',
+            multiItems: [],
+            newMultiKey: '',
+            assignServerId: '',
+            nextItemId: 1,
             loading: false,
             error: '',
-            result: null,
+            results: [],
+            summary: null,
 
-            activeServer() {
-                return this.servers.find((server) => String(server.id) === String(this.serverId)) || null;
-            },
-
-            activeServerName() {
-                return this.activeServer()?.name || 'No source selected';
-            },
-
-            async checkBalance() {
-                this.loading = true;
+            switchMode(mode) {
+                this.mode = mode;
                 this.error = '';
-                this.result = null;
+            },
+
+            activeServerName(serverId) {
+                return this.servers.find((server) => String(server.id) === String(serverId))?.name || 'No server selected';
+            },
+
+            parseKeys(value) {
+                return String(value || '')
+                    .split(/\r?\n/)
+                    .map((key) => key.trim())
+                    .filter(Boolean);
+            },
+
+            parsedBulkKeys() {
+                return this.parseKeys(this.bulkKeys);
+            },
+
+            maskKey(apiKey) {
+                const key = String(apiKey || '').trim();
+                if (key.length <= 12) return key.slice(0, 3) + '...';
+                return key.slice(0, 6) + '...' + key.slice(-4);
+            },
+
+            clearResults() {
+                this.error = '';
+                this.results = [];
+                this.summary = null;
+            },
+
+            setBulkPayload(payload) {
+                this.results = payload.results || [];
+                this.summary = payload.summary || {
+                    total_checks: this.results.length,
+                    valid_count: this.results.filter((row) => !row.error).length,
+                    error_count: this.results.filter((row) => row.error).length,
+                    total_balance_usd: '0.00',
+                };
+            },
+
+            singlePayloadToResults(payload) {
+                const data = payload.data || {};
+                return {
+                    results: [{
+                        index: 1,
+                        server: payload.server || this.activeServerName(this.serverId),
+                        server_id: this.serverId,
+                        key_masked: this.maskKey(this.apiKey),
+                        balance_usd: data.balance_usd,
+                        limit_usd: data.limit_usd,
+                        usage_usd: data.usage_usd,
+                        error: null,
+                    }],
+                    summary: {
+                        total_checks: 1,
+                        valid_count: 1,
+                        error_count: 0,
+                        total_balance_usd: data.balance_usd || '0.00',
+                    },
+                };
+            },
+
+            async checkSingle() {
+                this.loading = true;
+                this.clearResults();
                 try {
                     const response = await fetch('/api/check-balance', {
                         method: 'POST',
@@ -116,12 +326,107 @@
                         this.error = payload.detail || payload.error || 'Failed to check balance';
                         return;
                     }
-                    this.result = payload;
+                    this.setBulkPayload(this.singlePayloadToResults(payload));
                 } catch (error) {
                     this.error = 'Request failed: ' + error.message;
                 } finally {
                     this.loading = false;
                 }
+            },
+
+            async checkBulk(items) {
+                this.loading = true;
+                this.clearResults();
+                try {
+                    const response = await fetch('/api/check-balance-bulk', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items }),
+                    });
+                    const payload = await response.json();
+                    if (!response.ok) {
+                        this.error = payload.detail || payload.error || 'Failed to check balances';
+                        return;
+                    }
+                    this.setBulkPayload(payload);
+                } catch (error) {
+                    this.error = 'Request failed: ' + error.message;
+                } finally {
+                    this.loading = false;
+                }
+            },
+
+            checkBulkSingleServer() {
+                const keys = this.parsedBulkKeys();
+                if (keys.length > this.maxKeys) {
+                    this.error = 'Bulk balance checks are limited to 20 keys.';
+                    return;
+                }
+                return this.checkBulk(keys.map((apiKey) => ({
+                    api_key: apiKey,
+                    server_id: this.bulkServerId,
+                })));
+            },
+
+            parseMultiServerKeys() {
+                const keys = this.parseKeys(this.multiKeysText);
+                if (!keys.length) {
+                    this.error = 'Paste at least one API key.';
+                    return;
+                }
+                if (keys.length > this.maxKeys) {
+                    this.error = 'Bulk balance checks are limited to 20 keys.';
+                    return;
+                }
+                this.error = '';
+                this.multiItems = keys.map((apiKey) => ({
+                    id: this.nextItemId++,
+                    api_key: apiKey,
+                    key_masked: this.maskKey(apiKey),
+                    server_id: '',
+                }));
+            },
+
+            resetMultiServer() {
+                this.multiItems = [];
+                this.assignServerId = '';
+            },
+
+            addMultiKey() {
+                const apiKey = this.newMultiKey.trim();
+                if (!apiKey || this.multiItems.length >= this.maxKeys) return;
+                this.multiItems.push({
+                    id: this.nextItemId++,
+                    api_key: apiKey,
+                    key_masked: this.maskKey(apiKey),
+                    server_id: '',
+                });
+                this.newMultiKey = '';
+            },
+
+            removeMultiItem(itemId) {
+                this.multiItems = this.multiItems.filter((item) => item.id !== itemId);
+            },
+
+            setUnassignedServers() {
+                if (!this.assignServerId) return;
+                this.multiItems = this.multiItems.map((item) => ({
+                    ...item,
+                    server_id: item.server_id || this.assignServerId,
+                }));
+            },
+
+            multiServerReady() {
+                return this.multiItems.length > 0
+                    && this.multiItems.length <= this.maxKeys
+                    && this.multiItems.every((item) => item.api_key && item.server_id);
+            },
+
+            checkBulkMultiServer() {
+                return this.checkBulk(this.multiItems.map((item) => ({
+                    api_key: item.api_key,
+                    server_id: item.server_id,
+                })));
             },
         };
     }

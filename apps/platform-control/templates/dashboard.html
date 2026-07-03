@@ -24,7 +24,7 @@
                             <input class="control" name="name" x-model="pf.name" placeholder="GPT1" required>
                         </div>
                         <div>
-                            <label class="field-label">Linked source ID</label>
+                            <label class="field-label">Linked server ID</label>
                             <input class="control" name="source_id" x-model="pf.source_id" placeholder="Optional">
                         </div>
                     </div>
@@ -70,7 +70,7 @@
                 <form x-show="modalType === 'source'" method="POST" action="/control/service-sources/save" class="modal-body">
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Source ID</label>
+                            <label class="field-label">Server ID</label>
                             <input class="control" name="source_id" x-model="sf.source_id" required :readonly="sf.isEdit" :style="sf.isEdit && 'opacity:0.6'">
                         </div>
                         <div>
@@ -78,7 +78,7 @@
                             <input class="control" name="name" x-model="sf.name" required>
                         </div>
                         <div>
-                            <label class="field-label">Source type</label>
+                            <label class="field-label">Server type</label>
                             <input class="control" name="source_type" x-model="sf.source_type">
                         </div>
                     </div>
@@ -123,7 +123,7 @@
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
-                        <button type="submit" class="button" x-text="sf.isEdit ? 'Save Changes' : 'Create Source'"></button>
+                        <button type="submit" class="button" x-text="sf.isEdit ? 'Save Changes' : 'Create Server'"></button>
                     </div>
                 </form>
 
@@ -180,7 +180,7 @@
             <p class="metric-copy">{{ proxy_stats.active }} active, {{ proxy_stats.inactive }} inactive</p>
         </article>
         <article class="metric-card">
-            <div class="metric-label">Upstream sources</div>
+            <div class="metric-label">Upstream servers</div>
             <div class="metric-value">{{ source_stats.enabled }}/{{ source_stats.total }}</div>
             <p class="metric-copy">{{ source_stats.enabled }} enabled</p>
         </article>
@@ -317,10 +317,10 @@
         <article class="shell-table">
             <div class="panel-heading">
                 <div>
-                    <h2 class="panel-title">Upstream Sources</h2>
-                    <p class="panel-copy">General source registry for proxy and portal operations. Detailed pricing visibility controls remain under <strong>Pricing Sources</strong>.</p>
+                    <h2 class="panel-title">Upstream Servers</h2>
+                    <p class="panel-copy">General server registry for proxy and portal operations. Detailed pricing visibility controls remain under <strong>Pricing Servers</strong>.</p>
                 </div>
-                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddSource()">Create Source</button>
+                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddSource()">Create Server</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
@@ -341,7 +341,7 @@
                                 <div style="display:inline-flex; gap:4px;">
                                     <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
                                         @click="openEditSource('{{ item.id }}', '{{ item.name }}', '{{ item.source_type or 'newapi' }}', '{{ item.upstream_base_url }}', '{{ item.public_base_url or '' }}', {{ item.balance_rate or 1.0 }}, '{{ item.auth_mode or 'header' }}', '{{ item.auth_user_header or '' }}', '{{ item.auth_user_value or '' }}', '{{ item.auth_token or '' }}', '{{ item.auth_cookie or '' }}', '{{ item.pricing_path or '/api/pricing' }}', '{{ item.ratio_config_path or '/api/ratio_config' }}', '{{ item.log_path or '/api/log/self' }}', '{{ item.token_search_path or '/api/token/search' }}', '{{ item.notes or '' }}', {{ item.enabled or 0 }}, {{ item.public_pricing_enabled or 0 }}, {{ item.public_balance_enabled or 0 }})">Edit</button>
-                                    <form method="POST" action="/control/service-sources/delete" style="display:inline;" onsubmit="return confirm('Delete source {{ item.name }}?')">
+                                    <form method="POST" action="/control/service-sources/delete" style="display:inline;" onsubmit="return confirm('Delete server {{ item.name }}?')">
                                         <input type="hidden" name="source_id" value="{{ item.id }}">
                                         <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Delete</button>
                                     </form>
@@ -455,10 +455,10 @@ function adminDashboard() {
             this.modalType = 'proxy'; this.modalTitle = 'Edit Proxy Endpoint: ' + name; this.modalOpen = true;
         },
 
-        openAddSource() { this.sf = emptySource(); this.modalType = 'source'; this.modalTitle = 'Create Upstream Source'; this.modalOpen = true; },
+        openAddSource() { this.sf = emptySource(); this.modalType = 'source'; this.modalTitle = 'Create Upstream Server'; this.modalOpen = true; },
         openEditSource(id, name, type, upstream, pub, rate, authMode, authHeader, authValue, authToken, authCookie, pricingPath, ratioPath, logPath, tokenPath, notes, enabled, pricing, balance) {
             this.sf = { isEdit:true, source_id:id, name:name, source_type:type, upstream_base_url:upstream, public_base_url:pub, balance_rate:rate, auth_mode:authMode, auth_user_header:authHeader, auth_user_value:authValue, auth_token:authToken, auth_cookie:authCookie, pricing_path:pricingPath, ratio_config_path:ratioPath, log_path:logPath, token_search_path:tokenPath, notes:notes, enabled:!!enabled, public_pricing_enabled:!!pricing, public_balance_enabled:!!balance };
-            this.modalType = 'source'; this.modalTitle = 'Edit Upstream Source: ' + name; this.modalOpen = true;
+            this.modalType = 'source'; this.modalTitle = 'Edit Upstream Server: ' + name; this.modalOpen = true;
         },
 
         openAddModule() { this.mf = emptyModule(); this.modalType = 'module'; this.modalTitle = 'Create Portal Module'; this.modalOpen = true; },

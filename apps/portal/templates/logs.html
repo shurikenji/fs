@@ -17,7 +17,7 @@
         <div class="panel-heading">
             <div>
                 <h2 class="panel-title">Search usage</h2>
-                <p class="panel-copy">Pick a source, resolve your key, then filter runtime logs by model or group.</p>
+                <p class="panel-copy">Pick a server, resolve your key, then filter runtime logs by model or group.</p>
             </div>
             <div class="controls-row">
                 <button class="button-ghost" :disabled="page <= 1" @click="page--; fetchLogs()">
@@ -42,9 +42,9 @@
 
         <div class="toolbar-grid">
             <div>
-                <label class="field-label">Runtime source</label>
+                <label class="field-label">Server</label>
                 <select class="select-control" x-model="serverId" @change="onServerChanged()">
-                    <option value="">Choose a source</option>
+                    <option value="">Choose a server</option>
                     {% for s in servers %}
                     <option value="{{ s.id }}">{{ s.name }}</option>
                     {% endfor %}
@@ -139,7 +139,7 @@
                     </svg>
                 </div>
                 <h3 class="panel-title">No logs matched the current query</h3>
-                <p class="panel-copy mt-2">Try another source, model filter, group, or page.</p>
+                <p class="panel-copy mt-2">Try another server, model filter, group, or page.</p>
             </div>
         </div>
     </div>
@@ -188,7 +188,7 @@
                 this.error = '';
                 this.resolvedToken = '';
                 if (!this.serverId || !this.apiKey) {
-                    this.error = 'Choose a source and provide your API key before searching.';
+                    this.error = 'Choose a server and provide your API key before searching.';
                     this.loading = false;
                     return;
                 }
