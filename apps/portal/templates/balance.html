@@ -46,7 +46,7 @@
                 <input type="text" class="control code-text" placeholder="Paste the key to validate (for example: sk-...)"
                     x-model="apiKey">
             </div>
-            <button class="button button--lg" style="width: 100%;" @click="checkSingle()"
+            <button class="button button--lg" style="width: 100%; margin-top: var(--space-2);" @click="checkSingle()"
                 :disabled="loading || !serverId || !apiKey">
                 <span x-text="loading ? 'Checking...' : 'Run balance check'"></span>
             </button>
@@ -70,7 +70,7 @@
                 <textarea class="control textarea-control code-text" rows="8"
                     placeholder="Paste one API key per line. Maximum 20 keys." x-model="bulkKeys"></textarea>
             </div>
-            <button class="button button--lg" style="width: 100%;" @click="checkBulkSingleServer()"
+            <button class="button button--lg" style="width: 100%; margin-top: var(--space-2);" @click="checkBulkSingleServer()"
                 :disabled="loading || !bulkServerId || parsedBulkKeys().length === 0">
                 <span x-text="loading ? 'Checking...' : 'Run balance check'"></span>
             </button>
