@@ -19,34 +19,32 @@
             </div>
         </div>
 
-        <div class="controls-row" style="gap: 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 4px; background: var(--bg-inset);">
-            <button type="button" class="button-secondary" style="border:0; white-space:nowrap;"
+        <div class="controls-row" style="gap: 0; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 4px; background: var(--bg-inset); flex-wrap: nowrap; min-width: 0;">
+            <button type="button" class="button-secondary" style="border:0; white-space:nowrap; flex: 1 1 0; min-width: 0; text-align: center;"
                 :style="mode === 'single' ? 'background: var(--surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;'"
-                @click="switchMode('single')">Check 1 Key</button>
-            <button type="button" class="button-secondary" style="border:0; white-space:nowrap;"
+                @click="switchMode('single')">Single</button>
+            <button type="button" class="button-secondary" style="border:0; white-space:nowrap; flex: 1 1 0; min-width: 0; text-align: center;"
                 :style="mode === 'multi-key' ? 'background: var(--surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;'"
-                @click="switchMode('multi-key')">Multi-Key, 1 Server</button>
-            <button type="button" class="button-secondary" style="border:0; white-space:nowrap;"
+                @click="switchMode('multi-key')">Bulk</button>
+            <button type="button" class="button-secondary" style="border:0; white-space:nowrap; flex: 1 1 0; min-width: 0; text-align: center;"
                 :style="mode === 'multi-server' ? 'background: var(--surface); color: var(--text-primary); box-shadow: var(--shadow-sm);' : 'background: transparent;'"
-                @click="switchMode('multi-server')">Multi-Key, Multi-Server</button>
+                @click="switchMode('multi-server')">Multi-Server</button>
         </div>
 
         <div x-show="mode === 'single'" style="display: grid; gap: var(--space-4); margin-top: var(--space-5);">
-            <div class="toolbar-grid">
-                <div>
-                    <label class="field-label">Server</label>
-                    <select class="select-control" x-model="serverId">
-                        <option value="">Choose a server</option>
-                        <template x-for="server in servers" :key="server.id">
-                            <option :value="server.id" x-text="server.name"></option>
-                        </template>
-                    </select>
-                </div>
-                <div>
-                    <label class="field-label">API key</label>
-                    <input type="text" class="control code-text" placeholder="Paste the key to validate (for example: sk-...)"
-                        x-model="apiKey">
-                </div>
+            <div>
+                <label class="field-label">Server</label>
+                <select class="select-control" x-model="serverId">
+                    <option value="">Choose a server</option>
+                    <template x-for="server in servers" :key="server.id">
+                        <option :value="server.id" x-text="server.name"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="field-label">API key</label>
+                <input type="text" class="control code-text" placeholder="Paste the key to validate (for example: sk-...)"
+                    x-model="apiKey">
             </div>
             <button class="button button--lg" style="width: 100%;" @click="checkSingle()"
                 :disabled="loading || !serverId || !apiKey">
@@ -65,7 +63,10 @@
                 </select>
             </div>
             <div>
-                <label class="field-label">API keys</label>
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <label class="field-label">API keys</label>
+                    <span class="field-label" style="font-weight: normal; color: var(--text-secondary);" x-show="parsedBulkKeys().length > 0" :style="parsedBulkKeys().length > maxKeys ? 'color: var(--danger);' : ''" x-text="parsedBulkKeys().length + ' / ' + maxKeys + ' keys'"></span>
+                </div>
                 <textarea class="control textarea-control code-text" rows="8"
                     placeholder="Paste one API key per line. Maximum 20 keys." x-model="bulkKeys"></textarea>
             </div>
@@ -79,11 +80,14 @@
             <template x-if="!multiItems.length">
                 <div style="display: grid; gap: var(--space-4);">
                     <div>
-                        <label class="field-label">API keys</label>
+                        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                            <label class="field-label">API keys</label>
+                            <span class="field-label" style="font-weight: normal; color: var(--text-secondary);" x-show="parseKeys(multiKeysText).length > 0" :style="parseKeys(multiKeysText).length > maxKeys ? 'color: var(--danger);' : ''" x-text="parseKeys(multiKeysText).length + ' / ' + maxKeys + ' keys'"></span>
+                        </div>
                         <textarea class="control textarea-control code-text" rows="8"
                             placeholder="Paste one API key per line. Maximum 20 keys." x-model="multiKeysText"></textarea>
                     </div>
-                    <button type="button" class="button-secondary" @click="parseMultiServerKeys()"
+                    <button type="button" :class="parseKeys(multiKeysText).length > 0 ? 'button' : 'button-secondary'" @click="parseMultiServerKeys()"
                         :disabled="!parseKeys(multiKeysText).length">Parse keys</button>
                 </div>
             </template>
@@ -99,30 +103,30 @@
                     </div>
 
                     <div class="table-wrap">
-                        <table class="data-table">
+                        <table class="data-table" style="table-layout: fixed;">
                             <thead>
                                 <tr>
-                                    <th>#</th>
                                     <th>Key</th>
                                     <th>Server</th>
-                                    <th style="text-align:right;">Remove</th>
+                                    <th style="width: 48px;" aria-label="Remove"></th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="(item, index) in multiItems" :key="item.id">
+                                <template x-for="item in multiItems" :key="item.id">
                                     <tr>
-                                        <td x-text="index + 1"></td>
-                                        <td class="code-text" x-text="item.key_masked"></td>
+                                        <td class="code-text" style="text-overflow: ellipsis; overflow: hidden;" x-text="item.key_masked"></td>
                                         <td>
-                                            <select class="select-control" x-model="item.server_id">
+                                            <select class="select-control" style="width: 100%;" x-model="item.server_id">
                                                 <option value="">Choose server</option>
                                                 <template x-for="server in servers" :key="server.id">
                                                     <option :value="server.id" x-text="server.name"></option>
                                                 </template>
                                             </select>
                                         </td>
-                                        <td style="text-align:right;">
-                                            <button type="button" class="button-ghost" style="color: var(--danger);" @click="removeMultiItem(item.id)">Remove</button>
+                                        <td style="text-align: right; padding-left: 0;">
+                                            <button type="button" class="button-ghost" style="color: var(--danger); padding: 4px;" aria-label="Remove" @click="removeMultiItem(item.id)">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                                            </button>
                                         </td>
                                     </tr>
                                 </template>
@@ -130,19 +134,19 @@
                         </table>
                     </div>
 
-                    <div class="controls-row" style="justify-content: space-between;">
+                    <div style="display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
                         <div class="controls-row">
-                            <input type="text" class="control code-text" style="max-width: 320px;" placeholder="Add another key" x-model="newMultiKey">
-                            <button type="button" class="button-secondary" @click="addMultiKey()" :disabled="!newMultiKey.trim() || multiItems.length >= maxKeys">Add key</button>
+                            <input type="text" class="control code-text" placeholder="Add another key" x-model="newMultiKey">
+                            <button type="button" class="button-secondary" style="flex-shrink: 0;" @click="addMultiKey()" :disabled="!newMultiKey.trim() || multiItems.length >= maxKeys">Add key</button>
                         </div>
                         <div class="controls-row">
-                            <select class="select-control" style="max-width: 240px;" x-model="assignServerId">
+                            <select class="select-control" x-model="assignServerId">
                                 <option value="">Set unassigned to server</option>
                                 <template x-for="server in servers" :key="server.id">
                                     <option :value="server.id" x-text="server.name"></option>
                                 </template>
                             </select>
-                            <button type="button" class="button-secondary" @click="setUnassignedServers()" :disabled="!assignServerId">Apply</button>
+                            <button type="button" class="button-secondary" style="flex-shrink: 0;" @click="setUnassignedServers()" :disabled="!assignServerId">Apply</button>
                         </div>
                     </div>
 
@@ -187,7 +191,10 @@
                 <h2 class="panel-title">Results</h2>
                 <p class="panel-copy">Each row shows the selected server, masked key, reported credit limit, usage, and remaining balance.</p>
             </div>
-            <span class="tag is-accent"><span x-text="results.length"></span> checks</span>
+            <div class="page-actions" style="gap: var(--space-2);">
+                <span class="tag is-accent" style="height: 32px;"><span x-text="results.length"></span> checks</span>
+                <button x-show="results.length > 0" type="button" class="button-secondary" style="height: 32px;" @click="exportCSV()">Export CSV</button>
+            </div>
         </div>
         <div class="table-wrap">
             <table class="data-table">
@@ -212,7 +219,7 @@
                                 <span class="tag is-accent" x-show="!row.error">success</span>
                                 <span class="tag is-warm" x-show="row.error" x-text="row.error"></span>
                             </td>
-                            <td x-text="row.balance_usd ? '$' + row.balance_usd : '-'"></td>
+                            <td :style="row.balance_usd ? ('color: ' + (parseFloat(row.balance_usd) > 0 ? 'var(--success)' : 'var(--danger)')) : ''" x-text="row.balance_usd ? '$' + row.balance_usd : '-'"></td>
                             <td x-text="row.limit_usd ? '$' + row.limit_usd : '-'"></td>
                             <td x-text="row.usage_usd ? '$' + row.usage_usd : '-'"></td>
                         </tr>
@@ -248,6 +255,8 @@
             switchMode(mode) {
                 this.mode = mode;
                 this.error = '';
+                this.results = [];
+                this.summary = null;
             },
 
             activeServerName(serverId) {
@@ -275,6 +284,24 @@
                 this.error = '';
                 this.results = [];
                 this.summary = null;
+            },
+
+            exportCSV() {
+                if (!this.results.length) return;
+                let csv = 'Index,Server,Key,Status,Balance USD,Limit USD,Usage USD,Error\n';
+                this.results.forEach(row => {
+                    const status = row.error ? 'Error' : 'Success';
+                    const error = row.error ? `"${row.error.replace(/"/g, '""')}"` : '';
+                    csv += `${row.index},"${row.server}",${row.key_masked},${status},${row.balance_usd || ''},${row.limit_usd || ''},${row.usage_usd || ''},${error}\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `balance_checks_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
             },
 
             setBulkPayload(payload) {
