@@ -25,7 +25,7 @@
             <form method="POST" action="/control/pricing/settings/save" style="display:grid; gap:24px;">
                 <div class="form-grid-2">
                     <div>
-                        <label class="field-label">AI provider</label>
+                        <label class="field-label">AI provider</label>{{ field_tooltip("Chọn nhà cung cấp được dùng để dịch metadata pricing; Local/Gateway dùng API tương thích OpenAI.") }}
                         <select class="control select-control" id="ai_provider" name="ai_provider">
                             {% for provider in ai_providers %}
                             <option value="{{ provider.value }}" {% if all_settings.get('ai_provider') == provider.value %}selected{% endif %}>{{ provider.label }}</option>
@@ -33,30 +33,30 @@
                         </select>
                     </div>
                     <div>
-                        <label class="field-label">AI model</label>
+                        <label class="field-label">AI model</label>{{ field_tooltip("Tên model chính xác tại provider đã chọn, dùng cho các tác vụ dịch tự động.") }}
                         <input class="control" id="ai_model" name="ai_model" list="ai_model_suggestions" value="{{ all_settings.get('ai_model', '') }}">
                         <datalist id="ai_model_suggestions"></datalist>
                     </div>
                     <div class="field-span-full">
-                        <label class="field-label">AI API key</label>
+                        <label class="field-label">AI API key</label>{{ field_tooltip("Khóa truy cập provider AI; đây là dữ liệu nhạy cảm và không nên chia sẻ ngoài admin.") }}
                         <input class="control" type="password" name="ai_api_key" value="{{ all_settings.get('ai_api_key', '') }}">
                     </div>
                     <div class="field-span-full">
-                        <label class="field-label">AI base URL</label>
+                        <label class="field-label">AI base URL</label>{{ field_tooltip("URL API tùy chỉnh cho gateway hoặc provider tương thích OpenAI; để trống để dùng mặc định.") }}
                         <input class="control code-text" id="ai_base_url" name="ai_base_url" value="{{ all_settings.get('ai_base_url', '') }}" placeholder="Optional custom endpoint">
                     </div>
                 </div>
 
                 <div class="form-grid-2">
                     <div>
-                        <label class="field-label">Auto-sync interval (minutes)</label>
+                        <label class="field-label">Auto-sync interval (minutes)</label>{{ field_tooltip("Khoảng cách giữa hai lần đồng bộ pricing tự động; giá trị tối thiểu là 1 phút.") }}
                         <input class="control" type="number" min="1" step="1" name="auto_sync_interval_minutes" value="{{ all_settings.get('auto_sync_interval_minutes', '15') }}">
                     </div>
                 </div>
 
                 <div class="toggle-row">
-                    <label><input type="checkbox" name="ai_enabled" {% if all_settings.get('ai_enabled', 'false') == 'true' %}checked{% endif %}> Enable AI translation</label>
-                    <label><input type="checkbox" name="auto_sync_enabled" {% if all_settings.get('auto_sync_enabled', 'false') == 'true' %}checked{% endif %}> Enable automatic sync</label>
+                    <span><label><input type="checkbox" name="ai_enabled" {% if all_settings.get('ai_enabled', 'false') == 'true' %}checked{% endif %}> Enable AI translation</label>{{ field_tooltip("Bật dịch metadata pricing bằng cấu hình AI ở trên.") }}</span>
+                    <span><label><input type="checkbox" name="auto_sync_enabled" {% if all_settings.get('auto_sync_enabled', 'false') == 'true' %}checked{% endif %}> Enable automatic sync</label>{{ field_tooltip("Bật đồng bộ pricing theo chu kỳ đã cấu hình.") }}</span>
                 </div>
 
                 <div class="button-row">

@@ -55,13 +55,13 @@
                             </div>
                             <div class="col-12">
                                 <div class="form-group">
-                                    <label class="form-label">MBBank API Base URL</label>
+                                    <label class="form-label">MBBank API Base URL</label>{{ field_tooltip("Endpoint dịch vụ MBBank dùng để đọc giao dịch; nhập URL đầy đủ gồm https://.") }}
                                     <input name="mb_api_url" class="form-control" value="{{ all_settings.get('mb_api_url', '') }}" placeholder="https://api.apicanhan.com/transactions/MB">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">MBBank API Key</label>
+                                    <label class="form-label">MBBank API Key</label>{{ field_tooltip("Khóa truy cập dịch vụ MBBank; đây là dữ liệu nhạy cảm, không chia sẻ ngoài admin.") }}
                                     <input name="mb_api_key" type="password" class="form-control" value="{{ all_settings.get('mb_api_key', '') }}" placeholder="********">
                                 </div>
                             </div>
@@ -77,19 +77,19 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">MB Account Number</label>
+                                    <label class="form-label">MB Account Number</label>{{ field_tooltip("Số tài khoản nhận thanh toán dùng để đối chiếu giao dịch và tạo QR.") }}
                                     <input name="mb_account_no" class="form-control" value="{{ all_settings.get('mb_account_no', '') }}" placeholder="1234567890">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">MB Account Name</label>
+                                    <label class="form-label">MB Account Name</label>{{ field_tooltip("Tên chủ tài khoản hiển thị trong hướng dẫn thanh toán và VietQR.") }}
                                     <input name="mb_account_name" class="form-control" value="{{ all_settings.get('mb_account_name', '') }}">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Bank Identifier</label>
+                                    <label class="form-label">Bank Identifier</label>{{ field_tooltip("Mã ngân hàng dùng khi tạo VietQR; phải khớp mã mà dịch vụ QR hỗ trợ.") }}
                                     <input name="mb_bank_id" class="form-control" value="{{ all_settings.get('mb_bank_id', '') }}">
                                 </div>
                             </div>
@@ -118,21 +118,21 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">New API Key</label>
+                                    <label class="form-label">New API Key</label>{{ field_tooltip("Mẫu tin nhắn giao key mới. Giữ nguyên các biến trong ngoặc nhọn để hệ thống thay dữ liệu đơn hàng.") }}
                                     <textarea name="msg_key_new" class="form-control" rows="5" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">{{ all_settings.get('msg_key_new', '') }}</textarea>
                                     <div class="form-text">Variables: {order_code}, {api_key}, {dollar}, {server}</div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Existing Key Top Up</label>
+                                    <label class="form-label">Existing Key Top Up</label>{{ field_tooltip("Mẫu thông báo sau khi nạp key hiện có; các biến quota trước/sau được thay tự động.") }}
                                     <textarea name="msg_key_topup" class="form-control" rows="5" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">{{ all_settings.get('msg_key_topup', '') }}</textarea>
                                     <div class="form-text">Variables: {order_code}, {api_key}, {dollar_before}, {dollar_added}, {dollar_after}</div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Stock Account Delivery</label>
+                                    <label class="form-label">Stock Account Delivery</label>{{ field_tooltip("Mẫu tin nhắn giao account từ kho; biến {account_data} chứa dòng account thực tế.") }}
                                     <textarea name="msg_chatgpt" class="form-control" rows="5" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">{{ all_settings.get('msg_chatgpt', '') }}</textarea>
                                     <div class="form-text">Variables: {order_code}, {account_data}</div>
                                 </div>
@@ -149,7 +149,7 @@
                             </div>
                             <div class="col-12">
                                 <div class="form-group">
-                                    <label class="form-label">Wallet Top Up Success</label>
+                                    <label class="form-label">Wallet Top Up Success</label>{{ field_tooltip("Mẫu thông báo khi nạp ví thành công; giữ nguyên các biến mã đơn, số tiền và số dư.") }}
                                     <textarea name="msg_wallet_topup" class="form-control" rows="5" style="font-family: 'IBM Plex Mono', monospace; font-size: 0.8rem;">{{ all_settings.get('msg_wallet_topup', '') }}</textarea>
                                     <div class="form-text">Variables: {order_code}, {amount}, {balance}</div>
                                 </div>
@@ -173,56 +173,56 @@
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Bot Name</label>
+                                    <label class="form-label">Bot Name</label>{{ field_tooltip("Tên thương hiệu của bot hiển thị trong nội dung chào mừng và giao diện người dùng.") }}
                                     <input name="bot_name" class="form-control" value="{{ all_settings.get('bot_name', '') }}">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Bot Description</label>
+                                    <label class="form-label">Bot Description</label>{{ field_tooltip("Mô tả ngắn về dịch vụ bot dành cho khách hàng.") }}
                                     <input name="bot_description" class="form-control" value="{{ all_settings.get('bot_description', '') }}">
                                 </div>
                             </div>
                             <div class="col-12">
                                 <div class="form-group">
-                                    <label class="form-label">Welcome Message</label>
+                                    <label class="form-label">Welcome Message</label>{{ field_tooltip("Nội dung bot gửi khi người dùng bắt đầu hoặc quay lại luồng chính.") }}
                                     <textarea name="welcome_message" class="form-control" rows="2">{{ all_settings.get('welcome_message', '') }}</textarea>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Support URL</label>
+                                    <label class="form-label">Support URL</label>{{ field_tooltip("Liên kết hỗ trợ mở khi người dùng nhấn nút liên hệ, thường là URL Telegram.") }}
                                     <input name="support_url" class="form-control" value="{{ all_settings.get('support_url', '') }}" placeholder="https://t.me/support">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Support Button Text</label>
+                                    <label class="form-label">Support Button Text</label>{{ field_tooltip("Nhãn ngắn hiển thị trên nút mở liên kết hỗ trợ.") }}
                                     <input name="support_text" class="form-control" value="{{ all_settings.get('support_text', '') }}" placeholder="Contact Support">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Rows Per Page</label>
+                                    <label class="form-label">Rows Per Page</label>{{ field_tooltip("Số bản ghi mặc định trên mỗi trang danh sách trong admin.") }}
                                     <input name="pagination_size" type="number" class="form-control" value="{{ all_settings.get('pagination_size', '') }}" placeholder="10">
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Admin Password</label>
+                                    <label class="form-label">Admin Password</label>{{ field_tooltip("Mật khẩu đăng nhập Shopbot Admin; nên dùng chuỗi dài, riêng biệt và bảo quản an toàn.") }}
                                     <input name="admin_password" type="password" class="form-control" value="{{ all_settings.get('admin_password', '') }}" placeholder="********">
                                 </div>
                             </div>
                             <div class="col-12">
                                 <div class="form-group">
-                                    <label class="form-label">Admin Telegram IDs</label>
+                                    <label class="form-label">Admin Telegram IDs</label>{{ field_tooltip("Danh sách Telegram user ID được nhận thông báo quản trị, phân cách bằng dấu phẩy.") }}
                                     <input name="admin_telegram_ids" class="form-control" value="{{ all_settings.get('admin_telegram_ids', '') }}" placeholder="123456789, 987654321">
                                     <div class="form-text">Separate multiple IDs with commas.</div>
                                 </div>
                             </div>
                             <div class="col-12">
                                 <div class="form-group">
-                                    <label class="form-label" style="margin-bottom: 0.75rem;">Admin Telegram Notifications</label>
+                                    <label class="form-label" style="margin-bottom: 0.75rem;">Admin Telegram Notifications</label>{{ field_tooltip("Chọn các sự kiện đơn hàng sẽ gửi thông báo tới danh sách admin Telegram ở trên.") }}
                                     <div style="display: grid; gap: 0.5rem;">
                                         {% set notify_opts = [
                                             ('admin_notify_enabled', 'Enable order notifications for admins'),
@@ -258,19 +258,19 @@
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">Poll Interval (seconds)</label>
+                                    <label class="form-label">Poll Interval (seconds)</label>{{ field_tooltip("Khoảng nghỉ giữa hai lần kiểm tra giao dịch ngân hàng; giá trị thấp hơn tăng tải API.") }}
                                     <input name="poll_interval" class="form-control" value="{{ all_settings.get('poll_interval', '') }}" placeholder="30">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">Order Expiry (minutes)</label>
+                                    <label class="form-label">Order Expiry (minutes)</label>{{ field_tooltip("Thời gian chờ thanh toán trước khi đơn chưa trả tiền hết hạn.") }}
                                     <input name="order_expire_min" class="form-control" value="{{ all_settings.get('order_expire_min', '') }}" placeholder="15">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">VietQR Template</label>
+                                    <label class="form-label">VietQR Template</label>{{ field_tooltip("Tên template VietQR do nhà cung cấp hỗ trợ, ví dụ compact.") }}
                                     <input name="vietqr_template" class="form-control" value="{{ all_settings.get('vietqr_template', '') }}" placeholder="compact">
                                 </div>
                             </div>
@@ -288,19 +288,19 @@
                                 <div class="form-check" style="padding: 0.6rem 0.75rem; background: var(--background-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
                                     <input type="checkbox" class="form-check-input" id="key_alert_enabled" name="key_alert_enabled" value="true"
                                         {% if all_settings.get('key_alert_enabled', 'true') == 'true' %}checked{% endif %}>
-                                    <label class="form-check-label" for="key_alert_enabled" style="font-size: 0.875rem; font-weight: 500;">Enable API key balance alerts in Telegram</label>
+                                    <label class="form-check-label" for="key_alert_enabled" style="font-size: 0.875rem; font-weight: 500;">Enable API key balance alerts in Telegram</label>{{ field_tooltip("Bật quét số dư key định kỳ và gửi cảnh báo Telegram khi chạm ngưỡng.") }}
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Key Alert Poll Interval (minutes)</label>
+                                    <label class="form-label">Key Alert Poll Interval (minutes)</label>{{ field_tooltip("Chu kỳ quét số dư key; khoảng 10–15 phút thường phù hợp cho VPS nhỏ.") }}
                                     <input name="key_alert_poll_interval_min" type="number" min="1" class="form-control" value="{{ all_settings.get('key_alert_poll_interval_min', '15') }}" placeholder="15">
                                     <div class="form-text">A 10-15 minute cadence is usually safe for smaller VPS plans.</div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Thresholds (USD)</label>
+                                    <label class="form-label">Thresholds (USD)</label>{{ field_tooltip("Các mức số dư USD kích hoạt cảnh báo, phân cách bằng dấu phẩy và thường nhập từ cao xuống thấp.") }}
                                     <input name="key_alert_thresholds" class="form-control" value="{{ all_settings.get('key_alert_thresholds', '5,3,1') }}" placeholder="5,3,1">
                                     <div class="form-text">Separate multiple thresholds with commas.</div>
                                 </div>
@@ -319,19 +319,19 @@
                                 <div class="form-check" style="padding: 0.6rem 0.75rem; background: var(--background-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
                                     <input type="checkbox" class="form-check-input" id="key_backup_enabled" name="key_backup_enabled" value="true"
                                         {% if all_settings.get('key_backup_enabled', 'true') == 'true' %}checked{% endif %}>
-                                    <label class="form-check-label" for="key_backup_enabled" style="font-size: 0.875rem; font-weight: 500;">Enable upstream key backup snapshots</label>
+                                    <label class="form-check-label" for="key_backup_enabled" style="font-size: 0.875rem; font-weight: 500;">Enable upstream key backup snapshots</label>{{ field_tooltip("Bật lưu snapshot key định kỳ để admin và cảnh báo đọc dữ liệu cục bộ.") }}
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Key Backup Interval (minutes)</label>
+                                    <label class="form-label">Key Backup Interval (minutes)</label>{{ field_tooltip("Chu kỳ tải và lưu snapshot key, chạy độc lập với chu kỳ cảnh báo.") }}
                                     <input name="key_backup_interval_min" type="number" min="1" class="form-control" value="{{ all_settings.get('key_backup_interval_min', '10') }}" placeholder="10">
                                     <div class="form-text">Runs independently from Telegram alert polling.</div>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label class="form-label">Backup Retention (days)</label>
+                                    <label class="form-label">Backup Retention (days)</label>{{ field_tooltip("Số ngày giữ snapshot cũ trước khi dọn sau một chu kỳ backup thành công.") }}
                                     <input name="key_backup_retention_days" type="number" min="1" class="form-control" value="{{ all_settings.get('key_backup_retention_days', '7') }}" placeholder="7">
                                     <div class="form-text">Older snapshots are removed after successful backup cycles.</div>
                                 </div>
@@ -360,7 +360,7 @@
                         <div class="row g-3">
                             <div class="col-12">
                                 <div class="form-group">
-                                    <label class="form-label">Provider</label>
+                                    <label class="form-label">Provider</label>{{ field_tooltip("Nhà cung cấp AI dùng để dịch tên và mô tả group; Local/Gateway dùng API tương thích OpenAI.") }}
                                     <select name="ai_provider" class="form-select" id="ai_provider">
                                         {% for p in ai_providers %}
                                         <option value="{{ p.value }}" {% if all_settings.get('ai_provider') == p.value %}selected{% endif %}>{{ provider_labels.get(p.value, p.label) }}</option>
@@ -370,13 +370,13 @@
                             </div>
                             <div class="col-12">
                                 <div class="form-group">
-                                    <label class="form-label">API Key</label>
+                                    <label class="form-label">API Key</label>{{ field_tooltip("Khóa truy cập provider AI; đây là dữ liệu nhạy cảm và không nên chia sẻ.") }}
                                     <input name="ai_api_key" type="password" class="form-control" value="{{ all_settings.get('ai_api_key', '') }}" placeholder="sk-...">
                                 </div>
                             </div>
                             <div class="col-12">
                                 <div class="form-group">
-                                    <label class="form-label">Model</label>
+                                    <label class="form-label">Model</label>{{ field_tooltip("Tên model chính xác tại provider đã chọn để dịch nội dung group.") }}
                                     <input name="ai_model" class="form-control" id="ai_model" list="ai_model_suggestions" value="{{ all_settings.get('ai_model', '') }}" placeholder="gpt-4o-mini, llama3.1:8b">
                                     <datalist id="ai_model_suggestions">
                                         {% for m in ai_models.get(all_settings.get('ai_provider', 'openai'), []) %}
@@ -387,7 +387,7 @@
                             </div>
                             <div class="col-12" id="base_url_field" style="display: none;">
                                 <div class="form-group">
-                                    <label class="form-label">Base URL</label>
+                                    <label class="form-label">Base URL</label>{{ field_tooltip("URL API tùy chỉnh cho local model hoặc gateway tương thích OpenAI; để trống nếu provider dùng mặc định.") }}
                                     <input name="ai_base_url" type="text" class="form-control" value="{{ all_settings.get('ai_base_url', '') }}" placeholder="http://localhost:11434">
                                     <div class="form-text">Use this for local or gateway deployments that expose an OpenAI-compatible API.</div>
                                 </div>
@@ -395,7 +395,7 @@
                             <div class="col-12">
                                 <div class="form-check" style="padding: 0.6rem 0.75rem; background: var(--background-subtle); border-radius: var(--radius-sm); border: 1px solid var(--border-light);">
                                     <input type="checkbox" class="form-check-input" id="ai_enabled" name="ai_enabled" value="true" {% if all_settings.get('ai_enabled') == 'true' %}checked{% endif %}>
-                                    <label class="form-check-label" for="ai_enabled" style="font-weight: 500;">Enable AI-based group naming and translation</label>
+                                    <label class="form-check-label" for="ai_enabled" style="font-weight: 500;">Enable AI-based group naming and translation</label>{{ field_tooltip("Bật dùng cấu hình AI ở trên để tạo tên và bản dịch group.") }}
                                 </div>
                                 <div class="form-text mt-2" id="ai_test_result" style="font-size: 0.85rem;">Run a connection test before saving when you change provider, model, or gateway settings.</div>
                             </div>

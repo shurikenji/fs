@@ -1,3 +1,4 @@
+{% from "_field_tooltip.html" import field_tooltip %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -30,7 +31,7 @@
 
             <form method="POST" action="{{ post_url }}" class="login-form">
                 <div class="form-group">
-                    <label class="form-label" for="password">Admin password</label>
+                    <label class="form-label" for="password">Admin password</label>{{ field_tooltip("Nhập mật khẩu quản trị Shopbot; không dùng chung mật khẩu này với tài khoản khác.") }}
                     <input
                         type="password"
                         name="password"

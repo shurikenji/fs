@@ -1,0 +1,6 @@
+{% macro field_tooltip(text) -%}
+<details class="field-tooltip" name="admin-field-help">
+    <summary aria-label="Hướng dẫn: {{ text }}" title="Hướng dẫn"><span aria-hidden="true">ⓘ</span></summary>
+    <span class="field-tooltip__content" role="tooltip">{{ text }}</span>
+</details>
+{%- endmacro %}

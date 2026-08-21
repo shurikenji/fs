@@ -11,7 +11,7 @@
             <p class="page-subtitle">Model-level visibility for cached pricing snapshots in runtime.</p>
         </div>
         <div class="page-actions">
-            <a class="button-secondary" href="/control/pricing/sources">Back to servers</a>
+            <a class="button-secondary" href="/control/pricing/sources">Back to API Sources</a>
             <a class="button-secondary" href="/control/pricing/sources/{{ source.id }}/groups">Manage groups</a>
         </div>
     </section>
@@ -60,8 +60,8 @@
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>Pick</th>
-                        <th>Public</th>
+                        <th>Pick {{ field_tooltip("Đánh dấu tạm các model để áp dụng thao tác hàng loạt; lựa chọn này không được lưu trực tiếp.") }}</th>
+                        <th>Public {{ field_tooltip("Bật để model xuất hiện trong dữ liệu pricing public; bỏ chọn để loại model khỏi bề mặt public.") }}</th>
                         <th>Model</th>
                         <th>Provider</th>
                         <th>Mode</th>

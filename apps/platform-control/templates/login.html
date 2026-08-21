@@ -1,3 +1,4 @@
+{% from "_field_tooltip.html" import field_tooltip %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Platform Control Sign In - Shupremium</title>
     <meta name="csrf-token" content="{{ csrf_token(request) }}">
-    <link rel="stylesheet" href="/static/css/app.css">
+    <link rel="stylesheet" href="/static/css/app.css?v=20260821-field-tooltips-2">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
     <style>
         body {
@@ -149,7 +150,7 @@
             </div>
 
             <h1 class="login-title">Sign in</h1>
-            <p class="login-desc">Control plane for proxy endpoints, upstream server registry, portal modules, and pricing runtime sync workflows.</p>
+            <p class="login-desc">Control plane for proxy endpoints, API source registry, portal modules, and pricing runtime sync workflows.</p>
 
             {% if error %}
             <div class="login-error">
@@ -160,7 +161,8 @@
 
             <form method="POST" action="/control/login" class="login-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-                <input class="login-input" type="password" name="password" placeholder="Admin password" required autofocus>
+                <div><label class="field-label" for="admin-password">Admin password</label>{{ field_tooltip("Nhập mật khẩu quản trị Platform Control; không dùng chung mật khẩu này với tài khoản khác.") }}</div>
+                <input class="login-input" id="admin-password" type="password" name="password" placeholder="Admin password" required autofocus>
                 <button class="login-btn" type="submit">Sign In</button>
             </form>
         </div>

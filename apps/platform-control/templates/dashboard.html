@@ -16,29 +16,29 @@
                 <form x-show="modalType === 'proxy'" method="POST" action="/control/proxy-endpoints/save" class="modal-body">
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Endpoint ID</label>
+                            <label class="field-label">Endpoint ID</label>{{ field_tooltip("Mã định danh duy nhất của proxy endpoint; chỉ đặt khi tạo mới và không thể đổi sau đó.") }}
                             <input class="control" name="endpoint_id" x-model="pf.endpoint_id" required :readonly="pf.isEdit" :style="pf.isEdit && 'opacity:0.6'">
                         </div>
                         <div>
-                            <label class="field-label">Display name</label>
+                            <label class="field-label">Display name</label>{{ field_tooltip("Tên ngắn giúp nhận biết endpoint trong bảng quản trị và nhật ký vận hành.") }}
                             <input class="control" name="name" x-model="pf.name" placeholder="GPT1" required>
                         </div>
                         <div>
-                            <label class="field-label">Linked server ID</label>
+                            <label class="field-label">Linked API Source ID</label>{{ field_tooltip("Nhập ID của API Source liên kết nếu endpoint này thuộc một nguồn đã đăng ký; có thể để trống.") }}
                             <input class="control" name="source_id" x-model="pf.source_id" placeholder="Optional">
                         </div>
                     </div>
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Domain</label>
+                            <label class="field-label">Domain</label>{{ field_tooltip("Tên miền public trỏ tới proxy, không gồm giao thức hoặc đường dẫn; ví dụ gpt1.shupremium.com.") }}
                             <input class="control" name="domain" x-model="pf.domain" placeholder="gpt1.shupremium.com" required>
                         </div>
                         <div>
-                            <label class="field-label">Upstream host</label>
+                            <label class="field-label">Upstream host</label>{{ field_tooltip("Hostname đích mà proxy chuyển tiếp request tới, không gồm https:// hoặc đường dẫn.") }}
                             <input class="control" name="target_host" x-model="pf.target_host" placeholder="api.example.com" required>
                         </div>
                         <div>
-                            <label class="field-label">Protocol</label>
+                            <label class="field-label">Protocol</label>{{ field_tooltip("Chọn giao thức dùng để kết nối từ proxy tới upstream; ưu tiên HTTPS khi upstream hỗ trợ.") }}
                             <select class="control select-control" name="target_protocol" x-model="pf.target_protocol">
                                 <option value="https">https</option><option value="http">http</option>
                             </select>
@@ -46,11 +46,11 @@
                     </div>
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Internal port</label>
+                            <label class="field-label">Internal port</label>{{ field_tooltip("Cổng nội bộ dành cho tiến trình proxy; phải khác các dịch vụ đang chạy trên cùng host.") }}
                             <input class="control" name="port" type="number" x-model="pf.port" placeholder="3001" required>
                         </div>
                         <div>
-                            <label class="field-label">Status</label>
+                            <label class="field-label">Status</label>{{ field_tooltip("Active đưa endpoint vào cấu hình runtime; Inactive giữ cấu hình nhưng ngừng phục vụ.") }}
                             <select class="control select-control" name="status" x-model="pf.status">
                                 <option value="active">Active</option><option value="inactive">Inactive</option>
                             </select>
@@ -58,7 +58,7 @@
                         <div style="display:flex; align-items:end; padding-bottom:10px;">
                             <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-secondary);">
                                 <input type="checkbox" name="tls_skip_verify" :checked="pf.tls_skip_verify"> Skip TLS verification
-                            </label>
+                            </label>{{ field_tooltip("Chỉ bật khi upstream dùng chứng chỉ không tin cậy; tùy chọn này làm giảm an toàn TLS.") }}
                         </div>
                     </div>
                     <div class="modal-actions">
@@ -70,29 +70,29 @@
                 <form x-show="modalType === 'source'" method="POST" action="/control/service-sources/save" class="modal-body">
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Server ID</label>
+                            <label class="field-label">API Source ID</label>{{ field_tooltip("Mã định danh duy nhất của API Source; chỉ đặt khi tạo mới và không thể đổi sau đó.") }}
                             <input class="control" name="source_id" x-model="sf.source_id" required :readonly="sf.isEdit" :style="sf.isEdit && 'opacity:0.6'">
                         </div>
                         <div>
-                            <label class="field-label">Display name</label>
+                            <label class="field-label">Display name</label>{{ field_tooltip("Tên hiển thị của API Source trên các màn hình quản trị và public portal.") }}
                             <input class="control" name="name" x-model="sf.name" required>
                         </div>
                         <div>
-                            <label class="field-label">Server type</label>
+                            <label class="field-label">API Source type</label>{{ field_tooltip("Loại API tương thích của nguồn, ví dụ newapi; giá trị này quyết định cách hệ thống gọi upstream.") }}
                             <input class="control" name="source_type" x-model="sf.source_type">
                         </div>
                     </div>
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Upstream base URL</label>
+                            <label class="field-label">Upstream base URL</label>{{ field_tooltip("URL gốc của API upstream, gồm https:// nhưng không thêm endpoint cụ thể.") }}
                             <input class="control" name="upstream_base_url" x-model="sf.upstream_base_url" placeholder="https://api.example.com" required>
                         </div>
                         <div>
-                            <label class="field-label">Public base URL</label>
+                            <label class="field-label">Public base URL</label>{{ field_tooltip("URL public dùng khi hiển thị hoặc điều hướng tới nguồn; có thể để trống nếu chưa công khai.") }}
                             <input class="control" name="public_base_url" x-model="sf.public_base_url" placeholder="https://gpt1.shupremium.com">
                         </div>
                         <div>
-                            <label class="field-label">Balance rate</label>
+                            <label class="field-label">Balance rate</label>{{ field_tooltip("Hệ số quy đổi số dư upstream sang giá trị hiển thị; dùng 1 khi không cần quy đổi.") }}
                             <input class="control" name="balance_rate" type="number" step="0.01" x-model="sf.balance_rate">
                         </div>
                     </div>
@@ -100,14 +100,14 @@
                         <p class="panel-copy" style="margin:0 0 var(--space-3);">Authentication used for pricing, balance, token, and log lookups.</p>
                         <div class="modal-grid-4">
                             <div>
-                                <label class="field-label">Auth mode</label>
+                                <label class="field-label">Auth mode</label>{{ field_tooltip("Cách gửi thông tin xác thực khi gọi API Source: header, token, cookie hoặc không xác thực.") }}
                                 <select class="control select-control" name="auth_mode" x-model="sf.auth_mode">
                                     <option value="header">Header</option><option value="token">Token</option><option value="cookie">Cookie</option><option value="none">None</option>
                                 </select>
                             </div>
-                            <div><label class="field-label">Header name</label><input class="control" name="auth_user_header" x-model="sf.auth_user_header"></div>
-                            <div><label class="field-label">Header value</label><input class="control" name="auth_user_value" x-model="sf.auth_user_value"></div>
-                            <div><label class="field-label">Token / Cookie</label><input class="control" name="auth_token" x-model="sf.auth_token"></div>
+                            <div><label class="field-label">Header name</label>{{ field_tooltip("Tên header nhận diện người dùng mà upstream yêu cầu, ví dụ New-Api-User.") }}<input class="control" name="auth_user_header" x-model="sf.auth_user_header"></div>
+                            <div><label class="field-label">Header value</label>{{ field_tooltip("Giá trị gửi kèm header nhận diện, thường là user ID trên hệ thống upstream.") }}<input class="control" name="auth_user_value" x-model="sf.auth_user_value"></div>
+                            <div><label class="field-label">Token / Cookie</label>{{ field_tooltip("Token hoặc cookie xác thực của upstream; đây là dữ liệu nhạy cảm, không chia sẻ ra ngoài admin.") }}<input class="control" name="auth_token" x-model="sf.auth_token"></div>
                         </div>
                     </div>
                     <input type="hidden" name="auth_cookie" x-model="sf.auth_cookie">
@@ -117,52 +117,52 @@
                     <input type="hidden" name="token_search_path" x-model="sf.token_search_path">
                     <input type="hidden" name="notes" x-model="sf.notes">
                     <div class="modal-toggle-grid">
-                        <label><input type="checkbox" name="enabled" :checked="sf.enabled"> Enabled</label>
-                        <label><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Public pricing</label>
-                        <label><input type="checkbox" name="public_balance_enabled" :checked="sf.public_balance_enabled"> Public balance</label>
+                        <span><label><input type="checkbox" name="enabled" :checked="sf.enabled"> Enabled</label>{{ field_tooltip("Cho phép hệ thống sử dụng API Source này trong các luồng runtime.") }}</span>
+                        <span><label><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Public pricing</label>{{ field_tooltip("Cho phép công khai dữ liệu pricing của nguồn trên portal.") }}</span>
+                        <span><label><input type="checkbox" name="public_balance_enabled" :checked="sf.public_balance_enabled"> Public balance</label>{{ field_tooltip("Cho phép các luồng public truy vấn số dư qua nguồn này.") }}</span>
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
-                        <button type="submit" class="button" x-text="sf.isEdit ? 'Save Changes' : 'Create Server'"></button>
+                        <button type="submit" class="button" x-text="sf.isEdit ? 'Save Changes' : 'Create API Source'"></button>
                     </div>
                 </form>
 
                 <form x-show="modalType === 'module'" method="POST" action="/control/portal-modules/save" class="modal-body">
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Module ID</label>
+                            <label class="field-label">Module ID</label>{{ field_tooltip("Mã định danh duy nhất của module portal; chỉ đặt khi tạo mới và không thể đổi sau đó.") }}
                             <input class="control" name="module_id" x-model="mf.module_id" required :readonly="mf.isEdit" :style="mf.isEdit && 'opacity:0.6'">
                         </div>
                         <div>
-                            <label class="field-label">Menu label</label>
+                            <label class="field-label">Menu label</label>{{ field_tooltip("Tên module hiển thị trong menu hoặc danh sách chức năng của portal.") }}
                             <input class="control" name="name" x-model="mf.name" required>
                         </div>
                         <div>
-                            <label class="field-label">Path</label>
+                            <label class="field-label">Path</label>{{ field_tooltip("Đường dẫn nội bộ bắt đầu bằng dấu /, ví dụ /pricing.") }}
                             <input class="control" name="path" x-model="mf.path" placeholder="/pricing" required>
                         </div>
                     </div>
                     <div class="modal-grid-3">
                         <div>
-                            <label class="field-label">Public URL</label>
+                            <label class="field-label">Public URL</label>{{ field_tooltip("URL tuyệt đối nếu module được phục vụ bên ngoài portal hiện tại; để trống để dùng Path.") }}
                             <input class="control" name="public_url" x-model="mf.public_url">
                         </div>
                         <div>
-                            <label class="field-label">Icon</label>
+                            <label class="field-label">Icon</label>{{ field_tooltip("Tên icon mà giao diện hỗ trợ, ví dụ table; để trống nếu module không cần icon riêng.") }}
                             <input class="control" name="icon" x-model="mf.icon" placeholder="table">
                         </div>
                         <div>
-                            <label class="field-label">Sort order</label>
+                            <label class="field-label">Sort order</label>{{ field_tooltip("Số nhỏ hơn được hiển thị trước trong danh sách module.") }}
                             <input class="control" name="sort_order" type="number" x-model="mf.sort_order">
                         </div>
                     </div>
                     <div>
-                        <label class="field-label">Description</label>
+                        <label class="field-label">Description</label>{{ field_tooltip("Mô tả ngắn giải thích mục đích module cho người dùng portal.") }}
                         <textarea class="control textarea-control" name="description" x-model="mf.description" placeholder="Short module guidance"></textarea>
                     </div>
                     <div class="modal-toggle-grid">
-                        <label><input type="checkbox" name="enabled" :checked="mf.enabled"> Enabled</label>
-                        <label><input type="checkbox" name="is_public" :checked="mf.is_public"> Public</label>
+                        <span><label><input type="checkbox" name="enabled" :checked="mf.enabled"> Enabled</label>{{ field_tooltip("Bật để module được hệ thống tải và sử dụng.") }}</span>
+                        <span><label><input type="checkbox" name="is_public" :checked="mf.is_public"> Public</label>{{ field_tooltip("Bật để module xuất hiện cho người dùng không đăng nhập.") }}</span>
                     </div>
                     <div class="modal-actions">
                         <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
@@ -180,7 +180,7 @@
             <p class="metric-copy">{{ proxy_stats.active }} active, {{ proxy_stats.inactive }} inactive</p>
         </article>
         <article class="metric-card">
-            <div class="metric-label">Upstream servers</div>
+            <div class="metric-label">API Sources</div>
             <div class="metric-value">{{ source_stats.enabled }}/{{ source_stats.total }}</div>
             <p class="metric-copy">{{ source_stats.enabled }} enabled</p>
         </article>
@@ -317,10 +317,10 @@
         <article class="shell-table">
             <div class="panel-heading">
                 <div>
-                    <h2 class="panel-title">Upstream Servers</h2>
-                    <p class="panel-copy">General server registry for proxy and portal operations. Detailed pricing visibility controls remain under <strong>Pricing Servers</strong>.</p>
+                    <h2 class="panel-title">API Sources</h2>
+                    <p class="panel-copy">General API source registry for proxy and portal operations. Detailed pricing visibility controls remain under <strong>Pricing API Sources</strong>.</p>
                 </div>
-                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddSource()">Create Server</button>
+                <button class="button-secondary" style="height:32px; padding:0 14px; font-size:12px;" @click="openAddSource()">Create API Source</button>
             </div>
             <div class="table-wrap">
                 <table class="data-table">
@@ -341,7 +341,7 @@
                                 <div style="display:inline-flex; gap:4px;">
                                     <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
                                         @click="openEditSource('{{ item.id }}', '{{ item.name }}', '{{ item.source_type or 'newapi' }}', '{{ item.upstream_base_url }}', '{{ item.public_base_url or '' }}', {{ item.balance_rate or 1.0 }}, '{{ item.auth_mode or 'header' }}', '{{ item.auth_user_header or '' }}', '{{ item.auth_user_value or '' }}', '{{ item.auth_token or '' }}', '{{ item.auth_cookie or '' }}', '{{ item.pricing_path or '/api/pricing' }}', '{{ item.ratio_config_path or '/api/ratio_config' }}', '{{ item.log_path or '/api/log/self' }}', '{{ item.token_search_path or '/api/token/search' }}', '{{ item.notes or '' }}', {{ item.enabled or 0 }}, {{ item.public_pricing_enabled or 0 }}, {{ item.public_balance_enabled or 0 }})">Edit</button>
-                                    <form method="POST" action="/control/service-sources/delete" style="display:inline;" onsubmit="return confirm('Delete server {{ item.name }}?')">
+                                    <form method="POST" action="/control/service-sources/delete" style="display:inline;" onsubmit="return confirm('Delete API source {{ item.name }}?')">
                                         <input type="hidden" name="source_id" value="{{ item.id }}">
                                         <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Delete</button>
                                     </form>
@@ -455,10 +455,10 @@ function adminDashboard() {
             this.modalType = 'proxy'; this.modalTitle = 'Edit Proxy Endpoint: ' + name; this.modalOpen = true;
         },
 
-        openAddSource() { this.sf = emptySource(); this.modalType = 'source'; this.modalTitle = 'Create Upstream Server'; this.modalOpen = true; },
+        openAddSource() { this.sf = emptySource(); this.modalType = 'source'; this.modalTitle = 'Create API Source'; this.modalOpen = true; },
         openEditSource(id, name, type, upstream, pub, rate, authMode, authHeader, authValue, authToken, authCookie, pricingPath, ratioPath, logPath, tokenPath, notes, enabled, pricing, balance) {
             this.sf = { isEdit:true, source_id:id, name:name, source_type:type, upstream_base_url:upstream, public_base_url:pub, balance_rate:rate, auth_mode:authMode, auth_user_header:authHeader, auth_user_value:authValue, auth_token:authToken, auth_cookie:authCookie, pricing_path:pricingPath, ratio_config_path:ratioPath, log_path:logPath, token_search_path:tokenPath, notes:notes, enabled:!!enabled, public_pricing_enabled:!!pricing, public_balance_enabled:!!balance };
-            this.modalType = 'source'; this.modalTitle = 'Edit Upstream Server: ' + name; this.modalOpen = true;
+            this.modalType = 'source'; this.modalTitle = 'Edit API Source: ' + name; this.modalOpen = true;
         },
 
         openAddModule() { this.mf = emptyModule(); this.modalType = 'module'; this.modalTitle = 'Create Portal Module'; this.modalOpen = true; },

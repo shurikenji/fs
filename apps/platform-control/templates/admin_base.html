@@ -1,3 +1,4 @@
+{% from "_field_tooltip.html" import field_tooltip %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +8,7 @@
     <link rel="icon" type="image/svg+xml"
         href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23155e63'/%3E%3Ccircle cx='32' cy='32' r='9' fill='none' stroke='white' stroke-width='5'/%3E%3Cpath d='M32 13v8M32 43v8M13 32h8M43 32h8M19 19l5.5 5.5M39.5 39.5L45 45M45 19l-5.5 5.5M24.5 39.5L19 45' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
     <meta name="csrf-token" content="{{ csrf_token(request) }}">
-    <link rel="stylesheet" href="/static/css/app.css?v=20260623-sidebar">
+    <link rel="stylesheet" href="/static/css/app.css?v=20260821-field-tooltips-2">
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
     {% block head %}{% endblock %}
 </head>
@@ -54,7 +55,7 @@
                     <span class="sidebar-link__icon">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                     </span>
-                    Upstream Servers
+                    API Sources
                 </a>
 
                 <a class="sidebar-link {% if active_page == 'modules' %}is-active{% endif %}" href="/control#portal-modules">
@@ -70,7 +71,7 @@
                     <span class="sidebar-link__icon">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14.5a3.5 3.5 0 0 1 0 7H6"></path></svg>
                     </span>
-                    Pricing Servers
+                    Pricing API Sources
                 </a>
 
                 <a class="sidebar-link {% if active_page == 'pricing-settings' %}is-active{% endif %}" href="/control/pricing/settings">

@@ -3163,3 +3163,68 @@ textarea.form-control {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
 }
+
+/* Accessible, dependency-free field guidance. */
+.field-tooltip {
+    position: relative;
+    display: inline-block;
+    margin-left: 0.35rem;
+    vertical-align: middle;
+    z-index: 20;
+}
+
+.form-label:has(+ .field-tooltip) { display: inline-block; }
+
+.field-tooltip summary {
+    display: inline-grid;
+    width: 1.1rem;
+    height: 1.1rem;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--primary);
+    background: transparent;
+    cursor: help;
+    font-size: 0.8rem;
+    line-height: 1;
+    list-style: none;
+}
+
+.field-tooltip summary::-webkit-details-marker { display: none; }
+.field-tooltip summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.field-tooltip__content {
+    display: none;
+    position: absolute;
+    top: calc(100% + 0.45rem);
+    left: -1rem;
+    width: min(20rem, calc(100vw - 2rem));
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--text-primary);
+    color: white;
+    box-shadow: var(--shadow-lg);
+    font-size: 0.78rem;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: normal;
+    z-index: 1090;
+}
+
+.field-tooltip[open] > .field-tooltip__content,
+.field-tooltip:hover > .field-tooltip__content,
+.field-tooltip:focus-within > .field-tooltip__content { display: block; }
+
+@media (max-width: 640px) {
+    .field-tooltip__content {
+        position: fixed;
+        inset: auto 1rem 1rem;
+        width: auto;
+        z-index: 1200;
+    }
+}

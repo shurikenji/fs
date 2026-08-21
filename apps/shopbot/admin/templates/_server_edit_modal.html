@@ -1,4 +1,5 @@
 {% from "_entity_controls.html" import entity_state_checkbox %}
+{% from "_field_tooltip.html" import field_tooltip %}
 <div class="modal fade" id="editModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -10,12 +11,12 @@
                 <div class="modal-body">
                     <h6 class="text-muted mb-2">Core Connection</h6>
                     <div class="row mb-2">
-                        <div class="col"><label class="form-label">Source Name</label><input name="name" class="form-control" value="{{ editing.name }}" required></div>
-                        <div class="col"><label class="form-label">Base URL</label><input name="base_url" class="form-control" value="{{ editing.base_url }}" required></div>
+                        <div class="col"><label class="form-label">Source Name</label>{{ field_tooltip("Tên API Source hiển thị trong admin, sản phẩm và các thông báo liên quan.") }}<input name="name" class="form-control" value="{{ editing.name }}" required></div>
+                        <div class="col"><label class="form-label">Base URL</label>{{ field_tooltip("URL gốc của upstream, gồm https:// và không kèm endpoint cụ thể.") }}<input name="base_url" class="form-control" value="{{ editing.base_url }}" required></div>
                     </div>
 
                     <div class="mb-2">
-                        <label class="form-label">API Type</label>
+                        <label class="form-label">API Type</label>{{ field_tooltip("Chọn chuẩn API upstream để hệ thống áp dụng auth và endpoint phù hợp.") }}
                         <select name="api_type" class="form-select" id="edit_api_type">
                             {% set api_type_labels = {'newapi': 'NewAPI', 'rixapi': 'RixAPI', 'other': 'Custom'} %}
                             {% for t in api_types %}
@@ -27,7 +28,7 @@
                     <hr>
                     <h6 class="text-muted mb-2">Authentication</h6>
                     <div class="mb-2" id="edit_auth_type_wrap">
-                        <label class="form-label">Auth Strategy</label>
+                        <label class="form-label">Auth Strategy</label>{{ field_tooltip("Cách gửi thông tin xác thực tới API Source; chọn đúng theo hợp đồng upstream.") }}
                         <select name="auth_type" class="form-select" id="edit_auth_type">
                             {% set auth_type_labels = {'header': 'Header + Bearer', 'bearer_only': 'Bearer Only', 'cookie': 'Cookie Session', 'none': 'No Authentication'} %}
                             {% for a in auth_types %}
@@ -37,18 +38,18 @@
                     </div>
 
                     <div id="edit_auth_fields">
-                        <div class="mb-2" id="edit_header_wrap"><label class="form-label">User Header Name</label><input name="auth_user_header" class="form-control" value="{{ editing.auth_user_header or '' }}"></div>
-                        <div class="mb-2"><label class="form-label" id="edit_user_value_label">User Identifier</label><input name="auth_user_value" class="form-control" value="{{ editing.auth_user_value or '' }}"></div>
-                        <div class="mb-2"><label class="form-label" id="edit_token_label">Access Token</label><input name="auth_token" class="form-control" value="{{ editing.auth_token or '' }}"></div>
+                        <div class="mb-2" id="edit_header_wrap"><label class="form-label">User Header Name</label>{{ field_tooltip("Tên header nhận diện người dùng mà upstream yêu cầu, ví dụ new-api-user.") }}<input name="auth_user_header" class="form-control" value="{{ editing.auth_user_header or '' }}"></div>
+                        <div class="mb-2"><label class="form-label" id="edit_user_value_label">User Identifier</label>{{ field_tooltip("Giá trị nhận diện người dùng trên upstream, thường là user ID.") }}<input name="auth_user_value" class="form-control" value="{{ editing.auth_user_value or '' }}"></div>
+                        <div class="mb-2"><label class="form-label" id="edit_token_label">Access Token</label>{{ field_tooltip("Token truy cập upstream; đây là dữ liệu nhạy cảm và không nên chia sẻ.") }}<input name="auth_token" class="form-control" value="{{ editing.auth_token or '' }}"></div>
                     </div>
 
                     <div id="edit_cookie_field" class="mb-2" style="display:none;">
-                        <label class="form-label">Cookie</label><input name="auth_cookie" class="form-control" value="{{ editing.auth_cookie or '' }}">
+                        <label class="form-label">Cookie</label>{{ field_tooltip("Chuỗi Cookie đầy đủ khi upstream xác thực bằng phiên; không nhập nếu dùng token/header.") }}<input name="auth_cookie" class="form-control" value="{{ editing.auth_cookie or '' }}">
                     </div>
 
                     <div class="form-check mb-2" id="edit_multi_group_wrap">
                         <input class="form-check-input" type="checkbox" name="supports_multi_group" id="edit_multi_group" value="1" {% if editing.supports_multi_group %}checked{% endif %}>
-                        <label class="form-check-label" for="edit_multi_group">Supports multi-group policies</label>
+                        <label class="form-check-label" for="edit_multi_group">Supports multi-group policies</label>{{ field_tooltip("Bật khi API Source hỗ trợ nhiều group và chính sách chọn group theo thứ tự.") }}
                     </div>
 
                     <hr>
@@ -56,18 +57,18 @@
                         <div id="edit_key_lookup_wrap">
                             <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" name="supports_key_lookup_by_id" id="edit_supports_key_lookup_by_id" value="1" {% if editing.supports_key_lookup_by_id %}checked{% endif %}>
-                                <label class="form-check-label" for="edit_supports_key_lookup_by_id">Supports resolving the full key from a token ID</label>
+                                <label class="form-check-label" for="edit_supports_key_lookup_by_id">Supports resolving the full key from a token ID</label>{{ field_tooltip("Bật nếu upstream có endpoint đổi token ID thành API key đầy đủ.") }}
                             </div>
                             <div class="mb-2">
-                                <label class="form-label">Token ID Lookup Endpoint</label>
+                                <label class="form-label">Token ID Lookup Endpoint</label>{{ field_tooltip("Mẫu endpoint tra key theo token ID; giữ placeholder {id} để runtime thay tự động.") }}
                                 <input name="token_key_endpoint_template" class="form-control" value="{{ editing.token_key_endpoint_template or '/api/token/{id}/key' }}" placeholder="/api/token/{id}/key">
                                 <div class="form-text">For newer NewAPI deployments, the runtime replaces <code>{id}</code> with the token ID and sends a <code>POST</code> request.</div>
                             </div>
                         </div>
                         <h6 class="text-muted mb-2">Advanced Routing</h6>
-                        <div class="mb-2"><label class="form-label">Groups Endpoint</label><input name="groups_endpoint" class="form-control" value="{{ editing.groups_endpoint or '' }}"></div>
-                        <div class="mb-2"><label class="form-label">Manual Group List</label><input name="manual_groups" class="form-control" value="{{ editing.manual_groups or '' }}"></div>
-                        <div class="mb-2"><label class="form-label">Custom Headers (JSON)</label><textarea name="custom_headers" class="form-control" rows="2">{{ editing.custom_headers or '' }}</textarea></div>
+                        <div class="mb-2"><label class="form-label">Groups Endpoint</label>{{ field_tooltip("Đường dẫn endpoint lấy danh sách group, bắt đầu bằng dấu /; để trống nếu không hỗ trợ.") }}<input name="groups_endpoint" class="form-control" value="{{ editing.groups_endpoint or '' }}"></div>
+                        <div class="mb-2"><label class="form-label">Manual Group List</label>{{ field_tooltip("Danh sách group ghi đè, phân cách bằng dấu phẩy; khi có giá trị hệ thống không phụ thuộc catalog upstream.") }}<input name="manual_groups" class="form-control" value="{{ editing.manual_groups or '' }}"></div>
+                        <div class="mb-2"><label class="form-label">Custom Headers (JSON)</label>{{ field_tooltip("JSON array các header bổ sung gửi tới upstream; mỗi phần tử cần key và value.") }}<textarea name="custom_headers" class="form-control" rows="2">{{ editing.custom_headers or '' }}</textarea></div>
                     </div>
 
                     <hr>
@@ -86,12 +87,12 @@
                                 <strong>Imported keys contribute to spend</strong>
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="checkbox" name="import_spend_accrual_enabled" id="edit_import_spend_accrual_enabled" value="1" {% if editing.import_spend_accrual_enabled %}checked{% endif %}>
-                                    <label class="form-check-label" for="edit_import_spend_accrual_enabled">Enable spend accrual from user-imported keys</label>
+                                    <label class="form-check-label" for="edit_import_spend_accrual_enabled">Enable spend accrual from user-imported keys</label>{{ field_tooltip("Bật để cộng chi tiêu của key được tra qua nguồn vào ledger quyền lợi người dùng.") }}
                                 </div>
                             </div>
                             <div class="discount-builder__panel">
                                 <div class="discount-builder__panel-title">Benefit Merge Mode</div>
-                                <label class="form-label">Runtime Strategy</label>
+                                <label class="form-label">Runtime Strategy</label>{{ field_tooltip("Chọn cách áp dụng nhiều quyền lợi: chỉ quyền lợi tốt nhất hoặc kết hợp các loại được phép.") }}
                                 <select name="discount_stack_mode" class="form-select">
                                     {% set stack_mode_labels = {'exclusive': 'Best Benefit Only', 'combine_selected_types': 'Combine Selected Benefit Types'} %}
                                     {% for mode in discount_stack_modes %}
@@ -104,7 +105,7 @@
                         <div style="border-top: 1px solid var(--border-light); padding-top: 1rem; margin-top: 0.25rem;">
                             <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
                                 <div>
-                                    <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-bottom: 0.25rem;">Allowed Combined Benefits</div>
+                                    <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); margin-bottom: 0.25rem;">Allowed Combined Benefits {{ field_tooltip("Chọn các loại quyền lợi được phép cộng dồn khi runtime dùng chế độ kết hợp.") }}</div>
                                     <p style="margin: 0; color: var(--text-secondary); font-size: 0.82rem;">Choose which benefit types can stack when the source uses the combined-benefit strategy.</p>
                                 </div>
                                 <div class="stack-rule-picker__presets">
@@ -156,7 +157,7 @@
                         <div class="discount-builder__advanced">
                             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleDiscountJson('edit')">Open Advanced JSON</button>
                             <div id="edit_discount_json_wrap" class="mt-2" style="display:none;">
-                                <label class="form-label">Advanced JSON</label>
+                                <label class="form-label">Advanced JSON</label>{{ field_tooltip("JSON nâng cao cho các tier; dùng trình dựng phía trên nếu không cần chỉnh cấu trúc trực tiếp.") }}
                                 <textarea id="edit_discount_tiers_json" name="discount_tiers_json" class="form-control discount-json-input" rows="10">{{ editing.discount_tiers_json or '[]' }}</textarea>
                                 <div class="form-text">Each tier should include <code>min_spend_vnd</code> and a <code>benefits</code> array.</div>
                             </div>
@@ -195,14 +196,14 @@
                     <hr>
                     <h6 class="text-muted mb-2">Pricing Defaults</h6>
                     <div class="row mb-2">
-                        <div class="col"><label class="form-label">Price / $1 (VND)</label><input name="price_per_unit" type="number" class="form-control" value="{{ editing.price_per_unit }}" required></div>
-                        <div class="col"><label class="form-label">Quota / $1</label><input name="quota_per_unit" type="number" class="form-control" value="{{ editing.quota_per_unit }}" required></div>
+                        <div class="col"><label class="form-label">Price / $1 (VND)</label>{{ field_tooltip("Số VND khách hàng trả cho mỗi 1 USD giá trị danh nghĩa.") }}<input name="price_per_unit" type="number" class="form-control" value="{{ editing.price_per_unit }}" required></div>
+                        <div class="col"><label class="form-label">Quota / $1</label>{{ field_tooltip("Số đơn vị quota upstream tương ứng với 1 USD.") }}<input name="quota_per_unit" type="number" class="form-control" value="{{ editing.quota_per_unit }}" required></div>
                     </div>
                     <div class="row mb-2">
-                        <div class="col"><label class="form-label">Dollar Multiplier</label><input name="dollar_per_unit" type="number" step="0.1" class="form-control" value="{{ editing.dollar_per_unit }}"></div>
-                        <div class="col"><label class="form-label">Quota Multiplier</label><input name="quota_multiple" type="number" step="0.01" class="form-control" value="{{ editing.quota_multiple }}"></div>
+                        <div class="col"><label class="form-label">Dollar Multiplier</label>{{ field_tooltip("Hệ số quy đổi đơn vị gói sang USD danh nghĩa khi tính giá trị key.") }}<input name="dollar_per_unit" type="number" step="0.1" class="form-control" value="{{ editing.dollar_per_unit }}"></div>
+                        <div class="col"><label class="form-label">Quota Multiplier</label>{{ field_tooltip("Hệ số chuẩn hóa quota của upstream; dùng 1 khi không cần quy đổi.") }}<input name="quota_multiple" type="number" step="0.01" class="form-control" value="{{ editing.quota_multiple }}"></div>
                     </div>
-                    <div class="mb-2"><label class="form-label">Default Group</label><input name="default_group" class="form-control" value="{{ editing.default_group or '' }}"></div>
+                    <div class="mb-2"><label class="form-label">Default Group</label>{{ field_tooltip("Group mặc định cho sản phẩm không đặt override; có thể nhập nhiều group theo chính sách của nguồn.") }}<input name="default_group" class="form-control" value="{{ editing.default_group or '' }}"></div>
                     <div class="mb-2"><button type="button" class="btn btn-outline-info btn-sm" onclick="previewServerGroups('edit')">Preview Groups</button></div>
                     <div id="edit_group_preview" class="mb-2" style="display:none;"></div>
 

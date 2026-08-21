@@ -1523,3 +1523,69 @@ a { color: inherit; text-decoration: none; }
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* Accessible, dependency-free field guidance. */
+.field-tooltip {
+    position: relative;
+    display: inline-block;
+    margin-left: 6px;
+    vertical-align: middle;
+    z-index: 20;
+}
+
+.field-label:has(+ .field-tooltip) { display: inline-block; }
+.modal-toggle-grid > span { display: inline-flex; align-items: center; }
+
+.field-tooltip summary {
+    display: inline-grid;
+    width: 17px;
+    height: 17px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: var(--text-accent);
+    background: transparent;
+    cursor: help;
+    font-size: 12px;
+    line-height: 1;
+    list-style: none;
+}
+
+.field-tooltip summary::-webkit-details-marker { display: none; }
+.field-tooltip summary:focus-visible { outline: 2px solid var(--text-accent); outline-offset: 2px; }
+
+.field-tooltip__content {
+    display: none;
+    position: absolute;
+    top: calc(100% + 7px);
+    left: -16px;
+    width: min(320px, calc(100vw - 32px));
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--text-primary);
+    color: white;
+    box-shadow: var(--shadow-lg);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: normal;
+    white-space: normal;
+    z-index: 1200;
+}
+
+.field-tooltip[open] > .field-tooltip__content,
+.field-tooltip:hover > .field-tooltip__content,
+.field-tooltip:focus-within > .field-tooltip__content { display: block; }
+
+@media (max-width: 640px) {
+    .field-tooltip__content {
+        position: fixed;
+        inset: auto 16px 16px;
+        width: auto;
+        z-index: 1300;
+    }
+}

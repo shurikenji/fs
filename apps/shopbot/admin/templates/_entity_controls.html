@@ -1,3 +1,4 @@
+{% from "_field_tooltip.html" import field_tooltip %}
 {% macro entity_state_badge(is_active) -%}
 <span class="entity-state {{ 'entity-state--on' if is_active else 'entity-state--off' }}">
     <span class="entity-state__dot"></span>
@@ -22,6 +23,6 @@
     <input class="form-check-input" type="checkbox" name="is_active" id="{{ input_id }}" {% if is_active %}checked{% endif %}>
     <label class="form-check-label" for="{{ input_id }}">
         State: {{ 'Enabled' if is_active else 'Paused' }}
-    </label>
+    </label>{{ field_tooltip("Enabled cho phép thực thể xuất hiện trong luồng bán hàng; Paused giữ dữ liệu nhưng tạm ngừng sử dụng.") }}
 </div>
 {%- endmacro %}

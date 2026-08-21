@@ -2,6 +2,7 @@
 <div class="modal fade" id="editModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
+            {% from "_field_tooltip.html" import field_tooltip %}
             <form method="POST" action="/categories/{{ editing.id }}/edit">
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -12,16 +13,16 @@
                 </div>
                 <div class="modal-body" style="display: grid; gap: 1rem;">
                     <div class="form-group">
-                        <label class="form-label">Category name <span style="color: var(--danger);">*</span></label>
+                        <label class="form-label">Category name <span style="color: var(--danger);">*</span></label>{{ field_tooltip("Tên nhóm sản phẩm hiển thị cho admin và người mua.") }}
                         <input name="name" class="form-control" value="{{ editing.name }}" required>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                         <div class="form-group">
-                            <label class="form-label">Icon</label>
+                            <label class="form-label">Icon</label>{{ field_tooltip("Một emoji đại diện cho danh mục, ví dụ 📦 hoặc 🔑.") }}
                             <input name="icon" class="form-control" value="{{ editing.icon }}" style="font-size: 1.25rem; text-align: center;">
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Category type</label>
+                            <label class="form-label">Category type</label>{{ field_tooltip("API Key dành cho sản phẩm khóa API; General dành cho account và dịch vụ thông thường.") }}
                             <select name="cat_type" class="form-select">
                                 <option value="key_api" {{ 'selected' if editing.cat_type == 'key_api' }}>API Key</option>
                                 <option value="general" {{ 'selected' if editing.cat_type != 'key_api' }}>General</option>
@@ -29,11 +30,11 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Description</label>
+                        <label class="form-label">Description</label>{{ field_tooltip("Mô tả ngắn giúp người vận hành và khách hàng hiểu nội dung danh mục.") }}
                         <textarea name="description" class="form-control" rows="2">{{ editing.description or '' }}</textarea>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Sort order</label>
+                        <label class="form-label">Sort order</label>{{ field_tooltip("Số nhỏ hơn được hiển thị trước; dùng 0 làm giá trị mặc định.") }}
                         <input name="sort_order" type="number" class="form-control" value="{{ editing.sort_order }}">
                     </div>
                     {{ entity_state_checkbox('editActive', editing.is_active) }}

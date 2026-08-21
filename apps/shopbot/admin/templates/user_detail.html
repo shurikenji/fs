@@ -101,12 +101,14 @@
                 <form method="POST" action="/users/{{ user.id }}/adjust-wallet">
                     <div class="row g-2">
                         <div class="col-8">
+                            <label class="form-label">Adjustment amount</label>{{ field_tooltip("Nhập số dương để cộng hoặc số âm để trừ số dư ví của khách hàng.") }}
                             <input name="amount" type="number" class="form-control" placeholder="Positive or negative adjustment amount" required>
                         </div>
                         <div class="col-4">
                             <button class="btn btn-primary w-100">Apply</button>
                         </div>
                         <div class="col-12">
+                            <label class="form-label">Adjustment reason</label>{{ field_tooltip("Ghi lý do điều chỉnh để phục vụ đối soát và audit sau này.") }}
                             <input name="description" class="form-control" placeholder="Reason for this adjustment">
                         </div>
                     </div>

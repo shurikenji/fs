@@ -1,4 +1,5 @@
 {% from "_entity_controls.html" import entity_state_checkbox %}
+{% from "_field_tooltip.html" import field_tooltip %}
 <div class="modal fade" id="editModal" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
@@ -11,13 +12,13 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label class="form-label">Product Name</label>
+                                <label class="form-label">Product Name</label>{{ field_tooltip("Tên sản phẩm hiển thị cho khách hàng và trong đơn hàng.") }}
                                 <input name="name" class="form-control" value="{{ editing.name }}" required>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label class="form-label">Category</label>
+                                <label class="form-label">Category</label>{{ field_tooltip("Danh mục quyết định nơi sản phẩm xuất hiện và các loại sản phẩm được phép chọn.") }}
                                 <select name="category_id" class="form-select" id="editCategorySelect" onchange="syncProductTypeOptions('edit')">
                                     {% for c in categories %}
                                     <option value="{{ c.id }}" data-cat-type="{{ c.cat_type }}" {% if c.id == editing.category_id %}selected{% endif %}>{{ c.icon }} {{ c.name }}</option>
@@ -30,7 +31,7 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label class="form-label">Product Type</label>
+                                <label class="form-label">Product Type</label>{{ field_tooltip("Chọn luồng giao hàng: tạo key, nạp key, giao account có sẵn hoặc xử lý dịch vụ.") }}
                                 <select name="product_type" class="form-select" id="editProductType" onchange="toggleEditFields()">
                                     <option value="key_new" {% if editing.product_type == 'key_new' %}selected{% endif %}>New Key</option>
                                     <option value="key_topup" {% if editing.product_type == 'key_topup' %}selected{% endif %}>Top Up Existing Key</option>
@@ -41,19 +42,19 @@
                         </div>
                         <div class="col-md-3">
                             <div class="form-group">
-                                <label class="form-label">Price (VND)</label>
+                                <label class="form-label">Price (VND)</label>{{ field_tooltip("Giá bán cơ bản bằng VND trước khi áp dụng promotion hoặc quyền lợi theo nguồn.") }}
                                 <input name="price_vnd" type="number" class="form-control" value="{{ editing.price_vnd }}" required>
                             </div>
                         </div>
                         <div class="col-md-3">
                             <div class="form-group">
-                                <label class="form-label">Stock (-1 = unlimited)</label>
+                                <label class="form-label">Stock (-1 = unlimited)</label>{{ field_tooltip("Số lượng có thể bán; nhập -1 cho sản phẩm không giới hạn tồn kho.") }}
                                 <input name="stock" type="number" class="form-control" value="{{ editing.stock }}">
                             </div>
                         </div>
                         <div class="col-md-2">
                             <div class="form-group">
-                                <label class="form-label">Sort</label>
+                                <label class="form-label">Sort</label>{{ field_tooltip("Số nhỏ hơn được hiển thị trước trong cùng danh mục.") }}
                                 <input name="sort_order" type="number" class="form-control" value="{{ editing.sort_order or 0 }}">
                             </div>
                         </div>
@@ -63,7 +64,7 @@
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">API Source</label>
+                                    <label class="form-label">API Source</label>{{ field_tooltip("Chọn nguồn API dùng để tạo hoặc nạp key; để None nếu sản phẩm không gọi upstream.") }}
                                     <select name="server_id" id="editServerSelect" class="form-select">
                                         <option value="">- None -</option>
                                         {% for s in servers %}
@@ -74,13 +75,13 @@
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">Quota Amount</label>
+                                    <label class="form-label">Quota Amount</label>{{ field_tooltip("Lượng quota upstream cấp cho sản phẩm; dùng đơn vị quota của API Source.") }}
                                     <input name="quota_amount" type="number" class="form-control" value="{{ editing.quota_amount }}">
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">Dollar Amount</label>
+                                    <label class="form-label">Dollar Amount</label>{{ field_tooltip("Giá trị USD danh nghĩa được cấp hoặc nạp cho key.") }}
                                     <input name="dollar_amount" type="number" step="0.1" class="form-control" value="{{ editing.dollar_amount }}">
                                 </div>
                             </div>
@@ -88,7 +89,7 @@
 
                         <div class="form-group" id="editGroupWrap" style="display:none;">
                             <div class="d-flex justify-content-between align-items-end mb-2">
-                                <label class="form-label mb-0">Group Override</label>
+                                <label class="form-label mb-0">Group Override</label>{{ field_tooltip("Chọn nhóm riêng cho sản phẩm; để trống để kế thừa nhóm mặc định của API Source.") }}
                                 <div class="d-flex gap-2">
                                     <button type="button" class="btn btn-sm btn-outline-secondary" onclick="clearGroupOverride('edit')">Use Source Default</button>
                                     <button type="button" class="btn btn-sm btn-outline-info" id="editFetchGroupBtn" onclick="fetchGroups('edit')" style="display:none;">Refresh Groups</button>
@@ -103,22 +104,24 @@
                     </div>
 
                     <div class="form-group" id="editFormatWrap" style="display:none;">
-                        <label class="form-label">Account Format Template</label>
+                        <label class="form-label">Account Format Template</label>{{ field_tooltip("Khai báo thứ tự các trường account, phân cách bằng dấu |, ví dụ Email|Password|Cookie.") }}
                         <input name="format_template" class="form-control" value="{{ editing.format_template or '' }}" placeholder="Email|Password|Cookie">
                     </div>
 
                     <div class="form-group" id="editInputPromptWrap" style="display:none;">
-                        <label class="form-label">Service Input Prompt</label>
+                        <label class="form-label">Service Input Prompt</label>{{ field_tooltip("Câu hướng dẫn khách hàng nhập dữ liệu cần thiết khi mua dịch vụ.") }}
                         <input name="input_prompt" class="form-control" value="{{ editing.input_prompt or '' }}" placeholder="Describe the input the customer must provide">
                     </div>
 
                     <div class="form-group" id="editPromotionWrap">
-                        <label class="form-label">Promotion</label>
+                        <label class="form-label">Promotion</label>{{ field_tooltip("Thiết lập ưu đãi tùy chọn. Để loại promotion trống nếu sản phẩm không có khuyến mãi.") }}
                         <div class="row">
                             <div class="col-md-4">
+                                <span class="form-label">Name</span>{{ field_tooltip("Tên chiến dịch dùng để nhận biết promotion trong admin.") }}
                                 <input name="promotion_name" class="form-control" value="{{ editing.promotion.name if editing.promotion else '' }}" placeholder="Promotion name">
                             </div>
                             <div class="col-md-4">
+                                <span class="form-label">Type</span>{{ field_tooltip("Percent Off giảm theo phần trăm, Fixed Discount giảm số tiền cố định, Override Price đặt giá mới.") }}
                                 <select name="promotion_type" class="form-select">
                                     <option value="">- No promotion -</option>
                                     <option value="percent_off" {% if editing.promotion and editing.promotion.promotion_type == 'percent_off' %}selected{% endif %}>Percent Off</option>
@@ -127,28 +130,32 @@
                                 </select>
                             </div>
                             <div class="col-md-4">
+                                <span class="form-label">Value</span>{{ field_tooltip("Giá trị áp dụng theo loại promotion đã chọn: phần trăm, số VND giảm hoặc giá thay thế.") }}
                                 <input name="promotion_value" type="number" step="0.01" class="form-control" value="{{ editing.promotion.value_amount if editing.promotion else '' }}" placeholder="Value">
                             </div>
                         </div>
                         <div class="row mt-2">
                             <div class="col-md-4">
+                                <span class="form-label">Priority</span>{{ field_tooltip("Số lớn hơn được ưu tiên khi nhiều promotion cùng đủ điều kiện.") }}
                                 <input name="promotion_priority" type="number" class="form-control" value="{{ editing.promotion.priority if editing.promotion else 0 }}" placeholder="Priority">
                             </div>
                             <div class="col-md-4">
+                                <span class="form-label">Starts at</span>{{ field_tooltip("Thời điểm bắt đầu theo định dạng ISO YYYY-MM-DDTHH:MM:SS; để trống để có hiệu lực ngay.") }}
                                 <input name="promotion_start_at" class="form-control" value="{{ editing.promotion.starts_at if editing.promotion else '' }}" placeholder="2026-03-20T09:00:00">
                             </div>
                             <div class="col-md-4">
+                                <span class="form-label">Ends at</span>{{ field_tooltip("Thời điểm kết thúc theo định dạng ISO YYYY-MM-DDTHH:MM:SS; để trống nếu không hết hạn.") }}
                                 <input name="promotion_end_at" class="form-control" value="{{ editing.promotion.ends_at if editing.promotion else '' }}" placeholder="2026-03-31T23:59:59">
                             </div>
                         </div>
                         <div class="form-check mt-2">
                             <input class="form-check-input" type="checkbox" name="promotion_is_active" id="editPromotionActive" value="1" {% if not editing.promotion or editing.promotion.is_active %}checked{% endif %}>
-                            <label class="form-check-label" for="editPromotionActive">Enable this promotion</label>
+                            <label class="form-check-label" for="editPromotionActive">Enable this promotion</label>{{ field_tooltip("Bật để promotion được xét khi nằm trong khoảng thời gian hiệu lực.") }}
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Description</label>
+                        <label class="form-label">Description</label>{{ field_tooltip("Mô tả sản phẩm hiển thị cho khách hàng trước khi mua.") }}
                         <textarea name="description" class="form-control" rows="3">{{ editing.description or '' }}</textarea>
                     </div>
 

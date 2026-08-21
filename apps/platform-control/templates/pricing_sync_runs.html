@@ -23,14 +23,14 @@
         <div class="panel-heading">
             <div>
                 <h2 class="panel-title">Filter Runs</h2>
-                <p class="panel-copy">Review recent sync attempts by server, status, trigger, and execution origin.</p>
+                <p class="panel-copy">Review recent sync attempts by API source, status, trigger, and execution origin.</p>
             </div>
         </div>
         <form method="GET" action="/control/pricing/sync-runs" class="filter-grid-6">
             <div>
-                <label class="field-label">Server</label>
+                <label class="field-label">API Source</label>
                 <select class="control select-control" name="source_id">
-                    <option value="">All servers</option>
+                    <option value="">All API Sources</option>
                     {% for source in sources %}
                     <option value="{{ source.id }}" {% if source_id == source.id %}selected{% endif %}>{{ source.name }} ({{ source.id }})</option>
                     {% endfor %}
@@ -80,7 +80,7 @@
                 <thead>
                     <tr>
                         <th>ID</th>
-                        <th>Server</th>
+                        <th>API Source</th>
                         <th>Origin</th>
                         <th>Status</th>
                         <th>Trigger</th>

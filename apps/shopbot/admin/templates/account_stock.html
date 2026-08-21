@@ -114,7 +114,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-2">
-                        <label class="form-label">Product</label>
+                        <label class="form-label">Product</label>{{ field_tooltip("Chọn sản phẩm account stock sẽ nhận các dòng dữ liệu nhập vào.") }}
                         <select name="product_id" class="form-select" id="stockProductSelect" onchange="updatePlaceholder()">
                             {% for p in stock_products %}
                             {% set cat = cat_map.get(p.category_id, {}) %}
@@ -126,7 +126,7 @@
                     </div>
                     <div class="mb-2" id="formatHint"></div>
                     <div class="mb-2">
-                        <label class="form-label">Account rows</label>
+                        <label class="form-label">Account rows</label>{{ field_tooltip("Mỗi dòng là một account; dùng đúng dấu phân cách theo format của sản phẩm và không để dòng trống.") }}
                         <textarea name="accounts_data" class="form-control" rows="5" required id="accountsInput" placeholder="email@example.com|password123"></textarea>
                     </div>
                 </div>

@@ -22,15 +22,15 @@
             </div>
             <form method="POST" action="/control/settings/password" style="display:grid; gap:var(--space-4);">
                 <div>
-                    <label class="field-label">Current password</label>
+                    <label class="field-label">Current password</label>{{ field_tooltip("Nhập mật khẩu admin hiện tại để xác nhận quyền đổi mật khẩu.") }}
                     <input class="control" type="password" name="current" required>
                 </div>
                 <div>
-                    <label class="field-label">New password</label>
+                    <label class="field-label">New password</label>{{ field_tooltip("Mật khẩu mới phải có ít nhất 6 ký tự; nên dùng chuỗi dài và riêng cho admin.") }}
                     <input class="control" type="password" name="newpass" required minlength="6">
                 </div>
                 <div>
-                    <label class="field-label">Confirm new password</label>
+                    <label class="field-label">Confirm new password</label>{{ field_tooltip("Nhập lại chính xác mật khẩu mới để tránh lưu nhầm.") }}
                     <input class="control" type="password" name="confirm" required minlength="6">
                 </div>
                 <button type="submit" class="button" style="justify-self:start;">Save Change Request</button>
