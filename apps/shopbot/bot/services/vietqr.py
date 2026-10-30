@@ -7,11 +7,30 @@ from __future__ import annotations
 import logging
 from urllib.parse import quote
 
+import aiohttp
+import cairosvg
+from aiogram.types import BufferedInputFile
+
 from db.queries.settings import get_setting
 from bot.config import settings as env_settings
 from bot.utils.formatting import format_vnd
 
 logger = logging.getLogger(__name__)
+
+
+async def download_qr_photo(url: str) -> BufferedInputFile:
+    """Fetch VietQR (including redirects) and convert its SVG response to PNG."""
+    timeout = aiohttp.ClientTimeout(total=20)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(url, allow_redirects=True) as response:
+            response.raise_for_status()
+            svg = await response.content.read(5 * 1024 * 1024 + 1)
+
+    if len(svg) > 5 * 1024 * 1024:
+        raise ValueError("VietQR image is larger than 5 MiB")
+
+    png = cairosvg.svg2png(bytestring=svg)
+    return BufferedInputFile(png, filename="payment-qr.png")
 
 
 async def build_qr_url(

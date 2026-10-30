@@ -154,6 +154,8 @@ python3 -m venv /srv/shupremium-stack/shared/platform-control/venv
 ### Shopbot
 
 ```bash
+sudo apt-get update
+sudo apt-get install -y libcairo2 python3-dev libffi-dev
 mkdir -p /srv/shupremium-stack/shared/shopbot/data
 cp /path/to/known-good-shopbot.env /srv/shupremium-stack/shared/shopbot/.env
 cp -a /path/to/known-good-shopbot-data/. /srv/shupremium-stack/shared/shopbot/data/

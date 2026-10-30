@@ -16,7 +16,7 @@ from bot.callback_data.factories import WalletActionCB, WalletTopupAmountCB, Bac
 from bot.keyboards.inline_kb import wallet_menu_kb, wallet_topup_amounts_kb, back_only_kb
 from bot.utils.formatting import format_vnd, status_emoji, format_time_vn
 from bot.utils.order_code import generate_order_code
-from bot.services.vietqr import build_qr_url, build_qr_caption
+from bot.services.vietqr import build_qr_url, build_qr_caption, download_qr_photo
 from db.queries.wallets import get_balance, get_wallet_transactions, count_wallet_transactions
 from db.queries.orders import create_order
 from db.queries.settings import get_setting_int
@@ -145,7 +145,7 @@ async def wallet_topup_custom_input(
 
     from bot.keyboards.inline_kb import order_cancel_kb
     await message.answer_photo(
-        photo=qr_url,
+        photo=await download_qr_photo(qr_url),
         caption=caption,
         parse_mode="HTML",
         reply_markup=order_cancel_kb(order_id)
@@ -179,7 +179,7 @@ async def _create_topup_order(
     from bot.keyboards.inline_kb import order_cancel_kb
     await callback.message.delete()
     await callback.message.answer_photo(
-        photo=qr_url,
+        photo=await download_qr_photo(qr_url),
         caption=caption,
         parse_mode="HTML",
         reply_markup=order_cancel_kb(order_id)

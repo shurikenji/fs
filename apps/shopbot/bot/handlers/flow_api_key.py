@@ -35,7 +35,7 @@ from bot.services.pricing_resolver import quote_api_order
 from bot.utils.formatting import format_vnd, mask_api_key, quota_to_dollar
 from bot.utils.group_labels import format_group_display_names
 from bot.utils.order_code import generate_order_code
-from bot.services.vietqr import build_qr_url, build_qr_caption
+from bot.services.vietqr import build_qr_url, build_qr_caption, download_qr_photo
 from bot.services.payment_poller import process_wallet_payment
 
 logger = logging.getLogger(__name__)
@@ -931,7 +931,7 @@ async def payment_qr(
     from bot.keyboards.inline_kb import order_cancel_kb
     await callback.message.delete()
     await callback.message.answer_photo(
-        photo=qr_url,
+        photo=await download_qr_photo(qr_url),
         caption=caption,
         parse_mode="HTML",
         reply_markup=order_cancel_kb(order["id"])
