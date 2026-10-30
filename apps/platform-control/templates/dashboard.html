@@ -61,6 +61,25 @@
                             </label>{{ field_tooltip("Chỉ bật khi upstream dùng chứng chỉ không tin cậy; tùy chọn này làm giảm an toàn TLS.") }}
                         </div>
                     </div>
+                    <div style="border-top:1px solid var(--border); padding-top:var(--space-4); margin-top:var(--space-2);">
+                        <p class="panel-copy" style="margin:0 0 var(--space-3);">Allowed API routes (same policy is applied to Nginx and Fastify).</p>
+                        <div class="modal-toggle-grid">
+                            <span><label><input type="checkbox" name="route_presets" value="openai_compatible" x-model="pf.route_presets"> OpenAI-compatible</label></span>
+                            <span><label><input type="checkbox" name="route_presets" value="gemini_native" x-model="pf.route_presets"> Gemini native</label></span>
+                            <span><label><input type="checkbox" name="route_presets" value="gemini_openai_compatible" x-model="pf.route_presets"> Gemini OpenAI-compatible</label></span>
+                            <span><label><input type="checkbox" name="route_presets" value="newapi_billing" x-model="pf.route_presets"> NewAPI billing</label></span>
+                        </div>
+                        <label class="field-label" style="margin-top:12px;">Custom route prefixes</label>
+                        <textarea class="control textarea-control" name="custom_route_prefixes" x-model="pf.custom_route_prefixes" placeholder="/vendor/custom/&#10;/v2/embeddings"></textarea>
+                        <p class="panel-copy" style="margin:6px 0 0;">One prefix per line. Broad prefixes such as /api/ require confirmation.</p>
+                        <label style="display:flex; align-items:center; gap:6px; margin-top:10px; font-size:13px; color:var(--text-secondary);"><input type="checkbox" name="confirm_broad_routes"> I understand broad custom routes may expose upstream APIs</label>
+                    </div>
+                    <div class="modal-grid-3">
+                        <div>
+                            <label class="field-label">Maximum request body</label>
+                            <input class="control" name="max_body_size" x-model="pf.max_body_size" placeholder="600m">
+                        </div>
+                    </div>
                     <div class="modal-actions">
                         <button type="button" class="button-secondary" @click="modalOpen = false">Cancel</button>
                         <button type="submit" class="button" x-text="pf.isEdit ? 'Save Changes' : 'Create Endpoint'"></button>
@@ -107,7 +126,7 @@
                             </div>
                             <div><label class="field-label">Header name</label>{{ field_tooltip("Tên header nhận diện người dùng mà upstream yêu cầu, ví dụ New-Api-User.") }}<input class="control" name="auth_user_header" x-model="sf.auth_user_header"></div>
                             <div><label class="field-label">Header value</label>{{ field_tooltip("Giá trị gửi kèm header nhận diện, thường là user ID trên hệ thống upstream.") }}<input class="control" name="auth_user_value" x-model="sf.auth_user_value"></div>
-                            <div><label class="field-label">Token / Cookie</label>{{ field_tooltip("Token hoặc cookie xác thực của upstream; đây là dữ liệu nhạy cảm, không chia sẻ ra ngoài admin.") }}<input class="control" name="auth_token" x-model="sf.auth_token"></div>
+                            <div><label class="field-label">Token / Cookie</label>{{ field_tooltip("Token hoặc cookie xác thực của upstream; đây là dữ liệu nhạy cảm, không chia sẻ ra ngoài admin.") }}<input class="control" name="auth_token" x-model="sf.auth_token" placeholder="Leave blank to keep current secret"><small x-show="sf.isEdit && sf.auth_token_set" class="field-help">A secret is already configured; blank keeps it unchanged.</small></div>
                         </div>
                     </div>
                     <input type="hidden" name="auth_cookie" x-model="sf.auth_cookie">
@@ -116,6 +135,24 @@
                     <input type="hidden" name="log_path" x-model="sf.log_path">
                     <input type="hidden" name="token_search_path" x-model="sf.token_search_path">
                     <input type="hidden" name="notes" x-model="sf.notes">
+                    <div style="border-top:1px solid var(--border); padding-top:var(--space-4); margin-top:var(--space-3);">
+                        <p class="panel-copy" style="margin:0 0 var(--space-3);">Shopbot profile (managed centrally; leave disabled for proxy-only sources).</p>
+                        <div class="modal-toggle-grid">
+                            <span><label><input type="checkbox" name="shopbot_enabled" :checked="sf.shopbot_enabled"> Enable in shopbot</label></span>
+                            <span><label><input type="checkbox" name="shopbot_import_spend_accrual_enabled" :checked="sf.shopbot_import_spend_accrual_enabled"> Import spend accrual</label></span>
+                            <span><label><input type="checkbox" name="shopbot_supports_key_lookup_by_id" :checked="sf.shopbot_supports_key_lookup_by_id"> Token ID key lookup</label></span>
+                            <span><label><input type="checkbox" name="shopbot_key_backup_enabled" :checked="sf.shopbot_key_backup_enabled"> Key-vault backup</label></span>
+                        </div>
+                        <div class="modal-grid-4" style="margin-top:10px;">
+                            <div><label class="field-label">Price / unit</label><input class="control" name="shopbot_price_per_unit" type="number" x-model="sf.shopbot_price_per_unit"></div>
+                            <div><label class="field-label">Quota / unit</label><input class="control" name="shopbot_quota_per_unit" type="number" x-model="sf.shopbot_quota_per_unit"></div>
+                            <div><label class="field-label">Dollar / unit</label><input class="control" name="shopbot_dollar_per_unit" type="number" step="0.01" x-model="sf.shopbot_dollar_per_unit"></div>
+                            <div><label class="field-label">Default group</label><input class="control" name="shopbot_default_group" x-model="sf.shopbot_default_group"></div>
+                        </div>
+                        <input type="hidden" name="shopbot_discount_stack_mode" x-model="sf.shopbot_discount_stack_mode">
+                        <input type="hidden" name="shopbot_discount_allowed_stack_types" x-model="sf.shopbot_discount_allowed_stack_types">
+                        <input type="hidden" name="shopbot_token_key_endpoint_template" x-model="sf.shopbot_token_key_endpoint_template">
+                    </div>
                     <div class="modal-toggle-grid">
                         <span><label><input type="checkbox" name="enabled" :checked="sf.enabled"> Enabled</label>{{ field_tooltip("Cho phép hệ thống sử dụng API Source này trong các luồng runtime.") }}</span>
                         <span><label><input type="checkbox" name="public_pricing_enabled" :checked="sf.public_pricing_enabled"> Public pricing</label>{{ field_tooltip("Cho phép công khai dữ liệu pricing của nguồn trên portal.") }}</span>
@@ -207,6 +244,13 @@
                 {% endif %}
             </p>
         </article>
+        <article class="metric-card">
+            <div class="metric-label">Shopbot sync</div>
+            <div class="metric-value" style="font-size:16px;">
+                <span class="tag {% if shopbot_sync_state and shopbot_sync_state.status == 'healthy' %}is-accent{% else %}is-warm{% endif %}">{{ shopbot_sync_state.status if shopbot_sync_state else 'pending' }}</span>
+            </div>
+            <p class="metric-copy">Desired {{ shopbot_sync_state.desired_revision if shopbot_sync_state else 0 }} / applied {{ shopbot_sync_state.applied_revision if shopbot_sync_state else 0 }}</p>
+        </article>
     </section>
 
     <section class="content-grid">
@@ -287,14 +331,14 @@
                         {% for item in proxy_endpoints %}
                         <tr>
                             <td><strong>{{ item.name }}</strong> <span style="color:var(--text-tertiary); font-size:11px;">({{ item.id }})</span></td>
-                            <td><a href="https://{{ item.domain }}" target="_blank" class="code-text" style="color:var(--text-accent);">{{ item.domain }}</a></td>
+                            <td><a href="https://{{ item.domain }}" target="_blank" class="code-text" style="color:var(--text-accent);">{{ item.domain }}</a><div class="panel-copy" style="font-size:11px; margin-top:3px;">{{ item.route_policy.effective_prefixes|join(', ') }}</div></td>
                             <td class="code-text">{{ item.target_protocol }}://{{ item.target_host }}{% if item.tls_skip_verify %} <span class="tag is-warm" style="font-size:9px; height:20px;">skip-tls</span>{% endif %}</td>
                             <td>{{ item.port }}</td>
                             <td>{% if item.status == 'active' %}<span class="tag is-accent">Active</span>{% else %}<span class="tag is-warm">Inactive</span>{% endif %}</td>
                             <td style="text-align:right;">
                                 <div style="display:inline-flex; gap:4px;">
                                     <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
-                                        @click="openEditProxy('{{ item.id }}', '{{ item.source_id or '' }}', '{{ item.name }}', '{{ item.domain }}', '{{ item.target_host }}', '{{ item.target_protocol }}', {{ item.tls_skip_verify or 0 }}, {{ item.port }}, '{{ item.status }}')">Edit</button>
+                                        @click="openEditProxy('{{ item.id }}', '{{ item.source_id or '' }}', '{{ item.name }}', '{{ item.domain }}', '{{ item.target_host }}', '{{ item.target_protocol }}', {{ item.tls_skip_verify or 0 }}, {{ item.port }}, '{{ item.status }}', {{ item.route_policy.presets|tojson }}, {{ item.route_policy.custom_prefixes|tojson }}, '{{ item.max_body_size or '600m' }}')">Edit</button>
                                     <form method="POST" action="/control/proxy-endpoints/toggle" style="display:inline;">
                                         <input type="hidden" name="endpoint_id" value="{{ item.id }}">
                                         <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px;">{% if item.status == 'active' %}Disable{% else %}Enable{% endif %}</button>
@@ -340,7 +384,7 @@
                             <td style="text-align:right;">
                                 <div style="display:inline-flex; gap:4px;">
                                     <button type="button" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--text-accent);"
-                                        @click="openEditSource('{{ item.id }}', '{{ item.name }}', '{{ item.source_type or 'newapi' }}', '{{ item.upstream_base_url }}', '{{ item.public_base_url or '' }}', {{ item.balance_rate or 1.0 }}, '{{ item.auth_mode or 'header' }}', '{{ item.auth_user_header or '' }}', '{{ item.auth_user_value or '' }}', '{{ item.auth_token or '' }}', '{{ item.auth_cookie or '' }}', '{{ item.pricing_path or '/api/pricing' }}', '{{ item.ratio_config_path or '/api/ratio_config' }}', '{{ item.log_path or '/api/log/self' }}', '{{ item.token_search_path or '/api/token/search' }}', '{{ item.notes or '' }}', {{ item.enabled or 0 }}, {{ item.public_pricing_enabled or 0 }}, {{ item.public_balance_enabled or 0 }})">Edit</button>
+                                        @click="openEditSource('{{ item.id }}', '{{ item.name }}', '{{ item.source_type or 'newapi' }}', '{{ item.upstream_base_url }}', '{{ item.public_base_url or '' }}', {{ item.balance_rate or 1.0 }}, '{{ item.auth_mode or 'header' }}', '{{ item.auth_user_header or '' }}', '{{ item.auth_user_value or '' }}', '{{ item.auth_token or '' }}', '{{ item.auth_cookie or '' }}', {{ item.auth_token_set|tojson }}, {{ item.auth_cookie_set|tojson }}, '{{ item.pricing_path or '/api/pricing' }}', '{{ item.ratio_config_path or '/api/ratio_config' }}', '{{ item.log_path or '/api/log/self' }}', '{{ item.token_search_path or '/api/token/search' }}', '{{ item.notes or '' }}', {{ item.enabled or 0 }}, {{ item.public_pricing_enabled or 0 }}, {{ item.public_balance_enabled or 0 }}, {{ item.shopbot_profile|tojson }})">Edit</button>
                                     <form method="POST" action="/control/service-sources/delete" style="display:inline;" onsubmit="return confirm('Delete API source {{ item.name }}?')">
                                         <input type="hidden" name="source_id" value="{{ item.id }}">
                                         <button type="submit" class="button-ghost" style="height:28px; padding:0 8px; font-size:11px; color:var(--danger);">Delete</button>
@@ -437,8 +481,8 @@
 
 <script>
 function adminDashboard() {
-    const emptyProxy = () => ({ isEdit:false, endpoint_id:'', source_id:'', name:'', domain:'', target_host:'', target_protocol:'https', tls_skip_verify:false, port:'', status:'active' });
-    const emptySource = () => ({ isEdit:false, source_id:'', name:'', source_type:'newapi', upstream_base_url:'', public_base_url:'', balance_rate:1.0, auth_mode:'header', auth_user_header:'', auth_user_value:'', auth_token:'', auth_cookie:'', pricing_path:'/api/pricing', ratio_config_path:'/api/ratio_config', log_path:'/api/log/self', token_search_path:'/api/token/search', notes:'', enabled:true, public_pricing_enabled:true, public_balance_enabled:false });
+    const emptyProxy = () => ({ isEdit:false, endpoint_id:'', source_id:'', name:'', domain:'', target_host:'', target_protocol:'https', tls_skip_verify:false, port:'', status:'active', max_body_size:'600m', route_presets:['openai_compatible'], custom_route_prefixes:'' });
+    const emptySource = () => ({ isEdit:false, source_id:'', name:'', source_type:'newapi', upstream_base_url:'', public_base_url:'', balance_rate:1.0, auth_mode:'header', auth_user_header:'', auth_user_value:'', auth_token:'', auth_cookie:'', pricing_path:'/api/pricing', ratio_config_path:'/api/ratio_config', log_path:'/api/log/self', token_search_path:'/api/token/search', notes:'', enabled:true, public_pricing_enabled:true, public_balance_enabled:false, shopbot_enabled:false, shopbot_price_per_unit:0, shopbot_quota_per_unit:0, shopbot_dollar_per_unit:10.0, shopbot_default_group:'', shopbot_import_spend_accrual_enabled:false, shopbot_supports_key_lookup_by_id:false, shopbot_key_backup_enabled:false, shopbot_discount_stack_mode:'exclusive', shopbot_discount_allowed_stack_types:'cashback', shopbot_token_key_endpoint_template:'/api/token/{id}/key' });
     const emptyModule = () => ({ isEdit:false, module_id:'', name:'', path:'', public_url:'', icon:'', description:'', enabled:true, is_public:true, sort_order:0 });
 
     return {
@@ -450,14 +494,15 @@ function adminDashboard() {
         mf: emptyModule(),
 
         openAddProxy() { this.pf = emptyProxy(); this.modalType = 'proxy'; this.modalTitle = 'Create Proxy Endpoint'; this.modalOpen = true; },
-        openEditProxy(id, sid, name, domain, host, proto, skipTls, port, status) {
-            this.pf = { isEdit:true, endpoint_id:id, source_id:sid, name:name, domain:domain, target_host:host, target_protocol:proto, tls_skip_verify:!!skipTls, port:port, status:status };
+        openEditProxy(id, sid, name, domain, host, proto, skipTls, port, status, routePresets, customPrefixes, maxBodySize) {
+            this.pf = { isEdit:true, endpoint_id:id, source_id:sid, name:name, domain:domain, target_host:host, target_protocol:proto, tls_skip_verify:!!skipTls, port:port, status:status, max_body_size:maxBodySize || '600m', route_presets:routePresets || [], custom_route_prefixes:(customPrefixes || []).join('\n') };
             this.modalType = 'proxy'; this.modalTitle = 'Edit Proxy Endpoint: ' + name; this.modalOpen = true;
         },
 
         openAddSource() { this.sf = emptySource(); this.modalType = 'source'; this.modalTitle = 'Create API Source'; this.modalOpen = true; },
-        openEditSource(id, name, type, upstream, pub, rate, authMode, authHeader, authValue, authToken, authCookie, pricingPath, ratioPath, logPath, tokenPath, notes, enabled, pricing, balance) {
-            this.sf = { isEdit:true, source_id:id, name:name, source_type:type, upstream_base_url:upstream, public_base_url:pub, balance_rate:rate, auth_mode:authMode, auth_user_header:authHeader, auth_user_value:authValue, auth_token:authToken, auth_cookie:authCookie, pricing_path:pricingPath, ratio_config_path:ratioPath, log_path:logPath, token_search_path:tokenPath, notes:notes, enabled:!!enabled, public_pricing_enabled:!!pricing, public_balance_enabled:!!balance };
+        openEditSource(id, name, type, upstream, pub, rate, authMode, authHeader, authValue, authToken, authCookie, authTokenSet, authCookieSet, pricingPath, ratioPath, logPath, tokenPath, notes, enabled, pricing, balance, shopbotProfile) {
+            const profile = shopbotProfile || {};
+            this.sf = { isEdit:true, source_id:id, name:name, source_type:type, upstream_base_url:upstream, public_base_url:pub, balance_rate:rate, auth_mode:authMode, auth_user_header:authHeader, auth_user_value:authValue, auth_token:authToken, auth_cookie:authCookie, auth_token_set:!!authTokenSet, auth_cookie_set:!!authCookieSet, pricing_path:pricingPath, ratio_config_path:ratioPath, log_path:logPath, token_search_path:tokenPath, notes:notes, enabled:!!enabled, public_pricing_enabled:!!pricing, public_balance_enabled:!!balance, shopbot_enabled:Object.keys(profile).length > 0, shopbot_price_per_unit:profile.price_per_unit || 0, shopbot_quota_per_unit:profile.quota_per_unit || 0, shopbot_dollar_per_unit:profile.dollar_per_unit || 10.0, shopbot_default_group:profile.default_group || '', shopbot_import_spend_accrual_enabled:!!profile.import_spend_accrual_enabled, shopbot_supports_key_lookup_by_id:!!profile.supports_key_lookup_by_id, shopbot_key_backup_enabled:!!profile.key_backup_enabled, shopbot_discount_stack_mode:profile.discount_stack_mode || 'exclusive', shopbot_discount_allowed_stack_types:profile.discount_allowed_stack_types || 'cashback', shopbot_token_key_endpoint_template:profile.token_key_endpoint_template || '/api/token/{id}/key' };
             this.modalType = 'source'; this.modalTitle = 'Edit API Source: ' + name; this.modalOpen = true;
         },
 

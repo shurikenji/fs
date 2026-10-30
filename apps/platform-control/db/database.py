@@ -175,15 +175,45 @@ async def _seed_data(db: aiosqlite.Connection) -> None:
 
     cursor = await db.execute("PRAGMA table_info(proxy_endpoints)")
     columns = {row[1] for row in await cursor.fetchall()}
+    route_presets_missing = "route_presets_json" not in columns
+    custom_routes_missing = "custom_route_prefixes_json" not in columns
     if "tls_skip_verify" not in columns:
         await db.execute("ALTER TABLE proxy_endpoints ADD COLUMN tls_skip_verify INTEGER NOT NULL DEFAULT 0")
+    if "max_body_size" not in columns:
+        await db.execute("ALTER TABLE proxy_endpoints ADD COLUMN max_body_size TEXT NOT NULL DEFAULT '600m'")
+    if "route_presets_json" not in columns:
+        await db.execute("ALTER TABLE proxy_endpoints ADD COLUMN route_presets_json TEXT NOT NULL DEFAULT '[\"openai_compatible\"]'")
+    if "custom_route_prefixes_json" not in columns:
+        await db.execute("ALTER TABLE proxy_endpoints ADD COLUMN custom_route_prefixes_json TEXT NOT NULL DEFAULT '[]'")
+
+    # Existing proxies exposed the legacy OpenAI and billing locations. Preserve
+    # that behaviour only when migrating the old schema; an explicitly empty
+    # policy on a current schema means the domain is intentionally landing-page-only.
+    if route_presets_missing:
+        await db.execute(
+            """
+            UPDATE proxy_endpoints
+               SET route_presets_json = '[\"openai_compatible\",\"newapi_billing\"]'
+            """
+        )
+    if custom_routes_missing:
+        await db.execute("UPDATE proxy_endpoints SET custom_route_prefixes_json = '[]'")
+    await db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_endpoints_source_unique "
+        "ON proxy_endpoints(source_id) WHERE source_id IS NOT NULL"
+    )
+
+    await db.execute(
+        "INSERT OR IGNORE INTO config_state (id, revision) VALUES (1, 0)"
+    )
 
     for endpoint_id, source_id, name, domain, target_host, target_protocol, tls_skip_verify, port, status in _SEED_PROXY_ENDPOINTS:
         await db.execute(
             """
             INSERT OR IGNORE INTO proxy_endpoints (
-                id, source_id, name, domain, target_host, target_protocol, tls_skip_verify, port, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, source_id, name, domain, target_host, target_protocol, tls_skip_verify, port, status,
+                route_presets_json, custom_route_prefixes_json, max_body_size
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '["openai_compatible","newapi_billing"]', '[]', '600m')
             """,
             (endpoint_id, source_id or None, name, domain, target_host, target_protocol, tls_skip_verify, port, status),
         )
@@ -261,5 +291,71 @@ async def _ensure_schema(db: aiosqlite.Connection) -> None:
 
     cursor = await db.execute("PRAGMA table_info(proxy_endpoints)")
     columns = {row[1] for row in await cursor.fetchall()}
+    route_presets_missing = "route_presets_json" not in columns
+    custom_routes_missing = "custom_route_prefixes_json" not in columns
     if "tls_skip_verify" not in columns:
         await db.execute("ALTER TABLE proxy_endpoints ADD COLUMN tls_skip_verify INTEGER NOT NULL DEFAULT 0")
+    proxy_endpoint_columns = {
+        "max_body_size": "TEXT NOT NULL DEFAULT '600m'",
+        "route_presets_json": "TEXT NOT NULL DEFAULT '[\"openai_compatible\"]'",
+        "custom_route_prefixes_json": "TEXT NOT NULL DEFAULT '[]'",
+    }
+    for column, ddl in proxy_endpoint_columns.items():
+        if column not in columns:
+            await db.execute(f"ALTER TABLE proxy_endpoints ADD COLUMN {column} {ddl}")
+
+    if route_presets_missing:
+        await db.execute(
+            """
+            UPDATE proxy_endpoints
+               SET route_presets_json = '[\"openai_compatible\",\"newapi_billing\"]'
+            """
+        )
+    if custom_routes_missing:
+        await db.execute("UPDATE proxy_endpoints SET custom_route_prefixes_json = '[]'")
+
+    await db.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_proxy_endpoints_source_unique "
+        "ON proxy_endpoints(source_id) WHERE source_id IS NOT NULL"
+    )
+
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS shopbot_source_profiles (
+            source_id TEXT PRIMARY KEY REFERENCES service_sources(id) ON DELETE CASCADE,
+            price_per_unit INTEGER NOT NULL DEFAULT 0,
+            dollar_per_unit REAL NOT NULL DEFAULT 10.0,
+            quota_per_unit INTEGER NOT NULL DEFAULT 0,
+            default_group TEXT,
+            import_spend_accrual_enabled INTEGER NOT NULL DEFAULT 0,
+            discount_stack_mode TEXT NOT NULL DEFAULT 'exclusive',
+            discount_allowed_stack_types TEXT NOT NULL DEFAULT 'cashback',
+            supports_key_lookup_by_id INTEGER NOT NULL DEFAULT 0,
+            token_key_endpoint_template TEXT NOT NULL DEFAULT '/api/token/{id}/key',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+        """
+    )
+    await db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS config_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            revision INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT DEFAULT (datetime('now'))
+        )
+        """
+    )
+    consumer_columns_cursor = await db.execute("PRAGMA table_info(consumer_sync_state)")
+    consumer_columns = {row[1] for row in await consumer_columns_cursor.fetchall()}
+    if "desired_checksum" not in consumer_columns:
+        await db.execute("ALTER TABLE consumer_sync_state ADD COLUMN desired_checksum TEXT")
+    if "applied_checksum" not in consumer_columns:
+        await db.execute("ALTER TABLE consumer_sync_state ADD COLUMN applied_checksum TEXT")
+    profile_columns_cursor = await db.execute("PRAGMA table_info(shopbot_source_profiles)")
+    profile_columns = {row[1] for row in await profile_columns_cursor.fetchall()}
+    if "key_backup_enabled" not in profile_columns:
+        await db.execute(
+            "ALTER TABLE shopbot_source_profiles ADD COLUMN key_backup_enabled INTEGER NOT NULL DEFAULT 0"
+        )

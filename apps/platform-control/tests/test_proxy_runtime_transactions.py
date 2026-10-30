@@ -12,7 +12,6 @@ from app.app import _build_proxy_endpoint_fields, _run_proxy_runtime_transaction
 class ProxyRuntimeTransactionTests(unittest.IsolatedAsyncioTestCase):
     async def test_run_proxy_runtime_transaction_marks_success(self):
         mutate = AsyncMock()
-        rollback = AsyncMock()
 
         with (
             patch('app.app.get_proxy_endpoints', AsyncMock(return_value=[{'id': 'sv1'}, {'id': 'sv2'}])),
@@ -24,11 +23,9 @@ class ProxyRuntimeTransactionTests(unittest.IsolatedAsyncioTestCase):
                 job_type='proxy_save_apply',
                 request_payload={'endpoint_id': 'sv3'},
                 mutate=mutate,
-                rollback=rollback,
             )
 
         mutate.assert_awaited_once()
-        rollback.assert_not_awaited()
         mark_finished.assert_awaited_once_with(
             42,
             'success',
@@ -37,9 +34,8 @@ class ProxyRuntimeTransactionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(outcome['job_id'], 42)
         self.assertEqual(outcome['active_count'], 2)
 
-    async def test_run_proxy_runtime_transaction_rolls_back_on_apply_failure(self):
+    async def test_run_proxy_runtime_transaction_keeps_desired_state_on_apply_failure(self):
         mutate = AsyncMock()
-        rollback = AsyncMock()
 
         with (
             patch('app.app.get_proxy_endpoints', AsyncMock(return_value=[{'id': 'sv1'}])),
@@ -52,11 +48,9 @@ class ProxyRuntimeTransactionTests(unittest.IsolatedAsyncioTestCase):
                     job_type='proxy_toggle_apply',
                     request_payload={'endpoint_id': 'sv3', 'status': 'inactive'},
                     mutate=mutate,
-                    rollback=rollback,
                 )
 
         mutate.assert_awaited_once()
-        rollback.assert_awaited_once()
         mark_finished.assert_awaited_once()
         args, kwargs = mark_finished.await_args
         self.assertEqual(args[0], 77)
@@ -82,6 +76,38 @@ class ProxyFieldNormalizationTests(unittest.TestCase):
         self.assertEqual(fields['domain'], 'sv3.shupremium.com')
         self.assertEqual(fields['target_host'], 'upstream.example.com')
         self.assertEqual(fields['tls_skip_verify'], 0)
+
+    def test_route_policy_is_serialized_for_operator(self):
+        fields = _build_proxy_endpoint_fields(
+            source_id='gemini',
+            name='Gemini',
+            domain='gemini.example.com',
+            target_host='upstream.example.com',
+            target_protocol='https',
+            tls_skip_verify=False,
+            port=4010,
+            status='active',
+            route_presets=['gemini_native', 'gemini_openai_compatible'],
+            custom_route_prefixes=['/vendor/custom/'],
+        )
+
+        self.assertEqual(fields['max_body_size'], '600m')
+        self.assertIn('gemini_native', fields['route_presets_json'])
+        self.assertIn('/vendor/custom/', fields['custom_route_prefixes_json'])
+
+    def test_body_size_requires_an_nginx_unit(self):
+        with self.assertRaisesRegex(ValueError, 'max_body_size'):
+            _build_proxy_endpoint_fields(
+                source_id='bad-size',
+                name='Bad size',
+                domain='bad-size.example.com',
+                target_host='upstream.example.com',
+                target_protocol='https',
+                tls_skip_verify=False,
+                port=4011,
+                status='active',
+                max_body_size='600',
+            )
 
 
 if __name__ == '__main__':

@@ -126,6 +126,13 @@ async def load_public_proxy_status() -> list[dict[str, Any]]:
                 "name": str(item.get("name") or proxy_id).strip(),
                 "domain": str(item.get("domain") or "").strip(),
                 "status": str(item.get("status") or "unknown").strip(),
+                "connection_profiles": [
+                    profile
+                    for profile in item.get("connection_profiles", [])
+                    if isinstance(profile, dict)
+                    and str(profile.get("protocol") or "").strip()
+                    and str(profile.get("base_url") or "").strip()
+                ],
             }
         )
     return normalized

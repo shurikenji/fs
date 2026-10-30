@@ -46,6 +46,35 @@ test('buildNginxConfig falls back to http when wildcard cert is unavailable', ()
     assert.doesNotMatch(config.content, /listen 443 ssl http2;/);
 });
 
+test('buildNginxConfig renders configured Gemini and custom routes only', () => {
+    const config = buildNginxConfig(
+        {
+            id: 'gemini',
+            name: 'Gemini',
+            domain: 'gemini.shupremium.com',
+            port: 4010,
+            max_body_size: '600m',
+            route_policy: {
+                effective_prefixes: ['/v1beta/models', '/v1beta/openai/', '/vendor/custom/']
+            }
+        },
+        { available: false, path: '/etc/letsencrypt/live/shupremium-wildcard' }
+    );
+
+    assert.match(config.content, /location \^~ \/v1beta\/models\//);
+    assert.match(config.content, /location \^~ \/v1beta\/openai\//);
+    assert.match(config.content, /location \^~ \/vendor\/custom\//);
+    assert.doesNotMatch(config.content, /location \^~ \/v1\//);
+    assert.match(config.content, /client_max_body_size 600m;/);
+});
+
+test('buildNginxConfig rejects unsafe route prefixes before rendering', () => {
+    assert.throws(
+        () => buildNginxConfig({ id: 'bad', name: 'Bad', domain: 'bad.example.com', port: 4011, allowed_path_prefixes: ['/'] }, { available: false }),
+        /Invalid route prefix/
+    );
+});
+
 test('getCertCandidateDirs includes env path and legacy fallbacks', () => {
     const candidates = getCertCandidateDirs().map((item) => item.path);
 

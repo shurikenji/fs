@@ -86,6 +86,9 @@
                 </td>
                 <td data-label="Source">
                     <div class="cell-name">{{ s.name }}</div>
+                    {% if s.control_plane_source_id %}
+                    <div class="cell-meta"><span class="badge badge-info">Managed by platform-control</span></div>
+                    {% endif %}
                     {% if s.default_group %}
                     <div class="cell-meta">Default group: <code class="cell-code--subtle">{{ s.default_group }}</code></div>
                     {% endif %}

@@ -4,6 +4,7 @@ bot/services/key_alert_poller.py - Poll API keys and notify users when balances 
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 from datetime import timedelta
 
@@ -12,6 +13,7 @@ from aiogram import Bot
 from bot.keyboards.inline_kb import key_alert_topup_kb
 from bot.services.api_clients import get_api_client
 from bot.services.key_valuation import hash_api_key, normalize_api_key
+from bot.services.key_vault_client import lookup_item as lookup_vault_item
 from bot.services.notifier import notify_user
 from bot.utils.formatting import format_dollar, mask_api_key
 from bot.utils.time_utils import get_now_vn, to_db_time_string, to_gmt7
@@ -149,7 +151,10 @@ async def _notify_user_with_markup(
     reply_markup=None,
 ) -> bool:
     if not hasattr(bot, "send_message"):
-        return await notify_user(user_id, text, bot=bot)
+        result = notify_user(user_id, text, bot=bot)
+        if inspect.isawaitable(result):
+            result = await result
+        return bool(result)
 
     user = await get_user_by_id(user_id)
     if not user or not user.get("telegram_id"):
@@ -220,12 +225,16 @@ async def _check_user_key(bot: Bot, *, user_key: dict, server: dict, thresholds:
     )
     previous_level = _parse_float(previous_state.get("last_alert_threshold")) if previous_state else None
 
-    token = await find_backup_item_for_user_key(
-        int(server["id"]),
-        user_key.get("api_token_id"),
-        user_key.get("label"),
-        api_key,
+    token = await lookup_vault_item(
+        server, api_key, user_key.get("api_token_id"), user_key.get("label")
     )
+    if not token:
+        token = await find_backup_item_for_user_key(
+            int(server["id"]),
+            user_key.get("api_token_id"),
+            user_key.get("label"),
+            api_key,
+        )
     if not token:
         client = get_api_client(server)
         token = await client.search_token(server, api_key)

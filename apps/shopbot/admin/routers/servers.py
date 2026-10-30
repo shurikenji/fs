@@ -56,6 +56,10 @@ def _clean_str(value: object, default: str = "") -> str:
     return str(value).strip()
 
 
+def _is_control_plane_managed(server: dict | None) -> bool:
+    return bool(server and _clean_str(server.get("control_plane_source_id")))
+
+
 def _parse_discount_tiers_json(raw_value: object) -> list[dict]:
     raw_text = _clean_str(raw_value)
     if not raw_text:
@@ -118,6 +122,11 @@ def _build_server_flash_context(request: Request) -> dict[str, str]:
         return {
             "flash_message": "Spend tier configuration is invalid. Review the JSON payload and try again.",
             "flash_type": "danger",
+        }
+    if error == "managed_by_control_plane":
+        return {
+            "flash_message": "This source is managed by platform-control. Edit it from the central admin dashboard.",
+            "flash_type": "warning",
         }
     return {}
 
@@ -589,6 +598,9 @@ async def servers_edit_modal(request: Request, server_id: Annotated[int, Path()]
 
 @router.post("/{server_id}/edit")
 async def servers_edit_submit(request: Request, server_id: Annotated[int, Path()]):
+    server = await get_server_by_id(server_id)
+    if _is_control_plane_managed(server):
+        return RedirectResponse("/servers?error=managed_by_control_plane", status_code=303)
     form = await request.form()
     try:
         tiers = _parse_discount_tiers_json(form.get("discount_tiers_json"))
@@ -607,6 +619,8 @@ async def servers_toggle_active(request: Request, server_id: Annotated[int, Path
     server = await get_server_by_id(server_id)
     if not server:
         return _redirect_to_servers()
+    if _is_control_plane_managed(server):
+        return RedirectResponse("/servers?error=managed_by_control_plane", status_code=303)
 
     form = await request.form()
     redirect_target = _resolve_redirect_target(
@@ -619,6 +633,9 @@ async def servers_toggle_active(request: Request, server_id: Annotated[int, Path
 
 @router.get("/{server_id}/delete")
 async def servers_delete(server_id: Annotated[int, Path()]):
+    server = await get_server_by_id(server_id)
+    if _is_control_plane_managed(server):
+        return RedirectResponse("/servers?error=managed_by_control_plane", status_code=303)
     await delete_server(server_id)
     return _redirect_to_servers()
 

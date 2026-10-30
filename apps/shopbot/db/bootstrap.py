@@ -40,6 +40,8 @@ _BEST_EFFORT_MIGRATIONS = [
     "ALTER TABLE api_servers ADD COLUMN discount_allowed_stack_types TEXT DEFAULT 'cashback'",
     "ALTER TABLE api_servers ADD COLUMN supports_key_lookup_by_id INTEGER DEFAULT 0",
     "ALTER TABLE api_servers ADD COLUMN token_key_endpoint_template TEXT DEFAULT '/api/token/{id}/key'",
+    "ALTER TABLE api_servers ADD COLUMN control_plane_source_id TEXT",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_api_servers_control_plane_source ON api_servers(control_plane_source_id) WHERE control_plane_source_id IS NOT NULL",
     "ALTER TABLE orders ADD COLUMN base_amount INTEGER",
     "ALTER TABLE orders ADD COLUMN discount_amount INTEGER DEFAULT 0",
     "ALTER TABLE orders ADD COLUMN cashback_amount INTEGER DEFAULT 0",

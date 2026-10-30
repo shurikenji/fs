@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 import platform
 import time
+import json
+import re
 from contextlib import asynccontextmanager
 from html import escape
 import secrets
@@ -11,7 +13,7 @@ from typing import Any, Awaitable, Callable
 from urllib.parse import urlparse
 
 from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from itsdangerous import URLSafeTimedSerializer
 from starlette.middleware.sessions import SessionMiddleware
@@ -20,6 +22,13 @@ from app.config import get_settings
 from app.deps import get_templates, verify_csrf
 from app.operator_client import apply_proxy_state, ensure_wildcard_certificate, get_operator_status
 from app.pricing_hub_client import pricing_import_control_plane
+from app.proxy_routes import (
+    ROUTE_PRESETS,
+    effective_prefixes,
+    has_broad_custom_prefix,
+    parse_custom_text,
+    validate_custom_prefixes,
+)
 from app.pricing_admin import register_pricing_admin_routes
 from app.security import require_control_plane_token
 from db.database import close_db, init_db
@@ -29,21 +38,32 @@ from db.queries import (
     delete_portal_module,
     delete_proxy_endpoint,
     delete_service_source,
+    delete_shopbot_source_profile,
     get_activity_logs,
     get_deploy_jobs,
     get_module_stats,
     get_portal_modules,
     get_proxy_endpoints,
+    get_config_revision,
+    get_consumer_sync_state,
+    get_key_vault_config_snapshot,
+    get_shopbot_config_snapshot,
     get_proxy_stats,
     get_public_balance_sources,
     get_public_modules,
+    get_public_proxy_catalog,
     get_public_proxy_status,
+    get_service_source,
     get_service_sources,
+    get_shopbot_source_profiles,
     get_source_stats,
     mark_deploy_job_finished,
+    record_consumer_sync_status,
+    set_consumer_desired_checksum,
     upsert_portal_module,
     upsert_proxy_endpoint,
     upsert_service_source,
+    upsert_shopbot_source_profile,
 )
 
 
@@ -235,7 +255,16 @@ def _build_proxy_endpoint_fields(
     tls_skip_verify: bool,
     port: int,
     status: str,
+    max_body_size: str = "600m",
+    route_presets: list[str] | None = None,
+    custom_route_prefixes: list[str] | None = None,
 ) -> dict[str, Any]:
+    selected_presets = [str(item).strip() for item in (route_presets if route_presets is not None else ["openai_compatible"]) if str(item).strip()]
+    custom = validate_custom_prefixes(custom_route_prefixes or [])
+    effective_prefixes(selected_presets, custom)
+    body_limit = max_body_size.strip() or "600m"
+    if not re.fullmatch(r"[1-9][0-9]{0,8}[kKmMgG]", body_limit):
+        raise ValueError("max_body_size must be a size such as 600m, 1g, or 512k")
     return {
         "source_id": source_id,
         "name": name.strip(),
@@ -245,6 +274,9 @@ def _build_proxy_endpoint_fields(
         "tls_skip_verify": 1 if tls_skip_verify else 0,
         "port": port,
         "status": status.strip() or "active",
+        "max_body_size": body_limit,
+        "route_presets_json": json.dumps(selected_presets),
+        "custom_route_prefixes_json": json.dumps(custom),
     }
 
 
@@ -258,6 +290,9 @@ def _proxy_endpoint_fields_from_snapshot(snapshot: dict[str, Any]) -> dict[str, 
         "tls_skip_verify": int(snapshot.get("tls_skip_verify") or 0),
         "port": snapshot.get("port"),
         "status": snapshot.get("status") or "active",
+        "max_body_size": snapshot.get("max_body_size") or "600m",
+        "route_presets_json": snapshot.get("route_presets_json") or '["openai_compatible"]',
+        "custom_route_prefixes_json": snapshot.get("custom_route_prefixes_json") or "[]",
     }
 
 
@@ -281,7 +316,6 @@ async def _run_proxy_runtime_transaction(
     job_type: str,
     request_payload: dict[str, Any],
     mutate: Callable[[], Awaitable[None]],
-    rollback: Callable[[], Awaitable[None]],
 ) -> dict[str, Any]:
     await mutate()
     active = await get_proxy_endpoints(active_only=True)
@@ -289,16 +323,10 @@ async def _run_proxy_runtime_transaction(
     try:
         result = await apply_proxy_state(active)
     except Exception as exc:
-        rollback_error: Exception | None = None
-        try:
-            await rollback()
-        except Exception as inner_exc:  # pragma: no cover - defensive fallback
-            rollback_error = inner_exc
-        error_message = str(exc)
-        if rollback_error is not None:
-            error_message = f"{error_message} | rollback failed: {rollback_error}"
-        await mark_deploy_job_finished(job_id, "failed", error_message=error_message)
-        raise RuntimeError(error_message) from exc
+        # The operator restores its last-known-good Nginx/PM2 runtime. Keep this
+        # desired central state intact so an explicit sync can reconcile later.
+        await mark_deploy_job_finished(job_id, "failed", error_message=str(exc))
+        raise RuntimeError(str(exc)) from exc
 
     await mark_deploy_job_finished(job_id, "success", response_payload=result)
     return {"job_id": job_id, "result": result, "active_count": len(active)}
@@ -364,6 +392,10 @@ def create_app() -> FastAPI:
     async def public_status_api():
         return {"proxies": await get_public_proxy_status()}
 
+    @app.get("/api/public/proxy-catalog")
+    async def public_proxy_catalog_api():
+        return {"proxies": await get_public_proxy_catalog()}
+
     @app.get("/api/public/balance-sources")
     async def public_balance_sources():
         return {"servers": await get_public_balance_sources()}
@@ -376,7 +408,45 @@ def create_app() -> FastAPI:
 
     @app.get("/api/internal/proxy-endpoints", dependencies=[Depends(require_control_plane_token)])
     async def internal_proxy_endpoints():
-        return {"proxy_endpoints": await get_proxy_endpoints(active_only=False)}
+        return {
+            "revision": await get_config_revision(),
+            "proxy_endpoints": await get_proxy_endpoints(active_only=False),
+        }
+
+    @app.get("/api/internal/proxy-route-presets", dependencies=[Depends(require_control_plane_token)])
+    async def internal_proxy_route_presets():
+        return {"presets": {key: list(value) for key, value in ROUTE_PRESETS.items()}}
+
+    @app.get("/api/internal/config/shopbot", dependencies=[Depends(require_control_plane_token)])
+    async def internal_shopbot_config(request: Request):
+        snapshot = await get_shopbot_config_snapshot()
+        checksum = str(snapshot["checksum"])
+        etag = f'"{checksum}"'
+        await set_consumer_desired_checksum("shopbot", int(snapshot["revision"]), checksum)
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers={"ETag": etag, "Cache-Control": "no-store"})
+        return JSONResponse(snapshot, headers={"ETag": etag, "Cache-Control": "no-store"})
+
+    @app.get("/api/internal/config/key-vault", dependencies=[Depends(require_control_plane_token)])
+    async def internal_key_vault_config():
+        return await get_key_vault_config_snapshot()
+
+    @app.post("/api/internal/config/consumers/shopbot/status", dependencies=[Depends(require_control_plane_token)])
+    async def internal_shopbot_config_status(request: Request):
+        payload = await request.json()
+        await record_consumer_sync_status(
+            "shopbot",
+            int(payload.get("revision") or 0),
+            str(payload.get("status") or "unknown"),
+            str(payload.get("error") or ""),
+            str(payload.get("checksum") or ""),
+        )
+        await create_activity_log(
+            "SHOPBOT_CONFIG_ACK",
+            json.dumps({"revision": payload.get("revision"), "status": payload.get("status")}, ensure_ascii=True),
+            _client_ip(request),
+        )
+        return {"ok": True}
 
     @app.get("/api/internal/portal-modules", dependencies=[Depends(require_control_plane_token)])
     async def internal_portal_modules():
@@ -507,11 +577,20 @@ def create_app() -> FastAPI:
             operator_status = await get_operator_status()
         except Exception as exc:
             operator_status = {"status": "degraded", "error": str(exc)}
+        service_sources = [dict(item) for item in await get_service_sources(enabled_only=False)]
+        shopbot_profiles = await get_shopbot_source_profiles()
+        profiles_by_source = {item["source_id"]: item for item in shopbot_profiles}
+        for source in service_sources:
+            source["auth_token_set"] = bool(source.get("auth_token"))
+            source["auth_cookie_set"] = bool(source.get("auth_cookie"))
+            source["auth_token"] = ""
+            source["auth_cookie"] = ""
+            source["shopbot_profile"] = profiles_by_source.get(source["id"], {})
         return templates.TemplateResponse(
             "dashboard.html",
             {
                 "request": request,
-                "service_sources": await get_service_sources(enabled_only=False),
+                "service_sources": service_sources,
                 "proxy_endpoints": await get_proxy_endpoints(active_only=False),
                 "portal_modules": await get_portal_modules(public_only=False),
                 "deploy_jobs": await get_deploy_jobs(limit=15),
@@ -519,6 +598,8 @@ def create_app() -> FastAPI:
                 "proxy_stats": await get_proxy_stats(),
                 "source_stats": await get_source_stats(),
                 "module_stats": await get_module_stats(),
+                "shopbot_profiles": shopbot_profiles,
+                "shopbot_sync_state": await get_consumer_sync_state(),
                 "operator_status": operator_status,
                 "system_info": _system_info(),
                 "shopbot_admin_url": settings.shopbot_admin_url.rstrip("/"),
@@ -608,13 +689,30 @@ def create_app() -> FastAPI:
         log_path: str = Form("/api/log/self"),
         token_search_path: str = Form("/api/token/search"),
         notes: str = Form(""),
+        shopbot_enabled: str | None = Form(default=None),
+        shopbot_price_per_unit: int = Form(0),
+        shopbot_dollar_per_unit: float = Form(10.0),
+        shopbot_quota_per_unit: int = Form(0),
+        shopbot_default_group: str = Form(""),
+        shopbot_import_spend_accrual_enabled: str | None = Form(default=None),
+        shopbot_discount_stack_mode: str = Form("exclusive"),
+        shopbot_discount_allowed_stack_types: str = Form("cashback"),
+        shopbot_supports_key_lookup_by_id: str | None = Form(default=None),
+        shopbot_token_key_endpoint_template: str = Form("/api/token/{id}/key"),
+        shopbot_key_backup_enabled: str | None = Form(default=None),
     ):
         redirect = await _require_admin_post(request)
         if redirect:
             return redirect
         ip = _client_ip(request)
+        source_id = source_id.strip()
+        existing_source = await get_service_source(source_id)
+        # Secrets are write-only in the admin UI. A blank field on edit keeps the
+        # currently stored credential; clearing it is an explicit future action.
+        stored_auth_token = (existing_source or {}).get("auth_token") or ""
+        stored_auth_cookie = (existing_source or {}).get("auth_cookie") or ""
         await upsert_service_source(
-            source_id.strip(),
+            source_id,
             name=name.strip(),
             upstream_base_url=upstream_base_url.strip(),
             public_base_url=public_base_url.strip(),
@@ -626,19 +724,35 @@ def create_app() -> FastAPI:
             auth_mode=auth_mode.strip() or "header",
             auth_user_header=auth_user_header.strip(),
             auth_user_value=auth_user_value.strip(),
-            auth_token=auth_token.strip(),
-            auth_cookie=auth_cookie.strip(),
+            auth_token=auth_token.strip() or stored_auth_token,
+            auth_cookie=auth_cookie.strip() or stored_auth_cookie,
             pricing_path=pricing_path.strip(),
             ratio_config_path=ratio_config_path.strip(),
             log_path=log_path.strip(),
             token_search_path=token_search_path.strip(),
             notes=notes.strip(),
         )
-        await create_activity_log("SAVE_SOURCE", f"Saved upstream source: {source_id.strip()}", ip)
+        if shopbot_enabled:
+            await upsert_shopbot_source_profile(
+                source_id,
+                price_per_unit=shopbot_price_per_unit,
+                dollar_per_unit=shopbot_dollar_per_unit,
+                quota_per_unit=shopbot_quota_per_unit,
+                default_group=shopbot_default_group.strip(),
+                import_spend_accrual_enabled=1 if shopbot_import_spend_accrual_enabled else 0,
+                discount_stack_mode=shopbot_discount_stack_mode.strip() or "exclusive",
+                discount_allowed_stack_types=shopbot_discount_allowed_stack_types.strip() or "cashback",
+                supports_key_lookup_by_id=1 if shopbot_supports_key_lookup_by_id else 0,
+                token_key_endpoint_template=shopbot_token_key_endpoint_template.strip() or "/api/token/{id}/key",
+                key_backup_enabled=1 if shopbot_key_backup_enabled else 0,
+            )
+        else:
+            await delete_shopbot_source_profile(source_id)
+        await create_activity_log("SAVE_SOURCE", f"Saved upstream source: {source_id}", ip)
         try:
             result = await pricing_import_control_plane()
             request.session["flash_message"] = (
-                f"Saved upstream source `{source_id.strip()}` and synced pricing runtime "
+                f"Saved upstream source `{source_id}` and synced pricing runtime "
                 f"({result.get('sources_imported', 0)} sources imported)."
             )
         except Exception as exc:
@@ -681,29 +795,41 @@ def create_app() -> FastAPI:
         tls_skip_verify: str | None = Form(default=None),
         port: int = Form(...),
         status: str = Form("active"),
+        max_body_size: str = Form("600m"),
+        route_presets: list[str] = Form(default=[]),
+        custom_route_prefixes: str = Form(""),
+        confirm_broad_routes: str | None = Form(default=None),
     ):
         redirect = await _require_admin_post(request)
         if redirect:
             return redirect
         ip = _client_ip(request)
         endpoint_id = endpoint_id.strip()
-        fields = _build_proxy_endpoint_fields(
-            source_id=source_id.strip() or None,
-            name=name,
-            domain=domain,
-            target_host=target_host,
-            target_protocol=target_protocol,
-            tls_skip_verify=bool(tls_skip_verify),
-            port=port,
-            status=status,
-        )
-        previous = await _get_proxy_endpoint_snapshot(endpoint_id)
+        try:
+            custom = parse_custom_text(custom_route_prefixes)
+            if has_broad_custom_prefix(custom) and not confirm_broad_routes:
+                raise ValueError("Broad custom routes require explicit confirmation")
+            fields = _build_proxy_endpoint_fields(
+                source_id=source_id.strip() or None,
+                name=name,
+                domain=domain,
+                target_host=target_host,
+                target_protocol=target_protocol,
+                tls_skip_verify=bool(tls_skip_verify),
+                port=port,
+                status=status,
+                max_body_size=max_body_size,
+                route_presets=route_presets,
+                custom_route_prefixes=custom,
+            )
+        except ValueError as exc:
+            request.session["flash_error"] = str(exc)
+            return _redirect("/control")
         try:
             outcome = await _run_proxy_runtime_transaction(
                 job_type="proxy_save_apply",
                 request_payload={"endpoint_id": endpoint_id, "status": fields["status"]},
                 mutate=lambda: upsert_proxy_endpoint(endpoint_id, **fields),
-                rollback=lambda: _restore_proxy_endpoint_snapshot(endpoint_id, previous),
             )
             await create_activity_log(
                 "SAVE_PROXY",
@@ -726,8 +852,7 @@ def create_app() -> FastAPI:
             return redirect
         ip = _client_ip(request)
         endpoint_id = endpoint_id.strip()
-        previous = await _get_proxy_endpoint_snapshot(endpoint_id)
-        if previous is None:
+        if await _get_proxy_endpoint_snapshot(endpoint_id) is None:
             request.session["flash_error"] = f"Cannot delete proxy endpoint `{endpoint_id}` because it does not exist."
             return _redirect("/control")
         try:
@@ -735,7 +860,6 @@ def create_app() -> FastAPI:
                 job_type="proxy_delete_apply",
                 request_payload={"endpoint_id": endpoint_id},
                 mutate=lambda: delete_proxy_endpoint(endpoint_id),
-                rollback=lambda: _restore_proxy_endpoint_snapshot(endpoint_id, previous),
             )
             await create_activity_log("DELETE_PROXY", f"Deleted proxy endpoint `{endpoint_id}` and applied runtime successfully", ip)
             request.session["flash_message"] = (
@@ -767,7 +891,6 @@ def create_app() -> FastAPI:
                 job_type="proxy_toggle_apply",
                 request_payload={"endpoint_id": endpoint_id, "status": next_status},
                 mutate=lambda: upsert_proxy_endpoint(endpoint_id, **fields),
-                rollback=lambda: _restore_proxy_endpoint_snapshot(endpoint_id, previous),
             )
             action = "Enabled" if next_status == "active" else "Disabled"
             await create_activity_log("TOGGLE_PROXY", f"{action} proxy endpoint `{endpoint_id}` and applied runtime successfully", ip)

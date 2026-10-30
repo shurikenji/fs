@@ -28,6 +28,7 @@
                         <th>ID</th>
                         <th>Name</th>
                         <th>Domain</th>
+                        <th>Enabled protocols</th>
                         <th>Status</th>
                     </tr>
                 </thead>
@@ -37,6 +38,11 @@
                         <td class="code-text">{{ item.id }}</td>
                         <td>{{ item.name }}</td>
                         <td class="code-text">{{ item.domain or "-" }}</td>
+                        <td>
+                            {% if item.connection_profiles %}
+                                {% for profile in item.connection_profiles %}<span class="tag is-info" style="margin:2px;">{{ profile.protocol }}</span>{% endfor %}
+                            {% else %}-{% endif %}
+                        </td>
                         <td><span class="tag {% if item.status == 'active' %}is-accent{% else %}is-warm{% endif %}">{{
                                 item.status }}</span></td>
                     </tr>

@@ -33,8 +33,9 @@ const BLOCKED_PATHS = [
     /wp-config/i,
     /xmlrpc\.php/i,
     
-    // Vendor paths
-    /\/vendor\//i,
+    // Node internals remain blocked. A vendor prefix is allowed only when the
+    // central route policy explicitly enables it and is therefore checked by
+    // the allowlist below.
     /\/node_modules\//i,
     
     // Backup files
@@ -76,14 +77,15 @@ const BLOCKED_QUERY_PATTERNS = [
     /%2e%2e/i
 ];
 
-// Allowed API paths (whitelist)
-const ALLOWED_PATH_PREFIXES = [
-    '/v1/',
-    '/api/',
-    '/dashboard/billing/',
-    '/health',
-    '/_internal/health'
-];
+// The operator injects the same route policy that it rendered in Nginx.
+// Keep a legacy fallback so an older PM2 ecosystem remains serviceable.
+const ALLOWED_PATH_PREFIXES = (() => {
+    try {
+        const configured = JSON.parse(process.env.ALLOWED_PATH_PREFIXES_JSON || '[]');
+        if (Array.isArray(configured) && configured.length > 0) return configured.map(String);
+    } catch (_) { /* use legacy defaults */ }
+    return ['/v1/', '/dashboard/billing/'];
+})();
 
 // ========================================
 // CHECK FUNCTIONS
@@ -114,7 +116,11 @@ function isBlockedQuery(url) {
 function isAllowedPath(path) {
     if (path === '/' || path === '') return true;
     for (const prefix of ALLOWED_PATH_PREFIXES) {
-        if (path.startsWith(prefix)) return true;
+        if (prefix.endsWith('/')) {
+            if (path.startsWith(prefix)) return true;
+        } else if (path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}:`)) {
+            return true;
+        }
     }
     return false;
 }
@@ -156,4 +162,4 @@ async function securityMiddleware(request, reply) {
     }
 }
 
-module.exports = { securityMiddleware };
+module.exports = { securityMiddleware, isAllowedPath };

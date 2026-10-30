@@ -18,6 +18,7 @@ from bot.handlers import setup_routers
 from bot.middlewares.auth import AuthMiddleware
 from bot.services.key_alert_poller import start_key_alert_poller
 from bot.services.key_backup_poller import start_key_backup_poller
+from bot.services.control_plane_sync import start_control_plane_sync
 from bot.services.payment_poller import start_payment_poller
 from bot.storage.sqlite_fsm import SQLiteFSMStorage
 from db.bootstrap import init_db
@@ -117,7 +118,15 @@ async def main() -> None:
 
     poller_task = asyncio.create_task(start_payment_poller(bot))
     key_alert_task = asyncio.create_task(start_key_alert_poller(bot))
-    key_backup_task = asyncio.create_task(start_key_backup_poller())
+    remote_vault_enabled = bool(
+        settings.key_vault_url
+        and settings.key_vault_api_token
+        and settings.key_vault_lookup_secret
+    )
+    key_backup_task = None if remote_vault_enabled else asyncio.create_task(start_key_backup_poller())
+    if remote_vault_enabled:
+        logger.info("Remote key-vault enabled; local key backup poller is disabled")
+    control_plane_task = asyncio.create_task(start_control_plane_sync())
     admin_task = await start_admin_server()
 
     try:
@@ -128,6 +137,7 @@ async def main() -> None:
         await cancel_task(poller_task)
         await cancel_task(key_alert_task)
         await cancel_task(key_backup_task)
+        await cancel_task(control_plane_task)
         await cancel_task(admin_task)
         await close_db()
         await bot.session.close()

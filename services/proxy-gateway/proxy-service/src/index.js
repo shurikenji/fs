@@ -112,7 +112,7 @@ app.addHook('onRequest', async (request, reply) => {
     // Set CORS headers
     reply.header('Access-Control-Allow-Origin', '*');
     reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, X-Goog-Api-Key, X-Goog-FieldMask');
     reply.header('Access-Control-Allow-Credentials', 'true');
     
     // Handle preflight OPTIONS request

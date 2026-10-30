@@ -1,0 +1,22 @@
+[Unit]
+Description=Shupremium encrypted key-vault worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=shupremium
+WorkingDirectory=/srv/shupremium/apps/key-vault-worker
+EnvironmentFile=/etc/shupremium/key-vault-worker.env
+ExecStart=/srv/shupremium/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8093
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/srv/shupremium/apps/key-vault-worker/data
+MemoryMax=768M
+CPUQuota=150%
+
+[Install]
+WantedBy=multi-user.target

@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS api_servers (
     discount_allowed_stack_types TEXT DEFAULT 'cashback',
     supports_key_lookup_by_id INTEGER DEFAULT 0,
     token_key_endpoint_template TEXT DEFAULT '/api/token/{id}/key',
+    control_plane_source_id TEXT UNIQUE,
     created_at      TEXT DEFAULT (datetime('now', '+7 hours')),
     updated_at      TEXT DEFAULT (datetime('now', '+7 hours'))
 );

@@ -2,9 +2,70 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from typing import Any
 
 from db.database import get_db
+from app.proxy_routes import connection_profiles, route_policy
+
+
+async def get_config_revision() -> int:
+    db = await get_db()
+    cursor = await db.execute("SELECT revision FROM config_state WHERE id = 1")
+    row = await cursor.fetchone()
+    return int(row[0]) if row else 0
+
+
+async def _bump_config_revision(db: Any) -> int:
+    await db.execute(
+        """INSERT INTO config_state (id, revision) VALUES (1, 1)
+           ON CONFLICT(id) DO UPDATE SET revision = revision + 1, updated_at = datetime('now')"""
+    )
+    cursor = await db.execute("SELECT revision FROM config_state WHERE id = 1")
+    row = await cursor.fetchone()
+    revision = int(row[0]) if row else 0
+    await db.execute(
+        """
+        INSERT INTO consumer_sync_state (consumer_id, desired_revision, status)
+        VALUES ('shopbot', ?, 'pending')
+        ON CONFLICT(consumer_id) DO UPDATE SET
+            desired_revision = excluded.desired_revision,
+            status = CASE WHEN consumer_sync_state.applied_revision >= excluded.desired_revision
+                          THEN consumer_sync_state.status ELSE 'pending' END,
+            updated_at = datetime('now')
+        """,
+        (revision,),
+    )
+    return revision
+
+
+async def get_consumer_sync_state(consumer_id: str = "shopbot") -> dict[str, Any] | None:
+    db = await get_db()
+    cursor = await db.execute("SELECT * FROM consumer_sync_state WHERE consumer_id = ?", (consumer_id,))
+    row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
+async def record_consumer_sync_status(
+    consumer_id: str, revision: int, status: str, error_message: str = "", checksum: str = ""
+) -> None:
+    db = await get_db()
+    await db.execute(
+        """
+        INSERT INTO consumer_sync_state (consumer_id, desired_revision, applied_revision, applied_checksum, status, error_message, last_synced_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(consumer_id) DO UPDATE SET
+            applied_revision = MAX(consumer_sync_state.applied_revision, excluded.applied_revision),
+            applied_checksum = CASE WHEN excluded.applied_revision >= consumer_sync_state.applied_revision
+                                    THEN excluded.applied_checksum ELSE consumer_sync_state.applied_checksum END,
+            status = excluded.status,
+            error_message = excluded.error_message,
+            last_synced_at = datetime('now'),
+            updated_at = datetime('now')
+        """,
+        (consumer_id, revision, revision, checksum[:64] or None, status, error_message[:1000]),
+    )
+    await db.commit()
 
 
 async def get_service_sources(*, enabled_only: bool) -> list[dict[str, Any]]:
@@ -43,12 +104,14 @@ async def upsert_service_source(source_id: str, **fields: Any) -> None:
             f"INSERT INTO service_sources ({', '.join(columns)}) VALUES ({placeholders})",
             values,
         )
+    await _bump_config_revision(db)
     await db.commit()
 
 
 async def delete_service_source(source_id: str) -> None:
     db = await get_db()
     await db.execute("DELETE FROM service_sources WHERE id = ?", (source_id,))
+    await _bump_config_revision(db)
     await db.commit()
 
 
@@ -59,7 +122,19 @@ async def get_proxy_endpoints(*, active_only: bool) -> list[dict[str, Any]]:
         query += " WHERE status = 'active'"
     query += " ORDER BY port ASC"
     cursor = await db.execute(query)
-    return [dict(row) for row in await cursor.fetchall()]
+    result = []
+    for row in await cursor.fetchall():
+        item = dict(row)
+        try:
+            item["route_policy"] = route_policy(
+                item.get("route_presets_json"), item.get("custom_route_prefixes_json")
+            )
+            item["connection_profiles"] = connection_profiles(item.get("domain", ""), item["route_policy"])
+        except ValueError:
+            item["route_policy"] = {"presets": [], "custom_prefixes": [], "effective_prefixes": []}
+            item["connection_profiles"] = []
+        result.append(item)
+    return result
 
 
 async def upsert_proxy_endpoint(endpoint_id: str, **fields: Any) -> None:
@@ -81,12 +156,107 @@ async def upsert_proxy_endpoint(endpoint_id: str, **fields: Any) -> None:
             f"INSERT INTO proxy_endpoints ({', '.join(columns)}) VALUES ({placeholders})",
             values,
         )
+    await _bump_config_revision(db)
     await db.commit()
 
 
 async def delete_proxy_endpoint(endpoint_id: str) -> None:
     db = await get_db()
     await db.execute("DELETE FROM proxy_endpoints WHERE id = ?", (endpoint_id,))
+    await _bump_config_revision(db)
+    await db.commit()
+
+
+async def get_shopbot_config_snapshot() -> dict[str, Any]:
+    db = await get_db()
+    revision = await get_config_revision()
+    sources_cursor = await db.execute(
+        """
+        SELECT s.*, p.price_per_unit, p.dollar_per_unit, p.quota_per_unit,
+               p.default_group, p.import_spend_accrual_enabled,
+               p.discount_stack_mode, p.discount_allowed_stack_types,
+               p.supports_key_lookup_by_id, p.token_key_endpoint_template,
+               p.key_backup_enabled,
+               p.sort_order AS profile_sort_order
+          FROM service_sources s
+          LEFT JOIN shopbot_source_profiles p ON p.source_id = s.id
+         WHERE s.enabled = 1
+           AND p.source_id IS NOT NULL
+         ORDER BY COALESCE(p.sort_order, s.sort_order), s.id
+        """
+    )
+    sources = []
+    for row in await sources_cursor.fetchall():
+        item = dict(row)
+        sources.append(item)
+    checksum = hashlib.sha256(
+        json.dumps({"revision": revision, "sources": sources}, ensure_ascii=True, sort_keys=True, separators=(",", ":"), default=str).encode()
+    ).hexdigest()
+    return {"revision": revision, "checksum": checksum, "sources": sources}
+
+
+async def set_consumer_desired_checksum(consumer_id: str, revision: int, checksum: str) -> None:
+    """Record the precise snapshot a pull consumer should converge to."""
+    db = await get_db()
+    await db.execute(
+        """
+        UPDATE consumer_sync_state SET desired_checksum = ?, updated_at = datetime('now')
+         WHERE consumer_id = ? AND desired_revision = ?
+        """,
+        (checksum[:64], consumer_id, revision),
+    )
+    await db.commit()
+
+
+async def get_key_vault_config_snapshot() -> dict[str, Any]:
+    """Minimal private projection consumed by the isolated key-vault worker."""
+    db = await get_db()
+    revision = await get_config_revision()
+    cursor = await db.execute(
+        """
+        SELECT s.id, s.name, s.upstream_base_url, s.source_type, s.quota_multiple,
+               s.auth_mode, s.auth_user_header, s.auth_user_value, s.auth_token, s.auth_cookie,
+               p.token_key_endpoint_template, p.sort_order
+          FROM service_sources s
+          JOIN shopbot_source_profiles p ON p.source_id = s.id
+         WHERE s.enabled = 1 AND p.key_backup_enabled = 1
+         ORDER BY p.sort_order ASC, s.id ASC
+        """
+    )
+    return {"revision": revision, "sources": [dict(row) for row in await cursor.fetchall()]}
+
+
+async def get_shopbot_source_profiles() -> list[dict[str, Any]]:
+    db = await get_db()
+    cursor = await db.execute("SELECT * FROM shopbot_source_profiles ORDER BY sort_order ASC, source_id ASC")
+    return [dict(row) for row in await cursor.fetchall()]
+
+
+async def upsert_shopbot_source_profile(source_id: str, **fields: Any) -> None:
+    db = await get_db()
+    cursor = await db.execute("SELECT source_id FROM shopbot_source_profiles WHERE source_id = ?", (source_id,))
+    exists = await cursor.fetchone()
+    if exists:
+        assignments = ", ".join(f"{key} = ?" for key in fields)
+        await db.execute(
+            f"UPDATE shopbot_source_profiles SET {assignments}, updated_at = datetime('now') WHERE source_id = ?",
+            [*fields.values(), source_id],
+        )
+    else:
+        columns = ["source_id", *fields.keys()]
+        placeholders = ", ".join("?" for _ in columns)
+        await db.execute(
+            f"INSERT INTO shopbot_source_profiles ({', '.join(columns)}) VALUES ({placeholders})",
+            [source_id, *fields.values()],
+        )
+    await _bump_config_revision(db)
+    await db.commit()
+
+
+async def delete_shopbot_source_profile(source_id: str) -> None:
+    db = await get_db()
+    await db.execute("DELETE FROM shopbot_source_profiles WHERE source_id = ?", (source_id,))
+    await _bump_config_revision(db)
     await db.commit()
 
 
@@ -177,7 +347,29 @@ async def get_public_modules() -> list[dict[str, Any]]:
 
 async def get_public_proxy_status() -> list[dict[str, Any]]:
     rows = await get_proxy_endpoints(active_only=False)
-    return [{"id": row["id"], "name": row["name"], "domain": row["domain"], "status": row["status"]} for row in rows]
+    return [
+        {
+            "id": row["id"],
+            "name": row["name"],
+            "domain": row["domain"],
+            "status": row["status"],
+            "connection_profiles": row.get("connection_profiles", []),
+        }
+        for row in rows
+    ]
+
+
+async def get_public_proxy_catalog() -> list[dict[str, Any]]:
+    rows = await get_proxy_endpoints(active_only=True)
+    return [
+        {
+            "id": row["id"],
+            "name": row["name"],
+            "domain": row["domain"],
+            "connection_profiles": row.get("connection_profiles", []),
+        }
+        for row in rows
+    ]
 
 
 async def get_public_balance_sources() -> list[dict[str, Any]]:

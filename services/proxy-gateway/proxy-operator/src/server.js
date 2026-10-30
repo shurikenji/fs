@@ -22,6 +22,9 @@ const JOB_LOG_DIR = process.env.OPERATOR_JOB_LOG_DIR || path.join(__dirname, '..
 const JOB_LOG_MAX = parseInt(process.env.OPERATOR_JOB_LOG_MAX || '50', 10);
 const MANAGED_PREFIX = 'proxy-managed-';
 const FALLBACK_CERT_NAMES = ['proxy-gateway', 'shupremium-wildcard', CERT_NAME];
+const LEGACY_ROUTE_PREFIXES = ['/v1/', '/dashboard/billing/'];
+const ROUTE_PREFIX_PATTERN = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/;
+const ROUTE_REGEX_META = /[()[\]|+^$]/;
 
 let lastApplyStatus = null;
 
@@ -129,9 +132,58 @@ function validateProxies(proxies) {
         if (ports.has(proxy.port)) {
             throw makeStepError('validate', new Error(`Duplicate port: ${proxy.port}`));
         }
+        routePrefixes(proxy);
+        bodyLimit(proxy);
         domains.add(proxy.domain);
         ports.add(proxy.port);
     }
+}
+
+function bodyLimit(proxy) {
+    const value = String(proxy?.max_body_size || '600m').trim();
+    if (!/^[1-9][0-9]{0,8}[kKmMgG]$/.test(value)) {
+        throw makeStepError('validate', new Error(`Invalid max body size: ${value}`), { proxy_id: proxy?.id });
+    }
+    return value;
+}
+
+function routePrefixes(proxy) {
+    const raw = proxy?.route_policy?.effective_prefixes || proxy?.allowed_path_prefixes;
+    const prefixes = Array.isArray(raw) ? raw : LEGACY_ROUTE_PREFIXES;
+    const customPrefixes = proxy?.route_policy?.custom_prefixes;
+    if (Array.isArray(customPrefixes) && customPrefixes.length > 32) {
+        throw makeStepError('validate', new Error('A proxy cannot have more than 32 custom route prefixes'), { proxy_id: proxy?.id });
+    }
+    if (prefixes.length > 64) {
+        throw makeStepError('validate', new Error('A proxy cannot have more than 64 effective route prefixes'), { proxy_id: proxy?.id });
+    }
+    const seen = new Set();
+    for (const value of prefixes) {
+        const prefix = String(value || '').trim();
+        if (!prefix || prefix.length > 128 || prefix === '/' || prefix.includes('..') || prefix.includes('?') || prefix.includes('#') || prefix.includes(';') || ROUTE_REGEX_META.test(prefix) || !ROUTE_PREFIX_PATTERN.test(prefix)) {
+            throw makeStepError('validate', new Error(`Invalid route prefix: ${prefix}`), { proxy_id: proxy?.id });
+        }
+        if (prefix.startsWith('/_internal') || prefix.startsWith('/.well-known/') || prefix === '/health' || prefix.startsWith('/health/')) {
+            throw makeStepError('validate', new Error(`Reserved route prefix: ${prefix}`), { proxy_id: proxy?.id });
+        }
+        seen.add(prefix);
+    }
+    return Array.from(seen);
+}
+
+function renderProxyLocation(proxy, prefix, certState) {
+    const upstream = `http://127.0.0.1:${proxy.port}`;
+    const safePrefix = prefix.endsWith('/') ? prefix : `${prefix}/`;
+    const block = (location) => `    location ${location} {
+        proxy_pass ${upstream};
+        include /etc/nginx/snippets/proxy-params.conf;
+    }`;
+    if (prefix.endsWith('/')) return block(`^~ ${prefix}`);
+    return [
+        block(`= ${prefix}`),
+        block(`^~ ${safePrefix}`),
+        block(`~ ^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:`)
+    ].join('\n\n');
 }
 
 function buildEcosystem(proxies) {
@@ -153,6 +205,7 @@ function buildEcosystem(proxies) {
                 TLS_SKIP_VERIFY: proxy.tls_skip_verify ? 'true' : 'false',
                 SERVICE_NAME: proxy.name,
                 PROXY_DOMAIN: proxy.domain,
+                ALLOWED_PATH_PREFIXES_JSON: JSON.stringify(routePrefixes(proxy)),
                 LOG_LEVEL: 'warn'
             },
             error_file: `./logs/${safeName}-error.log`,
@@ -245,6 +298,8 @@ async function resolveWildcardCertificate() {
 
 function buildNginxConfig(proxy, certState) {
     const safeFile = `${MANAGED_PREFIX}${proxy.id}.conf`;
+    const locations = routePrefixes(proxy).map((prefix) => renderProxyLocation(proxy, prefix)).join('\n\n');
+    const bodyLimitValue = bodyLimit(proxy);
     if (certState?.available) {
         return {
             filename: safeFile,
@@ -252,6 +307,7 @@ function buildNginxConfig(proxy, certState) {
 server {
     listen 80;
     server_name ${proxy.domain};
+    client_max_body_size ${bodyLimitValue};
 
     location /.well-known/acme-challenge/ {
         root /var/www/html;
@@ -271,23 +327,16 @@ server {
     include /etc/nginx/snippets/ssl-params.conf;
     include /etc/nginx/snippets/security-headers.conf;
 
-    access_log /var/log/nginx/${sanitizeName(proxy.id)}-access.log;
+    access_log off;
     error_log /var/log/nginx/${sanitizeName(proxy.id)}-error.log;
+    client_max_body_size ${bodyLimitValue};
 
     location = /health {
         proxy_pass http://127.0.0.1:${proxy.port}/health;
         access_log off;
     }
 
-    location /v1/ {
-        proxy_pass http://127.0.0.1:${proxy.port};
-        include /etc/nginx/snippets/proxy-params.conf;
-    }
-
-    location /dashboard/billing/ {
-        proxy_pass http://127.0.0.1:${proxy.port};
-        include /etc/nginx/snippets/proxy-params.conf;
-    }
+${locations}
 
     location = / {
         proxy_pass http://127.0.0.1:${proxy.port};
@@ -308,6 +357,7 @@ server {
 server {
     listen 80;
     server_name ${proxy.domain};
+    client_max_body_size ${bodyLimitValue};
 
     location /.well-known/acme-challenge/ {
         root /var/www/html;
@@ -317,15 +367,7 @@ server {
         proxy_pass http://127.0.0.1:${proxy.port}/health;
     }
 
-    location /v1/ {
-        proxy_pass http://127.0.0.1:${proxy.port};
-        include /etc/nginx/snippets/proxy-params.conf;
-    }
-
-    location /dashboard/billing/ {
-        proxy_pass http://127.0.0.1:${proxy.port};
-        include /etc/nginx/snippets/proxy-params.conf;
-    }
+${locations}
 
     location = / {
         proxy_pass http://127.0.0.1:${proxy.port};

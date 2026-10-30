@@ -1,0 +1,11 @@
+# Copy to /etc/litestream/key-vault.yml and inject credentials via systemd.
+# Store the AES master key in a password manager/offline recovery record; do not
+# put it in this bucket or this file.
+dbs:
+  - path: /srv/shupremium/apps/key-vault-worker/data/key_vault.db
+    replicas:
+      - type: s3
+        bucket: <ORACLE_OBJECT_STORAGE_BUCKET>
+        path: shupremium/key-vault
+        endpoint: <ORACLE_OBJECT_STORAGE_S3_ENDPOINT>
+        region: <REGION>

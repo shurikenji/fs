@@ -73,6 +73,18 @@ class Settings:
     portal_internal_token: str = field(
         default_factory=lambda: _env("PORTAL_INTERNAL_TOKEN")
     )
+    control_plane_sync_interval_seconds: int = field(
+        default_factory=lambda: int(_env("CONTROL_PLANE_SYNC_INTERVAL_SECONDS", "60"))
+    )
+    key_vault_url: str = field(
+        default_factory=lambda: _env("KEY_VAULT_URL")
+    )
+    key_vault_api_token: str = field(
+        default_factory=lambda: _env("KEY_VAULT_API_TOKEN")
+    )
+    key_vault_lookup_secret: str = field(
+        default_factory=lambda: _env("KEY_VAULT_LOOKUP_SECRET")
+    )
     portal_session_secret: str = field(
         default_factory=lambda: _env("PORTAL_SESSION_SECRET", _env("ADMIN_SECRET_KEY", secrets.token_hex(32)))
     )

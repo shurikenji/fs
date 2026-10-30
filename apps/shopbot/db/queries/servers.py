@@ -66,6 +66,7 @@ async def create_server(
     discount_allowed_stack_types: str = "cashback",
     supports_key_lookup_by_id: int = 0,
     token_key_endpoint_template: str = "/api/token/{id}/key",
+    control_plane_source_id: str | None = None,
 ) -> int:
     """Tạo API server mới, trả về ID."""
     cursor = await execute_commit(
@@ -76,8 +77,8 @@ async def create_server(
             manual_groups, auth_type, auth_user_header, auth_user_value,
             auth_token, auth_cookie, custom_headers, groups_endpoint,
             import_spend_accrual_enabled, discount_stack_mode, discount_allowed_stack_types,
-            supports_key_lookup_by_id, token_key_endpoint_template)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            supports_key_lookup_by_id, token_key_endpoint_template, control_plane_source_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             name, base_url, user_id_header, access_token,
             price_per_unit, dollar_per_unit, quota_multiple, quota_per_unit,
@@ -85,7 +86,7 @@ async def create_server(
             manual_groups, auth_type, auth_user_header, auth_user_value,
             auth_token, auth_cookie, custom_headers, groups_endpoint,
             import_spend_accrual_enabled, discount_stack_mode, discount_allowed_stack_types,
-            supports_key_lookup_by_id, token_key_endpoint_template,
+            supports_key_lookup_by_id, token_key_endpoint_template, control_plane_source_id,
         ),
     )
     return cursor.lastrowid  # type: ignore[return-value]
@@ -106,6 +107,7 @@ async def update_server(server_id: int, **kwargs) -> None:
         "auth_token", "auth_cookie", "custom_headers", "groups_endpoint",
         "import_spend_accrual_enabled", "discount_stack_mode", "discount_allowed_stack_types",
         "supports_key_lookup_by_id", "token_key_endpoint_template",
+        "control_plane_source_id",
     }
 
     fields = []
