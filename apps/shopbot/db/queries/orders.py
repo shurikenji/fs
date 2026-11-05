@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bot.utils.time_utils import to_db_time_string
-from db.database import get_db
+from db.database import get_db, open_write_transaction
 from db.queries.analytics import get_dashboard_overview
 from db.queries._helpers import execute_commit, fetch_all_dicts, fetch_one_dict, fetch_scalar
 
@@ -185,20 +185,38 @@ async def update_order_status(
     await db.commit()
 
 
-async def cancel_order(order_id: int) -> None:
-    """Cancel an order and release reserved stock if any."""
-    await update_order_status(order_id, "cancelled")
-    from db.queries.account_stocks import release_account_by_order
+async def _close_pending_order(order_id: int, status: str) -> bool:
+    db = await open_write_transaction()
+    try:
+        cursor = await db.execute(
+            """UPDATE orders SET status = ?, expired_at = CASE WHEN ? = 'expired' THEN ? ELSE expired_at END,
+               updated_at = datetime('now', '+7 hours') WHERE id = ? AND status = 'pending'""",
+            (status, status, to_db_time_string(), order_id),
+        )
+        if cursor.rowcount != 1:
+            await db.rollback()
+            return False
+        await db.execute(
+            "UPDATE account_stocks SET sold_order_id = NULL WHERE sold_order_id = ? AND is_sold = 0",
+            (order_id,),
+        )
+        await db.commit()
+        return True
+    except BaseException:
+        await db.rollback()
+        raise
+    finally:
+        await db.close()
 
-    await release_account_by_order(order_id)
+
+async def cancel_order(order_id: int) -> bool:
+    """Cancel a pending order and release its reservations atomically."""
+    return await _close_pending_order(order_id, "cancelled")
 
 
-async def expire_order(order_id: int) -> None:
-    """Mark order as expired and release reserved stock if any."""
-    await update_order_status(order_id, "expired", expired_at=to_db_time_string())
-    from db.queries.account_stocks import release_account_by_order
-
-    await release_account_by_order(order_id)
+async def expire_order(order_id: int) -> bool:
+    """Expire a pending order and release its reservations atomically."""
+    return await _close_pending_order(order_id, "expired")
 
 
 async def mark_refunded(

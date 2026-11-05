@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from db.database import get_db
+from db.database import get_db, open_write_transaction
 
 
 KEY_PRODUCT_TYPES = frozenset({"key_new", "key_topup"})
@@ -23,9 +23,10 @@ class SpendLedgerService:
         amount: int,
         description: str = "",
         detail: dict[str, Any] | None = None,
+        _db=None,
     ) -> int | None:
-        db = await get_db()
-        await db.execute("BEGIN IMMEDIATE")
+        owns_transaction = _db is None
+        db = await open_write_transaction() if owns_transaction else _db
         try:
             cursor = await db.execute(
                 """SELECT id
@@ -34,7 +35,8 @@ class SpendLedgerService:
                 (source_type, source_ref),
             )
             if await cursor.fetchone():
-                await db.rollback()
+                if owns_transaction:
+                    await db.rollback()
                 return None
 
             cursor = await db.execute(
@@ -72,14 +74,19 @@ class SpendLedgerService:
                        updated_at = datetime('now')""",
                 (user_id, server_id, new_total, ledger_id),
             )
-            await db.commit()
+            if owns_transaction:
+                await db.commit()
             return ledger_id
         except Exception:
-            await db.rollback()
+            if owns_transaction:
+                await db.rollback()
             raise
+        finally:
+            if owns_transaction:
+                await db.close()
 
     @staticmethod
-    async def record_order_completion(order: dict[str, Any]) -> int | None:
+    async def record_order_completion(order: dict[str, Any], *, _db=None) -> int | None:
         if order.get("product_type") not in KEY_PRODUCT_TYPES:
             return None
         server_id = order.get("server_id")
@@ -100,16 +107,17 @@ class SpendLedgerService:
                 "pricing_version_id": order.get("pricing_version_id"),
                 "tier_id": order.get("applied_tier_id"),
             },
+            _db=_db,
         )
 
     @staticmethod
-    async def record_order_refund(order: dict[str, Any]) -> int | None:
+    async def record_order_refund(order: dict[str, Any], *, _db=None) -> int | None:
         if order.get("product_type") not in KEY_PRODUCT_TYPES:
             return None
         server_id = order.get("server_id")
         if not server_id:
             return None
-        db = await get_db()
+        db = _db if _db is not None else await get_db()
         cursor = await db.execute(
             """SELECT id
                FROM spend_ledger
@@ -133,4 +141,5 @@ class SpendLedgerService:
                 "pricing_version_id": order.get("pricing_version_id"),
                 "tier_id": order.get("applied_tier_id"),
             },
+            _db=_db,
         )

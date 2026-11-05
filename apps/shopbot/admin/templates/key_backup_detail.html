@@ -2,6 +2,7 @@
 {% block title %}Key Backup - {{ server.name }}{% endblock %}
 {% block content %}
 
+{% if remote_vault %}<div class="alert alert-warning">Remote Vault đang được cấu hình. Dữ liệu bên dưới là lịch sử cục bộ và có thể đã cũ; chưa thể chạy Backup Now từ trang này.</div>{% endif %}
 <div class="page-header animate-fade-up">
     <div>
         <h1>
@@ -19,7 +20,7 @@
     </div>
     <div class="page-actions">
         <a href="/key-backup" class="btn btn-outline-secondary">Overview</a>
-        <form method="POST" action="/key-backup/trigger/{{ server.id }}">
+        {% if not remote_vault %}<form method="POST" action="/key-backup/trigger/{{ server.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
             <button class="btn btn-primary" type="submit">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
@@ -27,7 +28,7 @@
                 </svg>
                 Backup Now
             </button>
-        </form>
+        </form>{% endif %}
     </div>
 </div>
 

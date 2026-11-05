@@ -140,13 +140,15 @@ def match_token_from_items(
     items: list[dict], requested: str
 ) -> dict | None:
     norm = requested[3:] if requested.startswith("sk-") else requested
+    if not norm or any(mask in norm for mask in ("*", "...", "…")):
+        return None
     for item in items:
-        raw = str(item.get("key") or "")
+        raw = item.get("key")
+        if not isinstance(raw, str) or any(mask in raw for mask in ("*", "...", "…")):
+            continue
         raw_norm = raw[3:] if raw.startswith("sk-") else raw
-        if raw == requested or raw_norm == norm:
+        if raw_norm == norm:
             return item
-    if len(items) == 1:
-        return items[0]
     return None
 
 

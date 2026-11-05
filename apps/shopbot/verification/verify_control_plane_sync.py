@@ -18,6 +18,7 @@ def main() -> None:
             "auth_user_value": "42",
             "auth_token": "secret",
             "quota_multiple": 1.5,
+            "shopbot_quota_multiple": 2.5,
             "price_per_unit": 12000,
             "quota_per_unit": 500000,
             "profile_sort_order": 2,
@@ -28,6 +29,7 @@ def main() -> None:
     assert values["base_url"] == "https://upstream.example"
     assert values["access_token"] == "secret"
     assert values["price_per_unit"] == 12000
+    assert values["quota_multiple"] == 2.5
     try:
         _validate_snapshot_sources([{"id": "bad", "name": "Bad", "upstream_base_url": "not-a-url"}])
     except ValueError:

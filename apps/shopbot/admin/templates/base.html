@@ -174,7 +174,7 @@
                 </span>
                 <span class="label">Platform Control</span>
             </a>
-            <a class="nav-link" href="/logout">
+            <form method="POST" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="nav-link" style="background:none;border:0;width:100%;text-align:left">
                 <span class="icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -183,7 +183,7 @@
                     </svg>
                 </span>
                 <span class="label">Sign Out</span>
-            </a>
+            </button></form>
         </div>
     </nav>
 

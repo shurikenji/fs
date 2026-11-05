@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS shopbot_source_profiles (
     price_per_unit                  INTEGER NOT NULL DEFAULT 0,
     dollar_per_unit                REAL NOT NULL DEFAULT 10.0,
     quota_per_unit                 INTEGER NOT NULL DEFAULT 0,
+    quota_multiple                 REAL,
     default_group                  TEXT,
     import_spend_accrual_enabled   INTEGER NOT NULL DEFAULT 0,
     discount_stack_mode            TEXT NOT NULL DEFAULT 'exclusive',

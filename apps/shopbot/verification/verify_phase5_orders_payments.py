@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +13,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from bot.config import settings
 from db.database import close_db
+from db.financial_migration import migrate
 from db.models import init_db
 from db.queries.account_stocks import add_account
 from db.queries.categories import create_category
@@ -54,6 +56,11 @@ async def main() -> None:
 
         try:
             await init_db()
+            connection = sqlite3.connect(settings.db_path)
+            try:
+                migrate(connection)
+            finally:
+                connection.close()
 
             user = await create_user(telegram_id=10001, username="phase5", full_name="Phase 5")
             category_id = await create_category("API Keys", cat_type="key_api")

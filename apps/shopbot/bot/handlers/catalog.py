@@ -617,11 +617,11 @@ async def _handle_standard_product(
     # [NEW] Nếu là tài khoản có sẵn, lập tức xí chỗ (reserve)
     if product["product_type"] == "account_stocked":
         from db.queries.account_stocks import reserve_accounts
-        from db.queries.orders import update_order_status
+        from db.queries.orders import cancel_order
         reserved_accounts = await reserve_accounts(product["id"], order_id, quantity)
         if len(reserved_accounts) < quantity:
             # Thu hồi đơn vừa tạo và báo lỗi (ai đó đã nhanh tay hơn)
-            await update_order_status(order_id, "cancelled", cancel_reason="Hết hàng (Race condition)")
+            await cancel_order(order_id)
             await callback.answer("❌ Tồn kho không đủ cho số lượng bạn chọn. Vui lòng thử lại với số lượng thấp hơn.", show_alert=True)
             return
 

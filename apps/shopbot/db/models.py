@@ -490,7 +490,7 @@ _DEFAULT_SETTINGS = [
     ("pagination_size", "6", "Items mỗi trang"),
     ("bot_name", "ShopBot", "Tên bot"),
     ("welcome_message", "Chào mừng bạn đến với ShopBot!", "Lời chào /start"),
-    ("admin_password", "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9", "Mật khẩu admin panel (hash của admin123)"),
+    ("admin_password", "", "Mật khẩu admin panel; đặt bằng công cụ reset"),
     ("wallet_topup_min", "30000", "Nạp ví tối thiểu (VNĐ)"),
     ("key_alert_enabled", "true", "Bật/tắt cảnh báo Telegram khi API key sắp hết số dư"),
     ("key_alert_poll_interval_min", "15", "Chu kỳ quét cảnh báo API key (phút)"),

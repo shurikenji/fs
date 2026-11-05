@@ -88,17 +88,18 @@ def _match_token_from_items(
     *,
     requested_token: str,
 ) -> dict[str, Any] | None:
-    """Find the best matching token item across masked and unmasked upstream payloads."""
+    """Match only an unmasked token with the same complete key."""
     normalized_requested = requested_token[3:] if requested_token.startswith("sk-") else requested_token
+    if not normalized_requested or any(mask in normalized_requested for mask in ("*", "...", "…")):
+        return None
 
     for item in items:
-        token_key = str(item.get("key") or "")
+        token_key = item.get("key")
+        if not isinstance(token_key, str) or any(mask in token_key for mask in ("*", "...", "…")):
+            continue
         normalized_key = token_key[3:] if token_key.startswith("sk-") else token_key
-        if token_key == requested_token or normalized_key == normalized_requested:
+        if normalized_key == normalized_requested:
             return item
-
-    if len(items) == 1:
-        return items[0]
     return None
 
 
@@ -414,6 +415,7 @@ class BaseAPIClient(ABC):
         try:
             async with aiohttp.ClientSession() as session:
                 last_message: str | None = None
+                checked_ids: set[int] = set()
                 for params in _build_search_token_param_candidates(api_key):
                     async with session.get(
                         url, params=params, headers=headers,
@@ -434,6 +436,25 @@ class BaseAPIClient(ABC):
                         matched = _match_token_from_items(tokens, requested_token=params["token"])
                         if matched is not None:
                             return matched
+                        if not self.supports_key_lookup_by_id(server):
+                            continue
+                        normalized_key = api_key[3:] if api_key.startswith("sk-") else api_key
+                        if not normalized_key or any(mask in normalized_key for mask in ("*", "...", "…")):
+                            continue
+                        for token in tokens:
+                            raw = token.get("key")
+                            if not isinstance(raw, str) or not any(mask in raw for mask in ("*", "...", "…")):
+                                continue
+                            token_id = str(token.get("id") or "")
+                            if not token_id.isascii() or not token_id.isdecimal():
+                                continue
+                            token_id = int(token_id)
+                            if token_id <= 0 or token_id in checked_ids or len(checked_ids) >= 3:
+                                continue
+                            checked_ids.add(token_id)
+                            full_key = await self.resolve_token_key_by_id(server, token_id)
+                            if full_key and _match_token_from_items([{"key": full_key}], requested_token=api_key):
+                                return token
                 if last_message:
                     logger.error(
                         "search_token failed on %s: %s",

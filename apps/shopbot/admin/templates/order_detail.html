@@ -124,7 +124,7 @@
                     {% endif %}
                     {% if order.quota_before is not none %}
                     <tr>
-                        <th>Quota delta</th>
+                        <th>Quota trước → sau</th>
                         <td>{{ "{:,}".format(order.quota_before) }} → {{ "{:,}".format(order.quota_after) }}</td>
                     </tr>
                     {% endif %}
@@ -163,18 +163,35 @@
                 <h3>Actions</h3>
             </div>
             <div class="card-body">
+                {% if can_reconcile_topup %}
+                <form method="POST" action="/orders/{{ order.id }}/complete-manual-topup" class="mb-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+                    <p><strong>Đối soát nạp key thủ công</strong></p>
+                    <p>Chỉ xác nhận sau khi đã nạp và kiểm tra đúng key trên upstream. Tổng quota là quota còn lại cộng quota đã dùng; tổng sau phải bằng tổng trước cộng lượng nạp.</p>
+                    <p>Key kết thúc: <code>…{{ (order.existing_key or '')[-4:] }}</code>. Đơn gói cũ cần đối chiếu lượng nạp theo chứng từ, vì cấu hình sản phẩm có thể đã thay đổi.</p>
+                    {% if order.custom_quota %}<p>Quota tùy chọn trong đơn: <strong>{{ order.custom_quota }}</strong></p>{% endif %}
+                    <label>ID token upstream <input class="form-control" name="token_id" type="number" min="1" required></label>
+                    <label>Tổng quota trước <input class="form-control" name="total_before" type="number" min="0" required></label>
+                    <label>Quota đã nạp <input class="form-control" name="quota_added" type="number" min="1" required></label>
+                    <label>Tổng quota sau <input class="form-control" name="total_after" type="number" min="1" required></label>
+                    <label>Mã chứng từ đối soát <input class="form-control" name="evidence" pattern="[A-Za-z0-9._:/-]{4,80}" required></label>
+                    <p>Không nhập API key hoặc mật khẩu vào mã chứng từ.</p>
+                    <label><input type="checkbox" name="confirmed" value="yes" required> Tôi đã kiểm tra đúng key, lượng nạp và chứng từ upstream.</label>
+                    <button type="submit" class="btn btn-success w-100">Xác nhận đã nạp và hoàn tất đơn</button>
+                </form>
+                {% endif %}
                 {% if order.status in ['paid', 'processing'] and order.product_type == 'service_upgrade' %}
-                <form method="POST" action="/orders/{{ order.id }}/complete" class="mb-2" onsubmit="return confirm('Mark this service order as completed and notify the customer now?');">
+                <form method="POST" action="/orders/{{ order.id }}/complete" class="mb-2" onsubmit="return confirm('Mark this service order as completed and notify the customer now?');"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <button type="submit" class="btn btn-success w-100">Complete Service Order</button>
                 </form>
                 {% endif %}
 
                 {% if order.status in ['pending','paid'] %}
-                <a href="/orders/{{ order.id }}/cancel" class="btn btn-outline-danger w-100 mb-2" onclick="return confirmDelete('Cancel this order without refund?')">Cancel Order</a>
+                <form method="POST" action="/orders/{{ order.id }}/cancel" onsubmit="return confirmDelete('Cancel this order without refund?')"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-outline-danger w-100 mb-2">Cancel Order</button></form>
                 {% endif %}
 
-                {% if order.status in ['paid','processing','completed'] and order.product_type != 'wallet_topup' %}
-                <a href="/orders/{{ order.id }}/refund" class="btn btn-danger w-100 mb-2" onclick="return confirmDelete('Cancel this order and refund the customer wallet?')">Cancel and Refund</a>
+                {% if can_refund %}
+                <form method="POST" action="/orders/{{ order.id }}/refund" onsubmit="return confirmDelete('Cancel this order and refund the customer wallet?')"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-danger w-100 mb-2">Cancel and Refund</button></form>
                 {% endif %}
 
                 <a href="/orders" class="btn btn-outline-secondary w-100">Back to Orders</a>

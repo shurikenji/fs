@@ -109,49 +109,50 @@ async def main() -> None:
             ids = await _seed_entities()
 
             from admin.app import create_admin_app
-            from admin.deps import require_admin
+            from admin.deps import require_admin, verify_csrf
 
             app = create_admin_app()
             app.dependency_overrides[require_admin] = lambda: {"admin": True}
+            app.dependency_overrides[verify_csrf] = lambda: None
 
             with TestClient(app) as client:
                 servers_page = client.get("/servers")
                 assert servers_page.status_code == 200
                 servers_text = servers_page.text
-                assert "Đang bật" in servers_text
-                assert "Tạm tắt" in servers_text
+                assert "Enabled" in servers_text
+                assert "Paused" in servers_text
                 assert f'/servers/{ids["server_active"]}/toggle-active' in servers_text
                 print("[OK] servers list uses unified state wording and inline toggle")
 
                 categories_page = client.get("/categories")
                 assert categories_page.status_code == 200
                 categories_text = categories_page.text
-                assert "Đang bật" in categories_text
-                assert "Tạm tắt" in categories_text
+                assert "Enabled" in categories_text
+                assert "Paused" in categories_text
                 assert f'/categories/{ids["category_active"]}/toggle-active' in categories_text
                 print("[OK] categories list uses unified state wording and inline toggle")
 
                 products_page = client.get("/products")
                 assert products_page.status_code == 200
                 products_text = products_page.text
-                assert "Máy chủ đang bật" in products_text
-                assert "Không giới hạn" in products_text
-                assert "Tài khoản khả dụng" in products_text
-                assert "Sẵn sàng bán" in products_text
+                assert "Active sources" in products_text
+                assert "Unlimited" in products_text
+                assert "Available credentials" in products_text
+                assert "Sellable units" in products_text
                 assert f'/products/{ids["product_unlimited"]}/toggle-active' in products_text
                 print("[OK] products list separates status from stock and uses inline toggle")
 
                 servers_edit_page = client.get(f'/servers/{ids["server_active"]}/edit')
                 assert servers_edit_page.status_code == 200
-                assert "Trạng thái: Đang bật" in servers_edit_page.text
+                assert "State: Enabled" in servers_edit_page.text
 
                 categories_edit_page = client.get(f'/categories/{ids["category_inactive"]}/edit')
                 assert categories_edit_page.status_code == 200
-                assert "Trạng thái: Tạm tắt" in categories_edit_page.text
+                assert "State: Paused" in categories_edit_page.text
 
                 products_edit_page = client.get(f'/products/{ids["product_limited"]}/edit')
                 assert products_edit_page.status_code == 200
-                assert "Trạng thái: Tạm tắt" in products_edit_page.text
+                assert "State: Paused" in products_edit_page.text
                 print("[OK] edit forms use unified state checkbox copy")
 
                 server_toggle = client.post(

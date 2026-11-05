@@ -326,6 +326,7 @@ async def _ensure_schema(db: aiosqlite.Connection) -> None:
             price_per_unit INTEGER NOT NULL DEFAULT 0,
             dollar_per_unit REAL NOT NULL DEFAULT 10.0,
             quota_per_unit INTEGER NOT NULL DEFAULT 0,
+            quota_multiple REAL,
             default_group TEXT,
             import_spend_accrual_enabled INTEGER NOT NULL DEFAULT 0,
             discount_stack_mode TEXT NOT NULL DEFAULT 'exclusive',
@@ -355,6 +356,8 @@ async def _ensure_schema(db: aiosqlite.Connection) -> None:
         await db.execute("ALTER TABLE consumer_sync_state ADD COLUMN applied_checksum TEXT")
     profile_columns_cursor = await db.execute("PRAGMA table_info(shopbot_source_profiles)")
     profile_columns = {row[1] for row in await profile_columns_cursor.fetchall()}
+    if "quota_multiple" not in profile_columns:
+        await db.execute("ALTER TABLE shopbot_source_profiles ADD COLUMN quota_multiple REAL")
     if "key_backup_enabled" not in profile_columns:
         await db.execute(
             "ALTER TABLE shopbot_source_profiles ADD COLUMN key_backup_enabled INTEGER NOT NULL DEFAULT 0"

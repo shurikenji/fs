@@ -7,6 +7,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from admin.deps import get_templates, protected_router
+from admin.passwords import hash_password
 from bot.services.ai_translator import AITranslator
 from db.queries.settings import get_settings_dict, set_setting
 
@@ -88,9 +89,16 @@ async def settings_page(request: Request):
 @router.post("/save")
 async def settings_save(request: Request):
     form = await request.form()
+    new_password = str(form.get("admin_password") or "")
+    if new_password and not 12 <= len(new_password) <= 1024:
+        return JSONResponse({"error": "Admin password must be 12–1024 characters."}, status_code=400)
     for key in _EDITABLE_KEYS:
         value = form.get(key)
         if value is not None:
+            if key == "admin_password":
+                if not new_password:
+                    continue
+                value = hash_password(new_password)
             await set_setting(key, value)
     await set_setting("ai_enabled", "true" if form.get("ai_enabled") else "false")
     for key in (

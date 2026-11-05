@@ -43,6 +43,7 @@
             </h3>
             <div class="text-secondary" style="font-size: 0.85rem;">
                 Available: <span class="text-success fw-bold">{{ info.available }}</span> / {{ info.total }}
+                — Reserved: {{ info.reserved }} — Sold: {{ info.sold }}
                 {% if info.format_template %}
                 — Format: <code>{{ info.format_template }}</code>
                 {% endif %}
@@ -84,16 +85,18 @@
                     </td>
                     {% endif %}
                     <td data-label="Status">
-                        {% if not a.is_sold %}
-                        <span class="badge badge-success">Available</span>
-                        {% else %}
+                        {% if a.is_sold %}
                         <span class="badge badge-danger">Sold</span>
+                        {% elif a.sold_order_id %}
+                        <span class="badge badge-warning">Reserved</span>
+                        {% else %}
+                        <span class="badge badge-success">Available</span>
                         {% endif %}
                     </td>
                     <td data-label="Sold to">{{ a.sold_to_user|default('—') }}</td>
                     <td data-label="" class="actions">
-                        {% if not a.is_sold %}
-                        <a href="/account-stock/{{ a.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Delete</a>
+                        {% if not a.is_sold and not a.sold_order_id %}
+                        <form method="POST" action="/account-stock/{{ a.id }}/delete" onsubmit="return confirmDelete()"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-sm btn-outline-danger">Delete</button></form>
                         {% endif %}
                     </td>
                 </tr>
@@ -107,7 +110,7 @@
 <div class="modal fade" id="addModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="/account-stock/add">
+            <form method="POST" action="/account-stock/add"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div class="modal-header">
                     <h5 class="modal-title">Add Inventory Batch</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

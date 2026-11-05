@@ -13,6 +13,27 @@ from bot.config import settings
 logger = logging.getLogger(__name__)
 
 
+async def get_summary() -> list[dict[str, Any]] | None:
+    if not settings.key_vault_url or not settings.key_vault_api_token:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{settings.key_vault_url.rstrip('/')}/internal/key-vault/summary",
+                headers={"Authorization": f"Bearer {settings.key_vault_api_token}"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                response.raise_for_status()
+                body = await response.json()
+        sources = body.get("sources") if isinstance(body, dict) else None
+        if not isinstance(sources, list) or any(not isinstance(row, dict) for row in sources):
+            return None
+        return sources
+    except Exception as exc:
+        logger.warning("Key-vault summary unavailable (%s)", type(exc).__name__)
+        return None
+
+
 def _fingerprint(api_key: str) -> str:
     normalized = api_key.strip()
     if normalized and not normalized.startswith("sk-"):

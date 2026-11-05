@@ -6,6 +6,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib.sh
 source "$SCRIPT_DIR/lib.sh"
 
+if [[ "${1:-}" == "--stage-only" ]]; then
+  exec bash "$SCRIPT_DIR/stage-app.sh" platform-control "${2:-main}"
+fi
+reexec_with_deploy_lock "$0" "$@"
+
 REF="${1:-main}"
 HOST_ROLE_VALUE="$(resolve_host_role "${2:-}")"
 

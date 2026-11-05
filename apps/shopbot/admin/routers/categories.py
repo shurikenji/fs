@@ -156,7 +156,7 @@ async def categories_toggle_active(request: Request, cat_id: Annotated[int, Path
     return RedirectResponse(redirect_target, status_code=303)
 
 
-@router.get("/{cat_id}/delete")
+@router.post("/{cat_id}/delete")
 async def categories_delete(cat_id: Annotated[int, Path()]):
     category = await get_category_by_id(cat_id)
     if not category:

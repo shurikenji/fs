@@ -563,6 +563,8 @@ async def input_key_received(
             )
         elif status == "no_change":
             accrual_lines.append("ℹ️ Key đã tồn tại trong hệ thống, chưa có giá trị tăng thêm để cộng tier.")
+        elif status == "pending_reconciliation":
+            accrual_lines.append("ℹ️ Key đang có đơn nạp chờ đối soát; chưa ghi nhận thêm chi tiêu từ key này.")
         else:
             accrual_lines.append(
                 "⚠️ Server không trả đủ `remain_quota` và `used_quota`, lần nhập này chỉ xác thực key."

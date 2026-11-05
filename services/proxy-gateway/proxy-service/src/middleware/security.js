@@ -114,7 +114,8 @@ function isBlockedQuery(url) {
 }
 
 function isAllowedPath(path) {
-    if (path === '/' || path === '') return true;
+    if (path === '/_internal/health') return false;
+    if (path === '/' || path === '' || path === '/health') return true;
     for (const prefix of ALLOWED_PATH_PREFIXES) {
         if (prefix.endsWith('/')) {
             if (path.startsWith(prefix)) return true;

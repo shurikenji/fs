@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form %}
+{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form with context %}
 {% block title %}Products{% endblock %}
 {% block content %}
 
@@ -187,7 +187,7 @@
                             data-edit-modal-url="/products/{{ p.id }}/edit-modal"
                             data-edit-modal-init="initializeProductEditModal"
                         >Edit</a>
-                        <a href="/products/{{ p.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Delete</a>
+                        <form method="POST" action="/products/{{ p.id }}/delete" onsubmit="return confirmDelete()"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-sm btn-outline-danger">Delete</button></form>
                     </div>
                 </td>
             </tr>
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', filterProducts);
 <div class="modal fade" id="addModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="POST" action="/products/add" id="addForm">
+            <form method="POST" action="/products/add" id="addForm"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div class="modal-header">
                     <h5 class="modal-title">Create Product</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>

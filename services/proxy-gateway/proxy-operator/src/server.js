@@ -2,13 +2,16 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const os = require('os');
 const { exec } = require('child_process');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
 const PORT = parseInt(process.env.OPERATOR_PORT || '8091', 10);
-const TOKEN = process.env.OPERATOR_TOKEN || 'change-me';
+const TOKEN = process.env.OPERATOR_TOKEN || '';
+const TOKEN_CONFIGURED = validOperatorToken(TOKEN);
 const ROOT_DOMAIN = process.env.ROOT_DOMAIN || 'shupremium.com';
 const CERT_NAME = process.env.WILDCARD_CERT_NAME || 'shupremium-wildcard';
 const CERT_DIR = process.env.WILDCARD_CERT_DIR || `/etc/letsencrypt/live/${CERT_NAME}`;
@@ -20,20 +23,120 @@ const NGINX_SITES_ENABLED = process.env.NGINX_SITES_ENABLED || '/etc/nginx/sites
 const BACKUP_ROOT = process.env.OPERATOR_BACKUP_ROOT || path.join(__dirname, '../runtime/backups');
 const JOB_LOG_DIR = process.env.OPERATOR_JOB_LOG_DIR || path.join(__dirname, '../runtime/jobs');
 const JOB_LOG_MAX = parseInt(process.env.OPERATOR_JOB_LOG_MAX || '50', 10);
+const RUNTIME_LOCK_DIR = process.env.OPERATOR_RUNTIME_LOCK_DIR || '/srv/shupremium-stack/shared/_ops/runtime.lock';
 const MANAGED_PREFIX = 'proxy-managed-';
 const FALLBACK_CERT_NAMES = ['proxy-gateway', 'shupremium-wildcard', CERT_NAME];
 const LEGACY_ROUTE_PREFIXES = ['/v1/', '/dashboard/billing/'];
 const ROUTE_PREFIX_PATTERN = /^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$/;
 const ROUTE_REGEX_META = /[()[\]|+^$]/;
+const RESERVED_PROXY_PORTS = new Set([22, 80, 443, 8080, 8090, 8091, 8092, 8093]);
 
 let lastApplyStatus = null;
+
+function acquireRuntimeGuard(owner, lockDir = RUNTIME_LOCK_DIR) {
+    fs.mkdirSync(path.dirname(lockDir), { recursive: true });
+    try {
+        fs.mkdirSync(lockDir, { mode: 0o700 });
+    } catch (error) {
+        if (error.code === 'EEXIST') throw makeStepError('busy', new Error('Runtime lock is held or requires operator review'));
+        throw error;
+    }
+    try {
+        fs.writeFileSync(path.join(lockDir, 'owner'), `${owner}\n`, { flag: 'wx', mode: 0o600 });
+    } catch (error) {
+        try { fs.rmdirSync(lockDir); } catch { /* leave an uncertain lock for review */ }
+        throw error;
+    }
+    return { lockDir, owner };
+}
+
+function releaseRuntimeGuard(guard) {
+    if (!guard) return;
+    try {
+        const ownerFile = path.join(guard.lockDir, 'owner');
+        if (fs.readFileSync(ownerFile, 'utf8').trim() !== guard.owner) return;
+        fs.unlinkSync(ownerFile);
+        fs.rmdirSync(guard.lockDir);
+    } catch (error) {
+        if (error.code !== 'ENOENT') console.error('[proxy-operator] Runtime lock cleanup failed:', error.code || 'error');
+    }
+}
+
+function atomicWriteExisting(filePath, content) {
+    const destination = fs.realpathSync(filePath);
+    const temp = `${destination}.${crypto.randomUUID()}.tmp`;
+    let fd;
+    try {
+        fd = fs.openSync(temp, 'wx', fs.statSync(destination).mode & 0o777);
+        fs.writeFileSync(fd, content);
+        fs.fsyncSync(fd);
+        fs.closeSync(fd);
+        fd = undefined;
+        fs.renameSync(temp, destination);
+    } finally {
+        if (fd !== undefined) fs.closeSync(fd);
+        try { fs.unlinkSync(temp); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+}
+
+function createPrivateNginxTemp(content) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'shupremium-nginx-'));
+    const file = path.join(directory, 'site.conf');
+    try {
+        fs.writeFileSync(file, content, { flag: 'wx', mode: 0o600 });
+        return { directory, file };
+    } catch (error) {
+        try { fs.rmdirSync(directory); } catch { /* preserve uncertain temporary state */ }
+        throw error;
+    }
+}
+
+function cleanupPrivateNginxTemp(temp) {
+    try { fs.unlinkSync(temp.file); } catch (error) { if (error.code !== 'ENOENT') console.error('[proxy-operator] Temporary file cleanup failed'); }
+    try { fs.rmdirSync(temp.directory); } catch (error) { if (error.code !== 'ENOENT') console.error('[proxy-operator] Temporary directory cleanup failed'); }
+}
+
+function validOperatorToken(value) {
+    return typeof value === 'string' && value === value.trim() && value.length >= 32 &&
+        !value.toLowerCase().startsWith('change-me') && !value.toLowerCase().startsWith('replace-with');
+}
+
+function validateProxyLayout(config, env, layout) {
+    const expectedService = path.resolve(layout.service);
+    const expectedLock = path.resolve(layout.lock);
+    const expectedState = path.resolve(layout.state);
+    if (!env.PROXY_SERVICE_PATH || path.resolve(env.PROXY_SERVICE_PATH) !== expectedService ||
+        !env.OPERATOR_RUNTIME_LOCK_DIR || path.resolve(env.OPERATOR_RUNTIME_LOCK_DIR) !== expectedLock ||
+        !env.OPERATOR_BACKUP_ROOT || path.resolve(env.OPERATOR_BACKUP_ROOT) !== path.join(expectedState, 'backups') ||
+        !env.OPERATOR_JOB_LOG_DIR || path.resolve(env.OPERATOR_JOB_LOG_DIR) !== path.join(expectedState, 'jobs')) {
+        throw new Error('Proxy operator paths must use the active release and shared storage');
+    }
+    if (layout.role === 'combined' && (env.OPERATOR_BIND_HOST !== '127.0.0.1' || env.PROXY_BIND_HOST !== '127.0.0.1')) {
+        throw new Error('Combined proxy operator and services must bind loopback');
+    }
+    if (!Array.isArray(config?.apps) || config.apps.length === 0) throw new Error('Proxy ecosystem must contain applications');
+    const names = new Set();
+    const ports = new Set();
+    for (const app of config.apps) {
+        const rawPort = String(app?.env?.PORT ?? '');
+        const port = Number(rawPort);
+        if (!app || typeof app.name !== 'string' || !/^proxy-[a-z0-9-]+$/.test(app.name) || names.has(app.name) ||
+            typeof app.cwd !== 'string' || !path.isAbsolute(app.cwd) || path.resolve(app.cwd) !== expectedService ||
+            app.script !== './src/index.js' || !/^[0-9]{1,5}$/.test(rawPort) || port < 1 || port > 65535 || RESERVED_PROXY_PORTS.has(port) || ports.has(port) ||
+            (layout.role === 'combined' && app.env.PROXY_BIND_HOST !== '127.0.0.1')) {
+            throw new Error('Proxy ecosystem has an invalid name, port, working directory, or bind address');
+        }
+        names.add(app.name);
+        ports.add(port);
+    }
+}
 
 function persistJobStatus(status) {
     lastApplyStatus = status;
     try {
-        fs.mkdirSync(JOB_LOG_DIR, { recursive: true });
+        fs.mkdirSync(JOB_LOG_DIR, { recursive: true, mode: 0o700 });
         const filePath = path.join(JOB_LOG_DIR, `${status.job_id}.json`);
-        fs.writeFileSync(filePath, JSON.stringify(status, null, 2));
+        fs.writeFileSync(filePath, JSON.stringify(status, null, 2), { mode: 0o600 });
         // Cleanup old job logs
         const files = fs.readdirSync(JOB_LOG_DIR).filter((f) => f.endsWith('.json')).sort().reverse();
         for (const old of files.slice(JOB_LOG_MAX)) {
@@ -56,7 +159,7 @@ function loadLastJobStatus() {
 }
 
 function requireToken(req, res, next) {
-    if (req.headers['x-operator-token'] !== TOKEN) {
+    if (!TOKEN_CONFIGURED || req.headers['x-operator-token'] !== TOKEN) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
     next();
@@ -120,22 +223,42 @@ function safePm2Name(proxy) {
 }
 
 function validateProxies(proxies) {
+    if (!Array.isArray(proxies) || proxies.length === 0) {
+        throw makeStepError('validate', new Error('Proxy list must contain at least one proxy'));
+    }
     const domains = new Set();
     const ports = new Set();
+    const ids = new Set();
+    const names = new Set();
     for (const proxy of proxies) {
-        if (!proxy.id || !proxy.name || !proxy.domain || !proxy.target_host || !proxy.port) {
-            throw makeStepError('validate', new Error(`Invalid proxy payload: ${JSON.stringify(proxy)}`));
+        if (!proxy || typeof proxy.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(proxy.id) ||
+            typeof proxy.name !== 'string' || !proxy.name.trim() || proxy.name.length > 200 ||
+            typeof proxy.domain !== 'string' || proxy.domain.length > 253 ||
+            !proxy.domain.split('.').every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label)) ||
+            typeof proxy.target_host !== 'string' || !proxy.target_host || /[\s\\/?#@]/.test(proxy.target_host) ||
+            !/^[0-9]{1,5}$/.test(String(proxy.port)) || Number(proxy.port) < 1 || Number(proxy.port) > 65535 || RESERVED_PROXY_PORTS.has(Number(proxy.port)) ||
+            (proxy.target_protocol != null && !['http', 'https'].includes(proxy.target_protocol)) ||
+            (proxy.tls_skip_verify != null && ![true, false, 0, 1].includes(proxy.tls_skip_verify))) {
+            throw makeStepError('validate', new Error('Invalid proxy identity, domain, target, port, or TLS policy'));
         }
-        if (domains.has(proxy.domain)) {
-            throw makeStepError('validate', new Error(`Duplicate domain: ${proxy.domain}`));
+        try {
+            const target = new URL(`http://${proxy.target_host}`);
+            if (!target.hostname || target.username || target.password || target.pathname !== '/' || target.search || target.hash) throw new Error('invalid');
+        } catch {
+            throw makeStepError('validate', new Error('Invalid proxy target'));
         }
-        if (ports.has(proxy.port)) {
-            throw makeStepError('validate', new Error(`Duplicate port: ${proxy.port}`));
+        const domain = proxy.domain.toLowerCase();
+        const port = Number(proxy.port);
+        const pm2Name = safePm2Name(proxy);
+        if (domains.has(domain) || ports.has(port) || ids.has(proxy.id) || names.has(pm2Name)) {
+            throw makeStepError('validate', new Error('Duplicate proxy identity, domain, port, or process name'));
         }
         routePrefixes(proxy);
         bodyLimit(proxy);
-        domains.add(proxy.domain);
-        ports.add(proxy.port);
+        domains.add(domain);
+        ports.add(port);
+        ids.add(proxy.id);
+        names.add(pm2Name);
     }
 }
 
@@ -191,6 +314,7 @@ function buildEcosystem(proxies) {
         const safeName = sanitizeName(proxy.name || proxy.id);
         return {
             name: safePm2Name(proxy),
+            cwd: path.resolve(PROXY_SERVICE_PATH),
             script: './src/index.js',
             instances: 2,
             exec_mode: 'cluster',
@@ -200,6 +324,7 @@ function buildEcosystem(proxies) {
             env: {
                 NODE_ENV: 'production',
                 PORT: proxy.port,
+                PROXY_BIND_HOST: process.env.PROXY_BIND_HOST || '0.0.0.0',
                 TARGET_HOST: proxy.target_host,
                 TARGET_PROTOCOL: proxy.target_protocol === 'http' ? 'http' : 'https',
                 TLS_SKIP_VERIFY: proxy.tls_skip_verify ? 'true' : 'false',
@@ -492,10 +617,10 @@ async function captureState() {
 }
 
 function persistBackup(state, jobId) {
-    fs.mkdirSync(BACKUP_ROOT, { recursive: true });
+    fs.mkdirSync(BACKUP_ROOT, { recursive: true, mode: 0o700 });
     const dir = path.join(BACKUP_ROOT, jobId);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(state, null, 2));
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify(state, null, 2), { mode: 0o600 });
     return dir;
 }
 
@@ -504,19 +629,22 @@ async function writeManagedFiles(proxies, certState) {
     for (const proxy of proxies) {
         const config = buildNginxConfig(proxy, certState);
         desiredFilenames.add(config.filename);
-        const tempPath = path.join('/tmp', config.filename);
-        fs.writeFileSync(tempPath, config.content);
+        const temp = createPrivateNginxTemp(config.content);
         const destination = path.join(NGINX_SITES_AVAILABLE, config.filename);
         const symlink = path.join(NGINX_SITES_ENABLED, config.filename);
-        await execAsync(`sudo mv ${shellQuote(tempPath)} ${shellQuote(destination)}`);
-        await execAsync(`sudo chmod 644 ${shellQuote(destination)}`);
-        await execAsync(`sudo ln -sf ${shellQuote(destination)} ${shellQuote(symlink)}`).catch(() => { });
+        try {
+            await execAsync(`sudo mv ${shellQuote(temp.file)} ${shellQuote(destination)}`);
+            await execAsync(`sudo chmod 644 ${shellQuote(destination)}`);
+            await execAsync(`sudo ln -sf ${shellQuote(destination)} ${shellQuote(symlink)}`);
+        } finally {
+            cleanupPrivateNginxTemp(temp);
+        }
     }
 
     for (const stale of listManagedNginxFiles()) {
         if (!desiredFilenames.has(stale)) {
-            await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_ENABLED, stale))}`).catch(() => { });
-            await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_AVAILABLE, stale))}`).catch(() => { });
+            await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_ENABLED, stale))}`);
+            await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_AVAILABLE, stale))}`);
         }
     }
 }
@@ -532,24 +660,27 @@ async function reloadRuntime() {
 
 async function restoreState(state) {
     if (state.ecosystem !== null) {
-        fs.writeFileSync(ECOSYSTEM_PATH, state.ecosystem);
+        atomicWriteExisting(ECOSYSTEM_PATH, state.ecosystem);
     }
 
     const existing = new Set(listManagedNginxFiles());
     for (const [filename, content] of Object.entries(state.managedFiles || {})) {
-        const tempPath = path.join('/tmp', filename);
+        const temp = createPrivateNginxTemp(content);
         const destination = path.join(NGINX_SITES_AVAILABLE, filename);
         const symlink = path.join(NGINX_SITES_ENABLED, filename);
-        fs.writeFileSync(tempPath, content);
-        await execAsync(`sudo mv ${shellQuote(tempPath)} ${shellQuote(destination)}`).catch(() => { });
-        await execAsync(`sudo chmod 644 ${shellQuote(destination)}`).catch(() => { });
-        await execAsync(`sudo ln -sf ${shellQuote(destination)} ${shellQuote(symlink)}`).catch(() => { });
+        try {
+            await execAsync(`sudo mv ${shellQuote(temp.file)} ${shellQuote(destination)}`);
+            await execAsync(`sudo chmod 644 ${shellQuote(destination)}`);
+            await execAsync(`sudo ln -sf ${shellQuote(destination)} ${shellQuote(symlink)}`);
+        } finally {
+            cleanupPrivateNginxTemp(temp);
+        }
         existing.delete(filename);
     }
 
     for (const stale of existing) {
-        await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_ENABLED, stale))}`).catch(() => { });
-        await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_AVAILABLE, stale))}`).catch(() => { });
+        await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_ENABLED, stale))}`);
+        await execAsync(`sudo rm -f ${shellQuote(path.join(NGINX_SITES_AVAILABLE, stale))}`);
     }
 
     await reloadRuntime();
@@ -589,7 +720,7 @@ async function probeHealth(proxies, options = {}) {
         for (let attempt = 1; attempt <= attempts; attempt += 1) {
             let response;
             try {
-                response = await fetch(`http://127.0.0.1:${proxy.port}/_internal/health`, {
+                response = await fetch(`http://127.0.0.1:${proxy.port}/health`, {
                     signal: AbortSignal.timeout(requestTimeoutMs)
                 });
             } catch (error) {
@@ -651,110 +782,116 @@ async function probeHealth(proxies, options = {}) {
 }
 
 async function applyRuntimeState(proxies, options = {}) {
+    validateProxies(proxies);
     const ensureWildcard = options.ensureWildcard !== false;
-    const jobId = `job-${Date.now()}`;
-    const desiredPm2Names = new Set(proxies.map((proxy) => safePm2Name(proxy)));
-    const snapshot = await captureState();
-    persistBackup(snapshot, jobId);
-
-    persistJobStatus({
-        status: 'running',
-        step: 'validate',
-        job_id: jobId,
-        updated_at: new Date().toISOString()
-    });
-
+    const jobId = `job-${Date.now()}-${crypto.randomUUID()}`;
+    const guard = acquireRuntimeGuard(`${jobId} pid=${process.pid}`);
     try {
-        logStep('validate', 'start', { job_id: jobId, proxy_count: proxies.length });
-        const preflight = await preflightRuntime(proxies);
-        let certState = preflight.wildcard_cert;
-        logStep('validate', 'ok', { job_id: jobId, wildcard_cert: certState });
-
-        if (!certState.available && ensureWildcard) {
-            logStep('ensure_cert', 'start', { job_id: jobId, cert_name: CERT_NAME });
-            await ensureWildcardCertificate();
-            certState = await resolveWildcardCertificate();
-            if (!certState.available) {
-                throw makeStepError('cert_probe', new Error('Wildcard certificate is still unavailable after ensure'), certState);
-            }
-            logStep('ensure_cert', 'ok', { job_id: jobId, wildcard_cert: certState });
-        }
-
-        if (!certState.available) {
-            throw makeStepError('cert_probe', new Error('Wildcard certificate is unavailable'), certState);
-        }
-
-        logStep('write_ecosystem', 'start', { job_id: jobId, ecosystem_path: ECOSYSTEM_PATH });
-        fs.writeFileSync(ECOSYSTEM_PATH, buildEcosystem(proxies));
-        logStep('write_ecosystem', 'ok', { job_id: jobId });
-
-        logStep('write_nginx', 'start', { job_id: jobId, proxy_count: proxies.length });
-        await writeManagedFiles(proxies, certState);
-        logStep('write_nginx', 'ok', { job_id: jobId });
-
-        logStep('nginx_test', 'start', { job_id: jobId });
-        await execAsync('sudo nginx -t', 30000);
-        logStep('nginx_test', 'ok', { job_id: jobId });
-
-        logStep('nginx_reload', 'start', { job_id: jobId });
-        await execAsync('sudo nginx -s reload', 30000);
-        logStep('nginx_reload', 'ok', { job_id: jobId });
-
-        logStep('pm2_reload', 'start', { job_id: jobId, proxy_service_path: PROXY_SERVICE_PATH });
-        const pm2Sync = await syncDesiredPm2Apps(desiredPm2Names);
-        await deleteStalePm2Apps(desiredPm2Names);
-        logStep('pm2_reload', 'ok', {
-            job_id: jobId,
-            desired_pm2_names: Array.from(desiredPm2Names),
-            reloaded_existing: pm2Sync.reloaded,
-            started_missing: pm2Sync.started
-        });
-
-        logStep('health_probe', 'start', { job_id: jobId });
-        const health = await probeHealth(proxies);
-        logStep('health_probe', 'ok', { job_id: jobId, proxy_count: health.length });
+        const desiredPm2Names = new Set(proxies.map((proxy) => safePm2Name(proxy)));
+        const snapshot = await captureState();
+        persistBackup(snapshot, jobId);
 
         persistJobStatus({
-            status: 'success',
-            step: 'health_probe',
+            status: 'running',
+            step: 'validate',
             job_id: jobId,
             updated_at: new Date().toISOString()
         });
 
-        return {
-            ok: true,
-            jobId,
-            wildcard_cert: certState,
-            health
-        };
-    } catch (error) {
-        const stepError = error?.step ? error : makeStepError('apply_runtime', error);
-        logStep(stepError.step, 'failed', { job_id: jobId, error: stepError.message, details: stepError.details || null });
-
-        let rollbackError = null;
         try {
-            await restoreState(snapshot);
-            logStep('rollback', 'ok', { job_id: jobId });
-        } catch (innerError) {
-            rollbackError = innerError;
-            logStep('rollback', 'failed', { job_id: jobId, error: innerError.message });
-        }
+            logStep('validate', 'start', { job_id: jobId, proxy_count: proxies.length });
+            const preflight = await preflightRuntime(proxies);
+            let certState = preflight.wildcard_cert;
+            logStep('validate', 'ok', { job_id: jobId, wildcard_cert: certState });
 
-        const details = { ...(stepError.details || {}) };
-        if (rollbackError) {
-            details.rollback_error = rollbackError.message;
-        }
+            if (!certState.available && ensureWildcard) {
+                logStep('ensure_cert', 'start', { job_id: jobId, cert_name: CERT_NAME });
+                await ensureWildcardCertificate();
+                certState = await resolveWildcardCertificate();
+                if (!certState.available) {
+                    throw makeStepError('cert_probe', new Error('Wildcard certificate is still unavailable after ensure'), certState);
+                }
+                logStep('ensure_cert', 'ok', { job_id: jobId, wildcard_cert: certState });
+            }
 
-        stepError.details = Object.keys(details).length > 0 ? details : null;
-        persistJobStatus({
-            status: 'failed',
-            step: stepError.step,
-            job_id: jobId,
-            error: stepError.message,
-            details: stepError.details,
-            updated_at: new Date().toISOString()
-        });
-        throw stepError;
+            if (!certState.available) {
+                throw makeStepError('cert_probe', new Error('Wildcard certificate is unavailable'), certState);
+            }
+
+            logStep('write_ecosystem', 'start', { job_id: jobId, ecosystem_path: ECOSYSTEM_PATH });
+            atomicWriteExisting(ECOSYSTEM_PATH, buildEcosystem(proxies));
+            logStep('write_ecosystem', 'ok', { job_id: jobId });
+
+            logStep('write_nginx', 'start', { job_id: jobId, proxy_count: proxies.length });
+            await writeManagedFiles(proxies, certState);
+            logStep('write_nginx', 'ok', { job_id: jobId });
+
+            logStep('nginx_test', 'start', { job_id: jobId });
+            await execAsync('sudo nginx -t', 30000);
+            logStep('nginx_test', 'ok', { job_id: jobId });
+
+            logStep('nginx_reload', 'start', { job_id: jobId });
+            await execAsync('sudo nginx -s reload', 30000);
+            logStep('nginx_reload', 'ok', { job_id: jobId });
+
+            logStep('pm2_reload', 'start', { job_id: jobId, proxy_service_path: PROXY_SERVICE_PATH });
+            const pm2Sync = await syncDesiredPm2Apps(desiredPm2Names);
+            await deleteStalePm2Apps(desiredPm2Names);
+            logStep('pm2_reload', 'ok', {
+                job_id: jobId,
+                desired_pm2_names: Array.from(desiredPm2Names),
+                reloaded_existing: pm2Sync.reloaded,
+                started_missing: pm2Sync.started
+            });
+
+            logStep('health_probe', 'start', { job_id: jobId });
+            const health = await probeHealth(proxies);
+            logStep('health_probe', 'ok', { job_id: jobId, proxy_count: health.length });
+
+            persistJobStatus({
+                status: 'success',
+                step: 'health_probe',
+                job_id: jobId,
+                updated_at: new Date().toISOString()
+            });
+
+            return {
+                ok: true,
+                jobId,
+                wildcard_cert: certState,
+                health
+            };
+        } catch (error) {
+            const stepError = error?.step ? error : makeStepError('apply_runtime', error);
+            logStep(stepError.step, 'failed', { job_id: jobId, error: stepError.message, details: stepError.details || null });
+
+            let rollbackError = null;
+            try {
+                await restoreState(snapshot);
+                logStep('rollback', 'ok', { job_id: jobId });
+            } catch (innerError) {
+                rollbackError = innerError;
+                logStep('rollback', 'failed', { job_id: jobId, error: innerError.message });
+            }
+
+            const details = { ...(stepError.details || {}) };
+            if (rollbackError) {
+                details.rollback_error = rollbackError.message;
+            }
+
+            stepError.details = Object.keys(details).length > 0 ? details : null;
+            persistJobStatus({
+                status: 'failed',
+                step: stepError.step,
+                job_id: jobId,
+                error: stepError.message,
+                details: stepError.details,
+                updated_at: new Date().toISOString()
+            });
+            throw stepError;
+        }
+    } finally {
+        releaseRuntimeGuard(guard);
     }
 }
 
@@ -827,36 +964,55 @@ app.post('/api/runtime/apply', requireToken, async (req, res) => {
         const result = await applyRuntimeState(proxies, { ensureWildcard });
         res.json(result);
     } catch (error) {
-        res.status(500).json(serializeError(error));
+        res.status(error?.step === 'busy' ? 409 : 500).json(serializeError(error));
     }
 });
 
 app.post('/api/runtime/wildcard/ensure', requireToken, async (req, res) => {
+    let guard;
     try {
+        guard = acquireRuntimeGuard(`cert-${Date.now()}-${crypto.randomUUID()} pid=${process.pid}`);
         const result = await ensureWildcardCertificate();
         res.json(result);
     } catch (error) {
-        res.status(500).json(serializeError(error));
+        res.status(error?.step === 'busy' ? 409 : 500).json(serializeError(error));
+    } finally {
+        releaseRuntimeGuard(guard);
     }
 });
 
 app.post('/api/runtime/restart/:name', requireToken, async (req, res) => {
+    let guard;
     try {
+        if (!/^proxy-[a-z0-9-]+$/.test(req.params.name)) {
+            return res.status(400).json({ error: 'Invalid proxy process name' });
+        }
+        guard = acquireRuntimeGuard(`restart-${Date.now()}-${crypto.randomUUID()} pid=${process.pid}`);
         await execAsync(`pm2 restart ${shellQuote(req.params.name)}`, 30000);
         res.json({ ok: true, name: req.params.name });
     } catch (error) {
-        res.status(500).json(serializeError(makeStepError('pm2_restart', error)));
+        res.status(error?.step === 'busy' ? 409 : 500).json(serializeError(error?.step ? error : makeStepError('pm2_restart', error)));
+    } finally {
+        releaseRuntimeGuard(guard);
     }
 });
 
 if (require.main === module) {
+    if (!TOKEN_CONFIGURED) {
+        console.error('[proxy-operator] OPERATOR_TOKEN must be configured with a non-default value');
+        process.exit(1);
+    }
     loadLastJobStatus();
-    app.listen(PORT, '0.0.0.0', () => {
+    app.listen(PORT, process.env.OPERATOR_BIND_HOST || '0.0.0.0', () => {
         console.log(`[proxy-operator] listening on :${PORT}`);
     });
 }
 
 module.exports = {
+    acquireRuntimeGuard,
+    atomicWriteExisting,
+    cleanupPrivateNginxTemp,
+    createPrivateNginxTemp,
     app,
     applyRuntimeState,
     buildEcosystem,
@@ -872,6 +1028,10 @@ module.exports = {
     probeHealth,
     resolveWildcardCertificate,
     restoreState,
+    releaseRuntimeGuard,
     serializeError,
+    validateProxyLayout,
+    validateProxies,
+    validOperatorToken,
     writeManagedFiles
 };

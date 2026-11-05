@@ -1,6 +1,7 @@
 """JSON API: /api/keys - resolve key info, list groups, change group."""
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Request
@@ -22,6 +23,7 @@ from app.visibility import (
 from db.queries.servers import get_public_server
 
 router = APIRouter(prefix="/api", tags=["api"])
+logger = logging.getLogger(__name__)
 
 
 class KeyResolveRequest(BaseModel):
@@ -262,7 +264,11 @@ async def api_key_update(body: KeyUpdateRequest, request: Request):
     hidden_groups = hidden_group_names(server)
     visible_group_names: set[str] = set()
     available_groups: list[dict[str, Any]] = []
-    catalog_rows = await ensure_server_group_catalog(server)
+    try:
+        catalog_rows = await ensure_server_group_catalog(server)
+    except Exception as exc:
+        logger.warning("Group catalog lookup failed for server %s: %s", body.server_id, type(exc).__name__)
+        return JSONResponse({"error": "Group catalog is unavailable. Please try again later."}, status_code=503)
     if catalog_rows:
         available_groups = [
             {
@@ -277,8 +283,12 @@ async def api_key_update(body: KeyUpdateRequest, request: Request):
         ]
         visible_group_names = {group["name"] for group in available_groups}
     else:
-        pricing = await fetch_pricing(body.server_id, allow_upstream=False)
-        public_pricing = await build_public_pricing(pricing, server) if pricing else None
+        try:
+            pricing = await fetch_pricing(body.server_id, allow_upstream=False)
+            public_pricing = await build_public_pricing(pricing, server) if pricing else None
+        except Exception as exc:
+            logger.warning("Group pricing lookup failed for server %s: %s", body.server_id, type(exc).__name__)
+            return JSONResponse({"error": "Group catalog is unavailable. Please try again later."}, status_code=503)
         if public_pricing:
             available_groups = [
                 {
@@ -287,9 +297,11 @@ async def api_key_update(body: KeyUpdateRequest, request: Request):
                 }
                 for group in public_pricing.groups
             ]
-            visible_group_names = {group["name"] for group in available_groups}
+            visible_group_names = {group["name"] for group in available_groups} - hidden_groups
 
-    if visible_group_names and any(group not in visible_group_names for group in groups):
+    if not visible_group_names:
+        return JSONResponse({"error": "Group catalog is unavailable. Please try again later."}, status_code=503)
+    if any(group not in visible_group_names for group in groups):
         return JSONResponse({"error": "One or more groups are hidden or unavailable."}, status_code=400)
 
     adapter = get_adapter(server)

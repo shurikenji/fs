@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form %}
+{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form with context %}
 {% block title %}Categories{% endblock %}
 {% block content %}
 
@@ -104,7 +104,7 @@
                             data-edit-modal-url="/categories/{{ c.id }}/edit-modal"
                             data-edit-modal-init="initializeCategoriesEditModal"
                         >Edit</a>
-                        <a href="/categories/{{ c.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Delete</a>
+                        <form method="POST" action="/categories/{{ c.id }}/delete" onsubmit="return confirmDelete()"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-sm btn-outline-danger">Delete</button></form>
                     </div>
                 </td>
             </tr>
@@ -124,7 +124,7 @@
 <div class="modal fade" id="addModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST" action="/categories/add">
+            <form method="POST" action="/categories/add"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div class="modal-header">
                     <h5 class="modal-title">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem; color: var(--primary);"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>

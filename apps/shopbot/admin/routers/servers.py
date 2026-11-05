@@ -631,7 +631,7 @@ async def servers_toggle_active(request: Request, server_id: Annotated[int, Path
     return RedirectResponse(redirect_target, status_code=303)
 
 
-@router.get("/{server_id}/delete")
+@router.post("/{server_id}/delete")
 async def servers_delete(server_id: Annotated[int, Path()]):
     server = await get_server_by_id(server_id)
     if _is_control_plane_managed(server):
@@ -682,6 +682,8 @@ async def servers_groups_save(request: Request, server_id: Annotated[int, Path()
     server = await _get_server_or_redirect(server_id)
     if isinstance(server, RedirectResponse):
         return server
+    if _is_control_plane_managed(server):
+        return RedirectResponse("/servers?error=managed_by_control_plane", status_code=303)
 
     form = await request.form()
     selected_groups = _split_group_names(_clean_str(form.get("default_group")))

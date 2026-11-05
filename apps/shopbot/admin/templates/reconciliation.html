@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Đối soát{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Đối soát thanh toán và xử lý đơn</h1>
+    <p class="page-subtitle">Mỗi bảng hiển thị tối đa 100 mục mới nhất. Kiểm tra giao dịch và upstream trước khi xử lý thủ công.</p>
+</div>
+<div class="card mb-3">
+    <div class="card-header"><h3>Giao dịch cần kiểm tra</h3></div>
+    <div class="card-body"><table class="table table-responsive-cards">
+        <thead><tr><th>ID</th><th>Mã giao dịch</th><th>Số tiền</th><th>Thời gian</th><th>Mã đơn</th><th>Trạng thái</th><th>Lý do</th></tr></thead>
+        <tbody>{% for r in receipts %}<tr>
+            <td>{{ r.id }}</td><td>{{ r.transaction_id }}</td><td>{{ format_vnd(r.amount) }}</td>
+            <td>{{ r.transaction_time or '—' }}</td><td>{{ r.order_code or '—' }}</td><td>{{ r.status }}</td><td>{{ r.last_error or '—' }}</td>
+        </tr>{% else %}<tr><td colspan="7">Không có giao dịch cần kiểm tra.</td></tr>{% endfor %}</tbody>
+    </table></div>
+</div>
+<div class="card mb-3">
+    <div class="card-header"><h3>Đơn đang chờ hoặc cần kiểm tra</h3></div>
+    <div class="card-body"><table class="table table-responsive-cards">
+        <thead><tr><th>Job</th><th>Đơn</th><th>Loại</th><th>Trạng thái</th><th>Lý do</th></tr></thead>
+        <tbody>{% for j in jobs %}<tr>
+            <td>{{ j.id }}</td><td><a href="/orders/{{ j.order_id }}">{{ j.order_code }}</a></td>
+            <td>{{ j.product_type }}</td><td>{{ j.status }}</td><td>{{ j.last_error or '—' }}</td>
+        </tr>{% else %}<tr><td colspan="5">Không có job đang chờ.</td></tr>{% endfor %}</tbody>
+    </table></div>
+</div>
+<div class="card mb-3">
+    <div class="card-header"><h3>Thông báo gửi thất bại</h3></div>
+    <div class="card-body"><table class="table table-responsive-cards">
+        <thead><tr><th>ID</th><th>Loại</th><th>Đơn</th><th>Số lần thử</th><th>Lý do</th></tr></thead>
+        <tbody>{% for n in failed_notifications %}<tr>
+            <td>{{ n.id }}</td><td>{{ n.event_type }}</td><td><a href="/orders/{{ n.order_id }}">{{ n.order_id }}</a></td>
+            <td>{{ n.attempts }}</td><td>{{ n.last_error or '—' }}</td>
+        </tr>{% else %}<tr><td colspan="5">Không có thông báo thất bại.</td></tr>{% endfor %}</tbody>
+    </table></div>
+</div>
+{% endblock %}

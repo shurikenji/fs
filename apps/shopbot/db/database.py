@@ -40,7 +40,22 @@ async def _open_connection() -> aiosqlite.Connection:
     db_path = Path(settings.db_path)
     logger.info("Opening database: %s", db_path)
     connection = await aiosqlite.connect(str(db_path))
-    return await _configure_connection(connection)
+    try:
+        return await _configure_connection(connection)
+    except BaseException:
+        await connection.close()
+        raise
+
+
+async def open_write_transaction() -> aiosqlite.Connection:
+    """Open a dedicated connection and acquire a short write transaction."""
+    connection = await _open_connection()
+    try:
+        await connection.execute("BEGIN IMMEDIATE")
+    except BaseException:
+        await connection.close()
+        raise
+    return connection
 
 
 async def get_db() -> aiosqlite.Connection:

@@ -24,6 +24,40 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"
 }
 
+release_runtime_guard() {
+  local recorded=""
+  if [[ -n "${DEPLOY_RUNTIME_GUARD:-}" && -f "$DEPLOY_RUNTIME_GUARD/owner" ]]; then
+    IFS= read -r recorded < "$DEPLOY_RUNTIME_GUARD/owner" || true
+    if [[ "$recorded" == "${DEPLOY_RUNTIME_GUARD_OWNER:-}" ]]; then
+      rm -f -- "$DEPLOY_RUNTIME_GUARD/owner"
+      rmdir -- "$DEPLOY_RUNTIME_GUARD" 2>/dev/null || true
+    fi
+  fi
+}
+
+reexec_with_deploy_lock() {
+  local entry="$1"
+  shift
+  if [[ "${SHUPREMIUM_DEPLOY_LOCK_HELD:-}" == "1" ]]; then
+    unset SHUPREMIUM_DEPLOY_LOCK_HELD
+    DEPLOY_RUNTIME_GUARD="$SHARED_DIR/_ops/runtime.lock"
+    DEPLOY_RUNTIME_GUARD_OWNER="deploy-${BASHPID}-${RANDOM}-${RANDOM}"
+    if ! mkdir "$DEPLOY_RUNTIME_GUARD" 2>/dev/null; then
+      fail "Runtime lock is held or requires operator review: $DEPLOY_RUNTIME_GUARD"
+    fi
+    if ! printf '%s\n' "$DEPLOY_RUNTIME_GUARD_OWNER" > "$DEPLOY_RUNTIME_GUARD/owner"; then
+      rmdir -- "$DEPLOY_RUNTIME_GUARD" 2>/dev/null || true
+      fail "Cannot record runtime lock owner"
+    fi
+    trap release_runtime_guard EXIT
+    return 0
+  fi
+  require_cmd flock
+  mkdir -p "$SHARED_DIR/_ops"
+  exec flock --nonblocking --conflict-exit-code 75 --close "$SHARED_DIR/_ops/deploy.lock" \
+    env SHUPREMIUM_DEPLOY_LOCK_HELD=1 bash "$entry" "$@"
+}
+
 now_ms() {
   local value
   value="$(date +%s%3N 2>/dev/null || true)"
@@ -142,6 +176,9 @@ resolve_host_role() {
 
 ensure_host_role() {
   local actual="$1"
+  if [[ "$actual" == "combined" && ( "$HOST_ROLE" == "arm" || "$HOST_ROLE" == "shopbot" || "$HOST_ROLE" == "combined" ) ]]; then
+    return 0
+  fi
   [[ "$actual" == "$HOST_ROLE" ]] || fail "App $APP_ID requires host role '$HOST_ROLE' but current host is '$actual'"
 }
 
@@ -275,7 +312,7 @@ link_shared_dir() {
 prepare_python_release() {
   local release_dir="$1"
   local shared_root="$SHARED_DIR/$SHARED_NAME"
-  local venv_dir="$shared_root/venv"
+  local venv_dir="$release_dir/.venv"
 
   require_cmd python3
   require_cmd curl
@@ -286,17 +323,15 @@ prepare_python_release() {
   link_shared_file "$shared_root/.env" "$release_dir/.env" true
   link_shared_dir "$shared_root/data" "$release_dir/data"
 
-  if [[ ! -d "$venv_dir" ]]; then
-    log "Creating shared venv for $APP_ID at $venv_dir"
-    python3 -m venv "$venv_dir"
-  fi
+  [[ ! -e "$venv_dir" && ! -L "$venv_dir" ]] || fail "Release venv already exists: $venv_dir"
+  log "Creating isolated venv for $APP_ID at $venv_dir"
+  python3 -m venv "$venv_dir"
 
   "$venv_dir/bin/pip" install --upgrade pip setuptools wheel
   if [[ -n "$PYTHON_REQUIREMENTS" && -f "$release_dir/$PYTHON_REQUIREMENTS" ]]; then
     "$venv_dir/bin/pip" install -r "$release_dir/$PYTHON_REQUIREMENTS"
   fi
 
-  link_shared_dir "$venv_dir" "$release_dir/.venv"
 }
 
 prepare_proxy_gateway_release() {
@@ -306,8 +341,13 @@ prepare_proxy_gateway_release() {
   require_cmd npm
 
   mkdir -p "$shared_root/proxy-operator"
+  mkdir -p "$shared_root/proxy-operator/backups" "$shared_root/proxy-operator/jobs"
+  mkdir -p "$shared_root/proxy-service/logs"
 
   link_shared_file "$shared_root/proxy-operator/.env" "$release_dir/proxy-operator/.env" true
+  [[ ! -L "$shared_root/proxy-service/ecosystem.config.js" ]] || fail "Shared proxy ecosystem must be a regular file"
+  link_shared_file "$shared_root/proxy-service/ecosystem.config.js" "$release_dir/proxy-service/ecosystem.config.js" true
+  link_shared_dir "$shared_root/proxy-service/logs" "$release_dir/proxy-service/logs"
 
   # Install Node.js dependencies for proxy-operator
   if [[ -f "$release_dir/proxy-operator/package.json" ]]; then
@@ -321,8 +361,6 @@ prepare_proxy_gateway_release() {
     ( cd "$release_dir/proxy-service" && npm ci --omit=dev )
   fi
 
-  # Ensure logs directory exists for proxy-service
-  mkdir -p "$release_dir/proxy-service/logs"
 }
 
 validate_python_release() {
@@ -338,13 +376,21 @@ validate_python_release() {
     portal|platform-control)
       (
         cd "$release_dir"
-        PYTHONPATH="$release_dir" "$python_bin" - <<'PY'
+        SHUPREMIUM_DATA_ROOT="$SHARED_DIR/$SHARED_NAME/data" SHUPREMIUM_DEPLOY_ROLE="${DEPLOY_HOST_ROLE:-$HOST_ROLE}" PYTHONPATH="$release_dir:$SCRIPT_DIR" "$python_bin" - <<'PY'
+import os
 from dotenv import load_dotenv
 
 load_dotenv(".env")
 
 from app.app import create_app
+from app.config import get_settings
+from check_service_database import check_combined_bind, check_database
+from main import validate_runtime_settings
 
+settings = get_settings()
+validate_runtime_settings(settings)
+check_combined_bind(os.environ["APP_ID"], settings.app_host, settings.app_port, os.environ["SHUPREMIUM_DEPLOY_ROLE"])
+check_database(os.environ["APP_ID"], settings.db_path, os.environ["SHUPREMIUM_DATA_ROOT"])
 application = create_app()
 assert application is not None
 PY
@@ -361,8 +407,34 @@ load_dotenv(".env")
 import bot.main  # noqa: F401
 from admin.app import create_admin_app
 
+bot.main.validate_runtime_secrets()
 application = create_admin_app()
 assert application is not None
+PY
+        "$python_bin" scripts/preflight_release.py --data-root "$SHARED_DIR/$SHARED_NAME/data" --role "${DEPLOY_HOST_ROLE:-$HOST_ROLE}"
+      )
+      ;;
+    key-vault-worker)
+      (
+        cd "$release_dir"
+        SHUPREMIUM_DATA_ROOT="$SHARED_DIR/$SHARED_NAME/data" PYTHONPATH="$release_dir" "$python_bin" - <<'PY'
+import asyncio
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(".env")
+import main
+
+main.validate_runtime_settings()
+database = main.DB_PATH
+root = Path(os.environ["SHUPREMIUM_DATA_ROOT"]).resolve(strict=True)
+if not database.is_absolute():
+    raise ValueError("KEY_VAULT_DB_PATH must be absolute")
+resolved = database.resolve(strict=True)
+if not root.is_dir() or not resolved.is_file() or not resolved.is_relative_to(root):
+    raise ValueError("Vault database must be inside the shared data directory")
+asyncio.run(main.require_vault_schema(readonly=True))
 PY
       )
       ;;
@@ -404,6 +476,18 @@ validate_proxy_gateway_release() {
     "src/server.js" \
     dotenv \
     express
+
+  (
+    cd "$release_dir/proxy-operator"
+    node -e 'const { validOperatorToken } = require("./src/server"); if (!validOperatorToken(process.env.OPERATOR_TOKEN || "")) { process.stderr.write("Invalid OPERATOR_TOKEN\n"); process.exit(1); }'
+    node - "$CURRENT_DIR/proxy-gateway/proxy-service" "$SHARED_DIR/_ops/runtime.lock" "$SHARED_DIR/proxy-gateway/proxy-operator" "${DEPLOY_HOST_ROLE:-$HOST_ROLE}" <<'NODE'
+require('dotenv').config();
+const path = require('path');
+const config = require(path.resolve('../proxy-service/ecosystem.config.js'));
+const { validateProxyLayout } = require('./src/server');
+validateProxyLayout(config, process.env, {service: process.argv[2], lock: process.argv[3], state: process.argv[4], role: process.argv[5]});
+NODE
+  )
 
   validate_node_package_dir \
     "$release_dir/proxy-service" \
@@ -469,7 +553,7 @@ ensure_pm2_process_online() {
 
 restart_pm2_python_app() {
   local cwd="$CURRENT_DIR/$APP_ID"
-  local python_bin="$SHARED_DIR/$SHARED_NAME/venv/bin/python"
+  local python_bin="$cwd/.venv/bin/python"
   local entry_path="$cwd/$PM2_ENTRY"
 
   require_cmd pm2
@@ -483,6 +567,25 @@ restart_pm2_python_app() {
     --cwd "$cwd" \
     --interpreter none \
     -- "$entry_path"
+}
+
+verify_shopbot_unit() {
+  require_cmd systemctl
+  local exec_start working_dir
+  exec_start="$(systemctl show "$SYSTEMD_UNIT" --property=ExecStart --value)" || fail "Cannot inspect $SYSTEMD_UNIT ExecStart"
+  working_dir="$(systemctl show "$SYSTEMD_UNIT" --property=WorkingDirectory --value)" || fail "Cannot inspect $SYSTEMD_UNIT WorkingDirectory"
+  [[ "$exec_start" == *"path=$CURRENT_DIR/$APP_ID/.venv/bin/python "* ]] || fail "Unit $SYSTEMD_UNIT must use the active release Python"
+  [[ "$working_dir" == "$CURRENT_DIR/$APP_ID" ]] || fail "Unit $SYSTEMD_UNIT must use the active release working directory"
+}
+
+verify_vault_unit() {
+  require_cmd systemctl
+  local exec_start working_dir
+  exec_start="$(systemctl show "$SYSTEMD_UNIT" --property=ExecStart --value)" || fail "Cannot inspect $SYSTEMD_UNIT ExecStart"
+  working_dir="$(systemctl show "$SYSTEMD_UNIT" --property=WorkingDirectory --value)" || fail "Cannot inspect $SYSTEMD_UNIT WorkingDirectory"
+  [[ "$exec_start" == *"path=$CURRENT_DIR/$APP_ID/.venv/bin/uvicorn "* ]] || fail "Unit $SYSTEMD_UNIT must use the active release uvicorn"
+  [[ "$exec_start" == *" --host 127.0.0.1 --port 8093 "* ]] || fail "Unit $SYSTEMD_UNIT must bind 127.0.0.1:8093"
+  [[ "$working_dir" == "$CURRENT_DIR/$APP_ID" ]] || fail "Unit $SYSTEMD_UNIT must use the active release working directory"
 }
 
 restart_shopbot_systemd() {
@@ -574,7 +677,7 @@ for (const app of (cfg.apps || [])) {
     [[ -n "$port" ]] || fail "Missing PORT for proxy service app: $name"
     status=""
     for attempt in {1..15}; do
-      status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/_internal/health" || true)"
+      status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "http://127.0.0.1:${port}/health" || true)"
       case ",200," in
         *",$status,"*) break ;;
       esac
@@ -595,6 +698,7 @@ run_runtime_smoke_checks() {
       ;;
     systemd-python)
       sudo systemctl is-active --quiet "$SYSTEMD_UNIT" || fail "Unit $SYSTEMD_UNIT is not active after deploy"
+      run_http_smoke_checks
       ;;
     pm2-node-multi)
       run_proxy_gateway_smoke_checks

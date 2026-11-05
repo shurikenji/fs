@@ -29,6 +29,9 @@ class _FakeResponse:
     async def json(self):
         return self.payload
 
+    def raise_for_status(self):
+        return None
+
 
 class _FakeSession:
     def __init__(self, payload, calls: list[dict]):
@@ -111,6 +114,15 @@ async def main() -> None:
             print("[OK] fetch_transactions builds the v3 URL and normalizes IN transactions")
 
             calls.clear()
+            try:
+                mbbank.aiohttp.ClientSession = lambda: _FakeSession(payload, calls)
+                await mbbank.fetch_transactions(from_days=7)
+            finally:
+                mbbank.aiohttp.ClientSession = original_client_session
+            assert calls[0]["url"].endswith("?fromDate=7&version=3")
+            print("[OK] fetch_transactions supports the seven-day recovery request")
+
+            calls.clear()
             original_client_session = mbbank.aiohttp.ClientSession
             try:
                 mbbank.aiohttp.ClientSession = lambda: _FakeSession({"status": "success", "transactions": {}}, calls)
@@ -118,13 +130,13 @@ async def main() -> None:
             finally:
                 mbbank.aiohttp.ClientSession = original_client_session
 
-            assert malformed == []
-            print("[OK] fetch_transactions returns [] when transactions payload is malformed")
+            assert malformed is None
+            print("[OK] fetch_transactions reports malformed feed as an error")
 
             await set_setting("mb_api_key", "")
             missing_config = await mbbank.fetch_transactions()
-            assert missing_config == []
-            print("[OK] fetch_transactions returns [] when scanner config is incomplete")
+            assert missing_config is None
+            print("[OK] fetch_transactions reports incomplete config as an error")
 
             print("\n=== MBBANK VERIFICATION PASSED ===")
         finally:

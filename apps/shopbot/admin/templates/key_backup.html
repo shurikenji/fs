@@ -2,6 +2,19 @@
 {% block title %}Key Backup{% endblock %}
 {% block content %}
 
+{% if remote_vault %}
+<div class="alert alert-warning">Lịch sử cục bộ bên dưới có thể đã cũ; chưa thể chạy Backup Now từ trang này.</div>
+<div class="table-card">
+    <h3>Trạng thái Vault</h3>
+    <p>Số key lưu được có thể bao gồm key được quan sát trong lần backup trước; không đảm bảo key đó vẫn còn hiệu lực.</p>
+    {% if vault_summary is none %}<p>Không lấy được trạng thái Vault.</p>
+    {% elif not vault_summary %}<p>Vault chưa ghi nhận nguồn nào.</p>
+    {% else %}
+    <table class="table"><thead><tr><th>Source ID</th><th>Lần chạy gần nhất (UTC)</th><th>Kết quả</th><th>Key đang theo dõi</th><th>Key lưu được</th></tr></thead>
+    <tbody>{% for source in vault_summary %}<tr><td>{{ source.source_id }}</td><td>{{ source.last_run_at or '—' }}</td><td>{{ source.last_status or '—' }}</td><td>{{ source.active_count }}</td><td>{{ source.stored_key_count }}</td></tr>{% endfor %}</tbody></table>
+    {% endif %}
+</div>
+{% endif %}
 <div class="page-header animate-fade-up">
     <div>
         <h1>
@@ -17,7 +30,7 @@
         <p class="page-subtitle">Monitor upstream token inventory snapshots across every configured API source.</p>
     </div>
     <div class="page-actions">
-        <form method="POST" action="/key-backup/trigger">
+        {% if not remote_vault %}<form method="POST" action="/key-backup/trigger"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
             <button class="btn btn-primary" type="submit">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                     <path d="M21 12a9 9 0 1 1-2.64-6.36"></path>
@@ -25,7 +38,7 @@
                 </svg>
                 Backup Now
             </button>
-        </form>
+        </form>{% endif %}
     </div>
 </div>
 
@@ -107,9 +120,9 @@
                     <div class="actions">
                         <a class="btn btn-sm btn-outline-primary" href="/key-backup/{{ server.id }}">Details</a>
                         <a class="btn btn-sm btn-outline-secondary" href="/key-backup/history/{{ server.id }}">History</a>
-                        <form method="POST" action="/key-backup/trigger/{{ server.id }}">
+                        {% if not remote_vault %}<form method="POST" action="/key-backup/trigger/{{ server.id }}"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                             <button class="btn btn-sm btn-primary" type="submit">Backup</button>
-                        </form>
+                        </form>{% endif %}
                     </div>
                 </td>
             </tr>

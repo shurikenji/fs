@@ -341,7 +341,7 @@ async def products_toggle_active(request: Request, product_id: Annotated[int, Pa
     return RedirectResponse(redirect_target, status_code=303)
 
 
-@router.get("/{product_id}/delete")
+@router.post("/{product_id}/delete")
 async def products_delete(product_id: Annotated[int, Path()]):
     product = await get_product_by_id(product_id)
     if not product:
