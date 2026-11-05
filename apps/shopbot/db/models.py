@@ -484,7 +484,7 @@ _DEFAULT_SETTINGS = [
     ("admin_notify_service_paid", "true", "Thông báo khi đơn dịch vụ đã thanh toán và cần xử lý"),
     ("admin_notify_service_completed", "true", "Thông báo khi admin hoàn tất đơn dịch vụ"),
     ("admin_notify_order_refunded", "true", "Thông báo khi đơn hàng được hoàn tiền"),
-    ("vietqr_template", "compact2", "Template VietQR"),
+    ("vietqr_template", "compact", "Template VietQR"),
     ("support_url", "https://t.me/yoursupport", "Link hỗ trợ"),
     ("support_text", "Liên hệ admin để được hỗ trợ", "Nội dung hỗ trợ"),
     ("pagination_size", "6", "Items mỗi trang"),

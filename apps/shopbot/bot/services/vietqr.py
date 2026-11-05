@@ -1,14 +1,10 @@
-"""
-bot/services/vietqr.py — Tạo VietQR Quick Link URL + caption.
-Dùng VietQR public API (không cần API key).
-"""
+"""Tạo ảnh VietQR offline bằng vietqr-node + caption thanh toán."""
 from __future__ import annotations
 
+import asyncio
 import logging
-from urllib.parse import quote
+from pathlib import Path
 
-import aiohttp
-import cairosvg
 from aiogram.types import BufferedInputFile
 
 from db.queries.settings import get_setting
@@ -16,54 +12,47 @@ from bot.config import settings as env_settings
 from bot.utils.formatting import format_vnd
 
 logger = logging.getLogger(__name__)
+NODE_HELPER = Path(__file__).with_name("vietqr_node.cjs")
 
 
-async def download_qr_photo(url: str) -> BufferedInputFile:
-    """Fetch VietQR (including redirects) and convert its SVG response to PNG."""
-    timeout = aiohttp.ClientTimeout(total=20)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(url, allow_redirects=True) as response:
-            response.raise_for_status()
-            svg = await response.content.read(5 * 1024 * 1024 + 1)
-
-    if len(svg) > 5 * 1024 * 1024:
-        raise ValueError("VietQR image is larger than 5 MiB")
-
-    png = cairosvg.svg2png(bytestring=svg)
-    return BufferedInputFile(png, filename="payment-qr.png")
-
-
-async def build_qr_url(
+async def build_qr_photo(
     amount: int,
     order_code: str,
-) -> str:
-    """
-    Tạo VietQR Quick Link URL.
-
-    Format:
-    https://img.vietqr.io/image/{BANK_ID}-{ACCOUNT_NO}-{TEMPLATE}.png
-        ?amount={AMOUNT}&addInfo={DESCRIPTION}&accountName={ACCOUNT_NAME}
-
-    addInfo: tối đa 50 ký tự, không dấu, không ký tự đặc biệt.
-    """
-    # Lấy config từ DB, fallback .env
+) -> BufferedInputFile:
+    """Render VietQR PNG locally through the bundled Node helper."""
     bank_id = await get_setting("mb_bank_id") or env_settings.mb_bank_id
     account_no = await get_setting("mb_account_no") or env_settings.mb_account_no
     account_name = await get_setting("mb_account_name") or env_settings.mb_account_name
-    template = await get_setting("vietqr_template") or "compact2"
+    template = await get_setting("vietqr_template") or "compact"
 
-    # addInfo chỉ dùng mã đơn (đảm bảo không dấu, không ký tự đặc biệt)
-    add_info = order_code
-
-    url = (
-        f"https://img.vietqr.io/image/{bank_id}-{account_no}-{template}.png"
-        f"?amount={amount}"
-        f"&addInfo={quote(add_info)}"
-        f"&accountName={quote(account_name)}"
+    process = await asyncio.create_subprocess_exec(
+        "node",
+        str(NODE_HELPER),
+        str(bank_id),
+        str(account_no),
+        str(account_name),
+        str(int(amount)),
+        str(order_code),
+        str(template),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
+    try:
+        png, stderr = await asyncio.wait_for(process.communicate(), timeout=20)
+    except TimeoutError:
+        process.kill()
+        await process.communicate()
+        raise RuntimeError("VietQR render timed out") from None
 
-    logger.debug("VietQR URL: %s", url)
-    return url
+    if process.returncode != 0:
+        detail = stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"VietQR render failed: {detail or 'unknown error'}")
+    if not png.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise RuntimeError("VietQR renderer did not return a PNG image")
+    if len(png) > 5 * 1024 * 1024:
+        raise RuntimeError("VietQR image is larger than 5 MiB")
+
+    return BufferedInputFile(png, filename="payment-qr.png")
 
 
 async def build_qr_caption(

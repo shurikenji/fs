@@ -1,0 +1,10 @@
+{
+  "name": "shupremium-shopbot",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "vietqr-node": "0.1.0"
+  }
+}

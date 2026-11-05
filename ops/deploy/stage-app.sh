@@ -39,6 +39,16 @@ if [[ "$RUNTIME_KIND" == "pm2-python" || "$RUNTIME_KIND" == "systemd-python" ]];
   env -i PATH="$PATH" HOME="$STAGE_DIR/home" TMPDIR="$STAGE_DIR/tmp" python3 -m venv "$RELEASE/.venv"
   env -i PATH="$PATH" HOME="$STAGE_DIR/home" TMPDIR="$STAGE_DIR/tmp" "$RELEASE/.venv/bin/pip" install -r "$RELEASE/requirements.txt"
   env -i PATH="$PATH" HOME="$STAGE_DIR/home" TMPDIR="$STAGE_DIR/tmp" "$RELEASE/.venv/bin/python" -m pip check
+  if [[ "$APP" == "shopbot" ]]; then
+    require_cmd node
+    require_cmd npm
+    node -e 'if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1)' || fail "Shopbot VietQR requires Node.js >= 20"
+    [[ -f "$RELEASE/package-lock.json" && ! -L "$RELEASE/package-lock.json" ]] || fail "Missing or symlinked Shopbot package-lock.json"
+    (cd "$RELEASE" && env -i PATH="$PATH" HOME="$STAGE_DIR/home" TMPDIR="$STAGE_DIR/tmp" npm ci --omit=dev --ignore-scripts)
+    env -i PATH="$PATH" HOME="$STAGE_DIR/home" TMPDIR="$STAGE_DIR/tmp" \
+      node "$RELEASE/bot/services/vietqr_node.cjs" MB 0123456789 TEST 10000 TEST compact2 > "$STAGE_DIR/vietqr.png"
+    "$RELEASE/.venv/bin/python" -c 'from pathlib import Path; assert Path(__import__("sys").argv[1]).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")' "$STAGE_DIR/vietqr.png"
+  fi
   case "$APP" in
     portal|platform-control) IMPORTS='from app.app import create_app' ;;
     shopbot) IMPORTS='import bot.main; from admin.app import create_admin_app' ;;

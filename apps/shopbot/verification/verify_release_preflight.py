@@ -1,14 +1,12 @@
 """Ensure deployment preflight rejects wrong or unmigrated databases."""
 import sqlite3
 import sys
-import types
 import unittest
 from contextlib import closing
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.modules.setdefault("cairosvg", types.ModuleType("cairosvg"))
 from db.financial_migration import VERSION, migrate
 from db.models import _CREATE_TABLES
 from scripts.preflight_release import check_combined_bind, check_database

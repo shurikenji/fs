@@ -332,6 +332,14 @@ prepare_python_release() {
     "$venv_dir/bin/pip" install -r "$release_dir/$PYTHON_REQUIREMENTS"
   fi
 
+  if [[ "$APP_ID" == "shopbot" && -f "$release_dir/package.json" ]]; then
+    require_cmd node
+    require_cmd npm
+    node -e 'if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1)' || fail "Shopbot VietQR requires Node.js >= 20"
+    [[ -f "$release_dir/package-lock.json" ]] || fail "Missing Shopbot package-lock.json"
+    (cd "$release_dir" && npm ci --omit=dev --ignore-scripts)
+  fi
+
 }
 
 prepare_proxy_gateway_release() {

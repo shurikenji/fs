@@ -8,8 +8,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-# The lifecycle test never renders a QR image.
-sys.modules.setdefault("cairosvg", types.ModuleType("cairosvg"))
 from bot import main as bot_main
 from bot.config import Settings
 
