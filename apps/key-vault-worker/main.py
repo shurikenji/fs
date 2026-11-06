@@ -16,7 +16,7 @@ import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urljoin, urlsplit
 
 import aiosqlite
 import httpx
@@ -37,6 +37,7 @@ POLL_SECONDS = max(60, int(os.getenv("KEY_VAULT_POLL_SECONDS", "600")))
 SNAPSHOT_RETENTION_DAYS = max(1, int(os.getenv("KEY_VAULT_SNAPSHOT_RETENTION_DAYS", "7")))
 MISSING_RETENTION_DAYS = max(1, int(os.getenv("KEY_VAULT_MISSING_RETENTION_DAYS", "90")))
 SENSITIVE_FIELDS = {"key", "api_key", "apikey", "token", "access_token", "secret", "secret_key"}
+KEY_FIELDS = ("key", "api_key", "apiKey", "token", "access_token", "accessToken", "secret", "secret_key")
 
 
 def _master_key() -> bytes:
@@ -104,6 +105,46 @@ def _int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _extract_full_key(payload: Any) -> str:
+    queue = [payload]
+    while queue:
+        current = queue.pop(0)
+        if isinstance(current, dict):
+            for field in KEY_FIELDS:
+                value = current.get(field)
+                if not isinstance(value, str):
+                    continue
+                key = value.strip()
+                if key and not any(mask in key for mask in ("*", "...", "\u2026")):
+                    return key if key.startswith("sk-") else f"sk-{key}"
+            queue.extend(value for value in current.values() if isinstance(value, (dict, list, tuple)))
+        elif isinstance(current, (list, tuple)):
+            queue.extend(value for value in current if isinstance(value, (dict, list, tuple)))
+    return ""
+
+
+async def _resolve_token_key(client: httpx.AsyncClient, source: dict[str, Any], token_id: str) -> str:
+    if not token_id.isascii() or not token_id.isdecimal() or int(token_id) <= 0:
+        raise ValueError("masked token has no usable token ID")
+    template = str(source.get("token_key_endpoint_template") or "/api/token/{id}/key").strip()
+    endpoint = template.format(id=int(token_id))
+    base_url = str(source.get("upstream_base_url") or "").rstrip("/") + "/"
+    url = endpoint if endpoint.startswith(("http://", "https://")) else urljoin(base_url, endpoint.lstrip("/"))
+    base = urlsplit(base_url)
+    target = urlsplit(url)
+    if (target.scheme, target.hostname, target.port) != (base.scheme, base.hostname, base.port):
+        raise ValueError("token key endpoint must use the upstream origin")
+    response = await client.post(url, headers=_headers(source))
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or payload.get("success") is False:
+        raise ValueError("token key endpoint returned an invalid payload")
+    full_key = _extract_full_key(payload)
+    if not full_key:
+        raise ValueError("token key endpoint returned no full key")
+    return full_key
 
 
 def _token_item(raw: dict[str, Any], source_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -287,7 +328,18 @@ async def _fetch_tokens(source: dict[str, Any]) -> list[dict[str, Any]]:
                 if token_ref in seen:
                     raise ValueError("upstream token pagination contains duplicate items")
                 seen.add(token_ref)
-            all_items.extend(items)
+            if source.get("supports_key_lookup_by_id"):
+                for item in items:
+                    raw_key = str(item.get("key") or "").strip()
+                    if raw_key and not any(mask in raw_key for mask in ("*", "...", "\u2026")):
+                        all_items.append(item)
+                        continue
+                    token_id = str(item.get("id") or item.get("token_id") or item.get("tokenId") or "").strip()
+                    item = dict(item)
+                    item["key"] = await _resolve_token_key(client, source, token_id)
+                    all_items.append(item)
+            else:
+                all_items.extend(items)
             if len(all_items) > total or (not items and len(all_items) < total):
                 raise ValueError("upstream token pagination is incomplete")
             if len(all_items) == total:

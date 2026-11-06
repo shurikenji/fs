@@ -223,7 +223,7 @@ async def get_key_vault_config_snapshot() -> dict[str, Any]:
         """
         SELECT s.id, s.name, s.upstream_base_url, s.source_type, s.quota_multiple,
                s.auth_mode, s.auth_user_header, s.auth_user_value, s.auth_token, s.auth_cookie,
-               p.token_key_endpoint_template, p.sort_order
+               p.supports_key_lookup_by_id, p.token_key_endpoint_template, p.sort_order
           FROM service_sources s
           JOIN shopbot_source_profiles p ON p.source_id = s.id
          WHERE s.enabled = 1 AND p.key_backup_enabled = 1
