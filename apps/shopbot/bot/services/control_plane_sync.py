@@ -49,7 +49,7 @@ def _server_values(source: dict[str, Any], existing: dict[str, Any] | None) -> d
         raise ValueError("Invalid Shopbot quota multiplier")
     return {
         "name": _value(source, "name", old.get("name", "Unnamed source")),
-        "base_url": _value(source, "public_base_url") or _value(source, "upstream_base_url", old.get("base_url", "")),
+        "base_url": _value(source, "upstream_base_url", old.get("base_url", "")),
         "user_id_header": _value(source, "auth_user_value", old.get("user_id_header", "")),
         "access_token": _value(source, "auth_token", old.get("access_token", "")),
         "price_per_unit": int(_value(profile, "price_per_unit", old.get("price_per_unit", 0)) or 0),
