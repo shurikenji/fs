@@ -2,18 +2,8 @@
 {% block title %}Key Backup{% endblock %}
 {% block content %}
 
-{% if remote_vault %}
-<div class="alert alert-warning">Lịch sử cục bộ bên dưới có thể đã cũ; chưa thể chạy Backup Now từ trang này.</div>
-<div class="table-card">
-    <h3>Trạng thái Vault</h3>
-    <p>Số key lưu được có thể bao gồm key được quan sát trong lần backup trước; không đảm bảo key đó vẫn còn hiệu lực.</p>
-    {% if vault_summary is none %}<p>Không lấy được trạng thái Vault.</p>
-    {% elif not vault_summary %}<p>Vault chưa ghi nhận nguồn nào.</p>
-    {% else %}
-    <table class="table"><thead><tr><th>Source ID</th><th>Lần chạy gần nhất (UTC)</th><th>Kết quả</th><th>Key đang theo dõi</th><th>Key lưu được</th></tr></thead>
-    <tbody>{% for source in vault_summary %}<tr><td>{{ source.source_id }}</td><td>{{ source.last_run_at or '—' }}</td><td>{{ source.last_status or '—' }}</td><td>{{ source.active_count }}</td><td>{{ source.stored_key_count }}</td></tr>{% endfor %}</tbody></table>
-    {% endif %}
-</div>
+{% if remote_vault and vault_summary is none %}
+<div class="alert alert-warning">Không lấy được dữ liệu từ Key Vault. Bảng bên dưới đang dùng dữ liệu backup cục bộ gần nhất nếu có.</div>
 {% endif %}
 <div class="page-header animate-fade-up">
     <div>
@@ -94,6 +84,8 @@
                 <td data-label="State">
                     {% if row.status == 'success' %}
                     <span class="badge badge-success">Success</span>
+                    {% elif row.status == 'partial' %}
+                    <span class="badge badge-warning">Partial</span>
                     {% elif row.status == 'error' %}
                     <span class="badge badge-danger">Error</span>
                     {% else %}
@@ -102,6 +94,10 @@
                 </td>
                 <td data-label="Keys">
                     <strong>{{ "{:,}".format(row.total_keys) }}</strong>
+                    {% if remote_vault and vault_summary is not none %}
+                    <div class="cell-meta">Active {{ row.active_count }} · Removed {{ row.removed_count }} · Unknown {{ row.unknown_count }}</div>
+                    <div class="cell-meta">Full key stored {{ row.stored_key_count }}{% if row.lookup_error_count %} · Lookup errors {{ row.lookup_error_count }}{% endif %}</div>
+                    {% endif %}
                 </td>
                 <td data-label="Balance">
                     <span class="cell-price">${{ "%.2f"|format(row.total_balance) }}</span>

@@ -110,40 +110,71 @@ async def _resolve_token_keys_batch(
     client: httpx.AsyncClient,
     source: dict[str, Any],
     token_ids: list[int],
-) -> dict[int, str]:
+) -> tuple[dict[int, str], dict[int, str]]:
     base_url = str(source.get("upstream_base_url") or "").rstrip("/")
     resolved: dict[int, str] = {}
+    errors: dict[int, str] = {}
     for offset in range(0, len(token_ids), 100):
         batch = token_ids[offset : offset + 100]
-        response = await client.post(
-            f"{base_url}/api/token/batch/keys",
-            headers=_headers(source),
-            json={"ids": batch},
-        )
-        response.raise_for_status()
-        payload = response.json()
+        try:
+            response = await client.post(
+                f"{base_url}/api/token/batch/keys",
+                headers=_headers(source),
+                json={"ids": batch},
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            retry_after = exc.response.headers.get("Retry-After", "")
+            code = f"api_http_{status}" + (f"_retry_{retry_after}" if retry_after.isdecimal() else "")
+            for token_id in batch:
+                errors[token_id] = code
+            if status == 429:
+                for token_id in token_ids[offset + len(batch) :]:
+                    errors[token_id] = code
+                logger.warning(
+                    "full-key lookup deferred for source %s (status=429 retry_after=%s remaining=%s)",
+                    source.get("id"),
+                    retry_after or "NONE",
+                    len(token_ids) - offset,
+                )
+                break
+            continue
+        except httpx.RequestError:
+            for token_id in token_ids[offset:]:
+                errors[token_id] = "network_error"
+            break
+        except (TypeError, ValueError, json.JSONDecodeError):
+            for token_id in batch:
+                errors[token_id] = "invalid_response"
+            continue
         data = payload.get("data") if isinstance(payload, dict) else None
         keys = data.get("keys") if isinstance(data, dict) else None
         if not isinstance(payload, dict) or payload.get("success") is False or not isinstance(keys, dict):
-            raise ValueError("batch token key endpoint returned an invalid payload")
+            for token_id in batch:
+                errors[token_id] = "invalid_response"
+            continue
         for token_id in batch:
             value = keys.get(str(token_id))
             key = value.strip() if isinstance(value, str) else ""
             if not key or any(mask in key for mask in ("*", "...", "\u2026")):
-                raise ValueError("batch token key endpoint returned no full key")
+                errors[token_id] = "full_key_unavailable"
+                continue
             resolved[token_id] = key if key.startswith("sk-") else f"sk-{key}"
-    return resolved
+    return resolved, errors
 
 
 def _token_item(raw: dict[str, Any], source_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
     raw_key = str(raw.get("key") or "").strip()
+    source_masked_key = str(raw.get("_vault_masked_key") or "").strip()
     full_key = raw_key if raw_key and not any(mask in raw_key for mask in ("*", "...", "\u2026")) else ""
     if full_key and not full_key.startswith("sk-"):
         full_key = f"sk-{full_key}"
     token_id = str(raw.get("id") or raw.get("token_id") or raw.get("tokenId") or "").strip()
     token_name = str(raw.get("name") or raw.get("token_name") or "").strip()
     fingerprint = _fingerprint(full_key) if full_key else ""
-    token_ref = token_id or ("key:" + fingerprint[:24] if fingerprint else "masked:" + hashlib.sha256((raw_key + token_name).encode()).hexdigest()[:24])
+    token_ref = str(raw.get("_vault_token_ref") or "").strip() or token_id or ("key:" + fingerprint[:24] if fingerprint else "masked:" + hashlib.sha256((raw_key + token_name).encode()).hexdigest()[:24])
     remain = _int(raw.get("remain_quota", raw.get("remainQuota")))
     used = _int(raw.get("used_quota", raw.get("usedQuota")))
     total = _int(raw.get("total_quota", raw.get("totalQuota")), remain + used)
@@ -153,8 +184,11 @@ def _token_item(raw: dict[str, Any], source_id: str) -> tuple[dict[str, Any], di
         "token_id": token_id or None,
         "token_name": token_name or None,
         "key_fingerprint": fingerprint or None,
-        "key_masked": _mask(full_key) if full_key else (raw_key or None),
+        "key_masked": source_masked_key or (_mask(full_key) if full_key else (raw_key or None)),
         "recoverable": 1 if full_key else 0,
+        "key_lookup_status": str(raw.get("_vault_lookup_status") or ("available" if full_key else "unverified")),
+        "key_lookup_error": str(raw.get("_vault_lookup_error") or "").strip() or None,
+        "key_lookup_attempted": 1 if raw.get("_vault_lookup_attempted") else 0,
         "status": _int(raw.get("status"), 1),
         "remain_quota": remain,
         "used_quota": used,
@@ -199,6 +233,7 @@ async def init_db() -> None:
                 source_id TEXT NOT NULL,
                 status TEXT NOT NULL,
                 item_count INTEGER NOT NULL DEFAULT 0,
+                lookup_error_count INTEGER NOT NULL DEFAULT 0,
                 error_message TEXT,
                 created_at TEXT DEFAULT (datetime('now'))
             );
@@ -228,12 +263,115 @@ async def init_db() -> None:
                 raw_json TEXT,
                 active INTEGER NOT NULL DEFAULT 1,
                 missing_since TEXT,
+                source_status TEXT NOT NULL DEFAULT 'active',
+                removed_at TEXT,
+                first_seen_at TEXT DEFAULT (datetime('now')),
+                key_lookup_status TEXT NOT NULL DEFAULT 'unverified',
+                key_lookup_error TEXT,
+                key_lookup_last_attempt_at TEXT,
                 last_seen_at TEXT DEFAULT (datetime('now')),
                 PRIMARY KEY(source_id, token_ref)
             );
+            CREATE TABLE IF NOT EXISTS key_vault_item_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER REFERENCES key_vault_runs(id),
+                source_id TEXT NOT NULL,
+                token_ref TEXT NOT NULL,
+                source_status TEXT NOT NULL,
+                key_masked TEXT,
+                key_lookup_status TEXT NOT NULL DEFAULT 'unverified',
+                status INTEGER NOT NULL DEFAULT 1,
+                remain_quota INTEGER NOT NULL DEFAULT 0,
+                used_quota INTEGER NOT NULL DEFAULT 0,
+                total_quota INTEGER NOT NULL DEFAULT 0,
+                group_name TEXT,
+                raw_json TEXT,
+                observed_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS key_vault_status_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id INTEGER REFERENCES key_vault_runs(id),
+                source_id TEXT NOT NULL,
+                token_ref TEXT NOT NULL,
+                source_status TEXT NOT NULL,
+                changed_at TEXT DEFAULT (datetime('now'))
+            );
             CREATE INDEX IF NOT EXISTS idx_key_vault_fingerprint ON key_vault_items(source_id, key_fingerprint, active);
             CREATE INDEX IF NOT EXISTS idx_key_vault_token_id ON key_vault_items(source_id, token_id, active);
+            CREATE INDEX IF NOT EXISTS idx_key_vault_history_item ON key_vault_item_history(source_id, token_ref, observed_at);
+            CREATE INDEX IF NOT EXISTS idx_key_vault_status_item ON key_vault_status_history(source_id, token_ref, changed_at);
             """
+        )
+        run_columns = {row[1] for row in await (await db.execute("PRAGMA table_info(key_vault_runs)")).fetchall()}
+        if "lookup_error_count" not in run_columns:
+            await db.execute("ALTER TABLE key_vault_runs ADD COLUMN lookup_error_count INTEGER NOT NULL DEFAULT 0")
+
+        item_columns = {row[1] for row in await (await db.execute("PRAGMA table_info(key_vault_items)")).fetchall()}
+        source_status_added = "source_status" not in item_columns
+        migrations = {
+            "source_status": "ALTER TABLE key_vault_items ADD COLUMN source_status TEXT NOT NULL DEFAULT 'active'",
+            "removed_at": "ALTER TABLE key_vault_items ADD COLUMN removed_at TEXT",
+            "first_seen_at": "ALTER TABLE key_vault_items ADD COLUMN first_seen_at TEXT",
+            "key_lookup_status": "ALTER TABLE key_vault_items ADD COLUMN key_lookup_status TEXT NOT NULL DEFAULT 'unverified'",
+            "key_lookup_error": "ALTER TABLE key_vault_items ADD COLUMN key_lookup_error TEXT",
+            "key_lookup_last_attempt_at": "ALTER TABLE key_vault_items ADD COLUMN key_lookup_last_attempt_at TEXT",
+        }
+        for column, sql in migrations.items():
+            if column not in item_columns:
+                await db.execute(sql)
+        if source_status_added:
+            await db.execute("UPDATE key_vault_items SET source_status = CASE WHEN active = 1 THEN 'active' ELSE 'removed' END")
+        else:
+            await db.execute("UPDATE key_vault_items SET source_status = CASE WHEN active = 1 THEN 'active' ELSE 'removed' END WHERE source_status IS NULL OR source_status = ''")
+        await db.execute("UPDATE key_vault_items SET removed_at = COALESCE(removed_at, missing_since) WHERE source_status = 'removed'")
+        await db.execute("UPDATE key_vault_items SET first_seen_at = COALESCE(first_seen_at, last_seen_at, datetime('now'))")
+        await db.execute("UPDATE key_vault_items SET key_lookup_status = CASE WHEN recoverable = 1 THEN 'available' ELSE COALESCE(NULLIF(key_lookup_status, ''), 'unverified') END")
+
+        backfill = await (await db.execute("SELECT value FROM vault_metadata WHERE key = 'item_history_backfill_v1'")).fetchone()
+        if backfill is None:
+            snapshots = await (await db.execute("SELECT id, source_id, nonce, ciphertext, created_at FROM key_vault_snapshots ORDER BY id")).fetchall()
+            for saved in snapshots:
+                try:
+                    items = json.loads(AES.decrypt(saved["nonce"], saved["ciphertext"], None))
+                except Exception:
+                    logger.warning("Skipping unreadable historical vault snapshot id=%s", saved["id"])
+                    continue
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    if not isinstance(item, dict) or not str(item.get("token_ref") or "").strip():
+                        continue
+                    raw_json = item.get("raw_json")
+                    if not isinstance(raw_json, str):
+                        raw_json = json.dumps(_clean_raw(raw_json), ensure_ascii=True, default=str)
+                    await db.execute(
+                        """INSERT INTO key_vault_item_history
+                           (run_id, source_id, token_ref, source_status, key_masked, key_lookup_status, status,
+                            remain_quota, used_quota, total_quota, group_name, raw_json, observed_at)
+                           VALUES (NULL, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            saved["source_id"], str(item["token_ref"]), item.get("key_masked"),
+                            "available" if item.get("recoverable") else "unverified", _int(item.get("status"), 1),
+                            _int(item.get("remain_quota")), _int(item.get("used_quota")), _int(item.get("total_quota")),
+                            item.get("group_name"), raw_json, saved["created_at"],
+                        ),
+                    )
+            await db.execute("INSERT INTO vault_metadata (key, value) VALUES ('item_history_backfill_v1', 'done')")
+        await db.execute(
+            """UPDATE key_vault_items
+               SET first_seen_at = COALESCE(
+                   (SELECT MIN(h.observed_at) FROM key_vault_item_history h
+                     WHERE h.source_id = key_vault_items.source_id AND h.token_ref = key_vault_items.token_ref),
+                   first_seen_at, last_seen_at, datetime('now'))"""
+        )
+        await db.execute(
+            """INSERT INTO key_vault_status_history (source_id, token_ref, source_status, changed_at)
+               SELECT i.source_id, i.token_ref, i.source_status, COALESCE(i.first_seen_at, i.last_seen_at, datetime('now'))
+                 FROM key_vault_items i
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM key_vault_status_history h
+                     WHERE h.source_id = i.source_id AND h.token_ref = i.token_ref
+                )"""
         )
         for key, value in _key_checks().items():
             await db.execute("INSERT OR IGNORE INTO vault_metadata (key, value) VALUES (?, ?)", (key, value))
@@ -251,13 +389,15 @@ async def require_vault_schema(*, readonly: bool = False) -> None:
     try:
         cursor = await db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         tables = {row[0] for row in await cursor.fetchall()}
-        if not {"vault_metadata", "key_vault_items", "key_vault_snapshots", "key_vault_runs"} <= tables:
+        if not {"vault_metadata", "key_vault_items", "key_vault_snapshots", "key_vault_runs", "key_vault_item_history", "key_vault_status_history"} <= tables:
             raise RuntimeError("Vault database must be explicitly initialized before startup")
         required = {
             "vault_metadata": {"key", "value"},
-            "key_vault_items": {"source_id", "token_ref", "token_id", "token_name", "key_fingerprint", "key_nonce", "key_ciphertext", "key_masked", "recoverable", "active", "missing_since", "last_seen_at", "raw_json", "status", "remain_quota", "used_quota", "total_quota", "group_name"},
+            "key_vault_items": {"source_id", "token_ref", "token_id", "token_name", "key_fingerprint", "key_nonce", "key_ciphertext", "key_masked", "recoverable", "active", "missing_since", "source_status", "removed_at", "first_seen_at", "key_lookup_status", "key_lookup_error", "key_lookup_last_attempt_at", "last_seen_at", "raw_json", "status", "remain_quota", "used_quota", "total_quota", "group_name"},
             "key_vault_snapshots": {"id", "source_id", "nonce", "ciphertext", "item_count", "created_at"},
-            "key_vault_runs": {"id", "source_id", "status", "item_count", "error_message", "created_at"},
+            "key_vault_runs": {"id", "source_id", "status", "item_count", "lookup_error_count", "error_message", "created_at"},
+            "key_vault_item_history": {"id", "run_id", "source_id", "token_ref", "source_status", "key_masked", "key_lookup_status", "status", "remain_quota", "used_quota", "total_quota", "group_name", "raw_json", "observed_at"},
+            "key_vault_status_history": {"id", "run_id", "source_id", "token_ref", "source_status", "changed_at"},
         }
         for table, columns in required.items():
             cursor = await db.execute(f"PRAGMA table_info({table})")
@@ -286,7 +426,31 @@ def _headers(source: dict[str, Any]) -> dict[str, str]:
     return headers
 
 
+async def _stored_key_state(source_id: str) -> list[dict[str, Any]]:
+    db = await _db(readonly=True)
+    try:
+        cursor = await db.execute(
+            "SELECT token_ref, token_id, key_masked, recoverable, key_nonce, key_ciphertext FROM key_vault_items WHERE source_id = ?",
+            (source_id,),
+        )
+        result = []
+        for saved in await cursor.fetchall():
+            row = dict(saved)
+            row["full_key_valid"] = False
+            if row.get("recoverable") and row.get("key_nonce") and row.get("key_ciphertext"):
+                try:
+                    value = json.loads(AES.decrypt(row["key_nonce"], row["key_ciphertext"], None))
+                    row["full_key_valid"] = isinstance(value, str) and bool(value.strip())
+                except Exception:
+                    pass
+            result.append(row)
+        return result
+    finally:
+        await db.close()
+
+
 async def _fetch_tokens(source: dict[str, Any]) -> list[dict[str, Any]]:
+    source_id = str(source.get("id") or "").strip()
     base_url = str(source.get("upstream_base_url") or "").rstrip("/")
     parsed = urlsplit(base_url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
@@ -325,88 +489,182 @@ async def _fetch_tokens(source: dict[str, Any]) -> list[dict[str, Any]]:
         else:
             raise ValueError("upstream token pagination exceeded the safety limit")
 
-        if source.get("supports_key_lookup_by_id"):
-            masked: list[tuple[dict[str, Any], int]] = []
-            for item in all_items:
-                raw_key = str(item.get("key") or "").strip()
-                if raw_key and not any(mask in raw_key for mask in ("*", "...", "\u2026")):
-                    continue
-                token_id = str(item.get("id") or item.get("token_id") or item.get("tokenId") or "").strip()
-                if not token_id.isascii() or not token_id.isdecimal() or int(token_id) <= 0:
-                    raise ValueError("masked token has no usable token ID")
-                masked.append((item, int(token_id)))
-            keys = await _resolve_token_keys_batch(client, source, [token_id for _, token_id in masked])
-            for item, token_id in masked:
-                item["key"] = keys[token_id]
+        stored = await _stored_key_state(source_id)
+        by_id = {
+            str(row["token_id"]): row
+            for row in stored
+            if str(row.get("token_id") or "").strip()
+        }
+
+        unresolved: list[tuple[dict[str, Any], int]] = []
+        for item in all_items:
+            raw_key = str(item.get("key") or "").strip()
+            is_masked = not raw_key or any(mask in raw_key for mask in ("*", "...", "\u2026"))
+            if is_masked and raw_key:
+                item["_vault_masked_key"] = raw_key
+            token_id = str(item.get("id") or item.get("token_id") or item.get("tokenId") or "").strip()
+            existing = by_id.get(token_id) if token_id else None
+            if existing:
+                item["_vault_token_ref"] = existing["token_ref"]
+
+            if not is_masked:
+                item["_vault_lookup_status"] = "available"
+                continue
+
+            if existing and existing.get("full_key_valid"):
+                item["_vault_lookup_status"] = "available"
+                continue
+
+            if not token_id.isascii() or not token_id.isdecimal() or int(token_id) <= 0:
+                item["_vault_lookup_status"] = "unverified"
+                item["_vault_lookup_error"] = "missing_stable_id"
+                continue
+
+            if not source.get("supports_key_lookup_by_id"):
+                item["_vault_lookup_status"] = "unverified"
+                item["_vault_lookup_error"] = "lookup_not_supported"
+                continue
+            item["_vault_lookup_attempted"] = True
+            unresolved.append((item, int(token_id)))
+
+        if unresolved:
+            keys, errors = await _resolve_token_keys_batch(client, source, [token_id for _, token_id in unresolved])
+            for item, token_id in unresolved:
+                if token_id in keys:
+                    item["key"] = keys[token_id]
+                    item["_vault_lookup_status"] = "available"
+                    item.pop("_vault_lookup_error", None)
+                else:
+                    item["_vault_lookup_status"] = "error"
+                    item["_vault_lookup_error"] = errors.get(token_id, "full_key_unavailable")
         return all_items
 
 
 async def _record_success(source: dict[str, Any], raw_items: list[dict[str, Any]]) -> None:
     source_id = str(source["id"])
-    rows, snapshot = zip(*(_token_item(item, source_id) for item in raw_items)) if raw_items else ([], [])
+    converted = [_token_item(item, source_id) for item in raw_items]
+    rows = [item[0] for item in converted]
+    snapshot = [item[1] for item in converted]
+    lookup_error_count = sum(1 for row in rows if row["key_lookup_status"] in {"error", "unverified"})
+    run_status = "partial" if lookup_error_count else "success"
     db = await _db()
     try:
         await db.execute("BEGIN")
-        if not raw_items:
-            cursor = await db.execute("SELECT 1 FROM key_vault_items WHERE source_id = ? AND active = 1 LIMIT 1", (source_id,))
-            if await cursor.fetchone():
-                raise ValueError("empty inventory requires manual review")
-        await db.execute("UPDATE key_vault_items SET active = 0 WHERE source_id = ?", (source_id,))
+        existing_rows = [
+            dict(row)
+            for row in await (await db.execute("SELECT * FROM key_vault_items WHERE source_id = ?", (source_id,))).fetchall()
+        ]
+        if existing_rows and not rows:
+            raise ValueError("empty upstream inventory requires manual review")
+        existing = {str(row["token_ref"]): row for row in existing_rows}
+        run_cursor = await db.execute(
+            "INSERT INTO key_vault_runs (source_id, status, item_count, lookup_error_count) VALUES (?, ?, ?, ?)",
+            (source_id, run_status, len(rows), lookup_error_count),
+        )
+        run_id = int(run_cursor.lastrowid)
+        observed_refs = {str(row["token_ref"]) for row in rows}
+        for previous in existing_rows:
+            token_ref = str(previous["token_ref"])
+            if token_ref in observed_refs or previous.get("source_status") == "removed":
+                continue
+            await db.execute(
+                """UPDATE key_vault_items
+                      SET active = 0, source_status = 'removed',
+                          missing_since = COALESCE(missing_since, datetime('now')),
+                          removed_at = COALESCE(removed_at, datetime('now'))
+                    WHERE source_id = ? AND token_ref = ?""",
+                (source_id, token_ref),
+            )
+            await db.execute(
+                "INSERT INTO key_vault_status_history (run_id, source_id, token_ref, source_status) VALUES (?, ?, ?, 'removed')",
+                (run_id, source_id, token_ref),
+            )
+
         for index, row in enumerate(rows):
             key_nonce = key_ciphertext = None
+            previous = existing.get(str(row["token_ref"]))
+            same_identity = bool(
+                previous
+                and (
+                    (row["token_id"] is not None and previous.get("token_id") == row["token_id"])
+                    or (row["token_id"] is None and previous.get("token_ref") == row["token_ref"])
+                )
+            )
+            key_fingerprint = row["key_fingerprint"]
+            recoverable = int(row["recoverable"])
+            lookup_status = row["key_lookup_status"]
+            lookup_error = row["key_lookup_error"]
             if row["recoverable"]:
                 raw_key = snapshot[index]["key"]
                 key_nonce, key_ciphertext = _encrypt(raw_key)
                 snapshot[index]["key_origin"] = "current_observation"
-            elif row["token_id"] is not None:
-                cursor = await db.execute(
-                    "SELECT token_id, key_fingerprint, key_nonce, key_ciphertext, recoverable FROM key_vault_items WHERE source_id = ? AND token_ref = ?",
-                    (source_id, row["token_ref"]),
-                )
-                previous = await cursor.fetchone()
-                if previous and previous["token_id"] == row["token_id"] and previous["recoverable"] and previous["key_nonce"] and previous["key_ciphertext"]:
-                    snapshot[index]["key"] = json.loads(AES.decrypt(previous["key_nonce"], previous["key_ciphertext"], None))
-                    snapshot[index]["key_fingerprint"] = previous["key_fingerprint"]
-                    snapshot[index]["recoverable"] = 1
-                    snapshot[index]["key_origin"] = "previous_observation"
+            elif same_identity and previous and previous.get("recoverable") and previous.get("key_nonce") and previous.get("key_ciphertext"):
+                key_nonce = previous["key_nonce"]
+                key_ciphertext = previous["key_ciphertext"]
+                key_fingerprint = previous.get("key_fingerprint")
+                recoverable = 1
+                lookup_status = "available"
+                lookup_error = None
+                snapshot[index]["key"] = json.loads(AES.decrypt(key_nonce, key_ciphertext, None))
+                snapshot[index]["key_fingerprint"] = key_fingerprint
+                snapshot[index]["recoverable"] = 1
+                snapshot[index]["key_lookup_status"] = "available"
+                snapshot[index]["key_lookup_error"] = None
+                snapshot[index]["key_origin"] = "previous_observation"
             await db.execute(
                 """
                 INSERT INTO key_vault_items (
                     source_id, token_ref, token_id, token_name, key_fingerprint, key_nonce, key_ciphertext,
                     key_masked, recoverable, status, remain_quota, used_quota, total_quota, group_name,
-                    raw_json, active, missing_since, last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, datetime('now'))
+                    raw_json, active, missing_since, source_status, removed_at, first_seen_at,
+                    key_lookup_status, key_lookup_error, last_seen_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, 'active', NULL, datetime('now'), ?, ?, datetime('now'))
                 ON CONFLICT(source_id, token_ref) DO UPDATE SET
                     token_id=excluded.token_id, token_name=excluded.token_name,
-                    key_fingerprint=CASE WHEN excluded.recoverable = 0 AND excluded.token_id IS NOT NULL AND key_vault_items.token_id = excluded.token_id THEN key_vault_items.key_fingerprint ELSE excluded.key_fingerprint END,
-                    key_nonce=CASE WHEN excluded.recoverable = 0 AND excluded.token_id IS NOT NULL AND key_vault_items.token_id = excluded.token_id THEN key_vault_items.key_nonce ELSE excluded.key_nonce END,
-                    key_ciphertext=CASE WHEN excluded.recoverable = 0 AND excluded.token_id IS NOT NULL AND key_vault_items.token_id = excluded.token_id THEN key_vault_items.key_ciphertext ELSE excluded.key_ciphertext END,
+                    key_fingerprint=excluded.key_fingerprint,
+                    key_nonce=excluded.key_nonce,
+                    key_ciphertext=excluded.key_ciphertext,
                     key_masked=excluded.key_masked,
-                    recoverable=CASE WHEN excluded.recoverable = 0 AND excluded.token_id IS NOT NULL AND key_vault_items.token_id = excluded.token_id THEN key_vault_items.recoverable ELSE excluded.recoverable END, status=excluded.status,
+                    recoverable=excluded.recoverable, status=excluded.status,
                     remain_quota=excluded.remain_quota, used_quota=excluded.used_quota,
                     total_quota=excluded.total_quota, group_name=excluded.group_name,
-                    raw_json=excluded.raw_json, active=1, missing_since=NULL,
+                    raw_json=excluded.raw_json, active=1, missing_since=NULL, source_status='active', removed_at=NULL,
+                    key_lookup_status=excluded.key_lookup_status, key_lookup_error=excluded.key_lookup_error,
                     last_seen_at=datetime('now')
                 """,
                 (
                     row["source_id"], row["token_ref"], row["token_id"], row["token_name"],
-                    row["key_fingerprint"], key_nonce, key_ciphertext, row["key_masked"], row["recoverable"],
+                    key_fingerprint, key_nonce, key_ciphertext, row["key_masked"], recoverable,
                     row["status"], row["remain_quota"], row["used_quota"], row["total_quota"],
-                    row["group_name"], row["raw_json"],
+                    row["group_name"], row["raw_json"], lookup_status, lookup_error,
                 ),
             )
-        await db.execute(
-            "UPDATE key_vault_items SET missing_since = COALESCE(missing_since, datetime('now')) WHERE source_id = ? AND active = 0",
-            (source_id,),
-        )
-        snapshot_nonce, snapshot_ciphertext = _encrypt(list(snapshot))
+            if row["key_lookup_attempted"]:
+                await db.execute(
+                    "UPDATE key_vault_items SET key_lookup_last_attempt_at = datetime('now') WHERE source_id = ? AND token_ref = ?",
+                    (source_id, row["token_ref"]),
+                )
+            if not previous or previous.get("source_status") != "active":
+                await db.execute(
+                    "INSERT INTO key_vault_status_history (run_id, source_id, token_ref, source_status) VALUES (?, ?, ?, 'active')",
+                    (run_id, source_id, row["token_ref"]),
+                )
+            await db.execute(
+                """INSERT INTO key_vault_item_history
+                   (run_id, source_id, token_ref, source_status, key_masked, key_lookup_status, status,
+                    remain_quota, used_quota, total_quota, group_name, raw_json)
+                   VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    run_id, source_id, row["token_ref"], row["key_masked"], lookup_status, row["status"],
+                    row["remain_quota"], row["used_quota"], row["total_quota"], row["group_name"], row["raw_json"],
+                ),
+            )
+
+        snapshot_nonce, snapshot_ciphertext = _encrypt(snapshot)
         await db.execute(
             "INSERT INTO key_vault_snapshots (source_id, nonce, ciphertext, item_count) VALUES (?, ?, ?, ?)",
             (source_id, snapshot_nonce, snapshot_ciphertext, len(rows)),
         )
-        await db.execute("INSERT INTO key_vault_runs (source_id, status, item_count) VALUES (?, 'success', ?)", (source_id, len(rows)))
-        await db.execute("DELETE FROM key_vault_snapshots WHERE created_at < datetime('now', ?)", (f"-{SNAPSHOT_RETENTION_DAYS} days",))
-        await db.execute("DELETE FROM key_vault_items WHERE active = 0 AND missing_since < datetime('now', ?)", (f"-{MISSING_RETENTION_DAYS} days",))
         await db.commit()
     except Exception:
         await db.rollback()
@@ -418,11 +676,32 @@ async def _record_success(source: dict[str, Any], raw_items: list[dict[str, Any]
 async def _record_failure(source_id: str, exc: Exception) -> None:
     db = await _db()
     try:
-        await db.execute(
+        await db.execute("BEGIN")
+        cursor = await db.execute(
             "INSERT INTO key_vault_runs (source_id, status, error_message) VALUES (?, 'error', ?)",
             (source_id, type(exc).__name__),
         )
+        run_id = int(cursor.lastrowid)
+        active_rows = await (
+            await db.execute(
+                "SELECT token_ref FROM key_vault_items WHERE source_id = ? AND source_status = 'active'",
+                (source_id,),
+            )
+        ).fetchall()
+        if active_rows:
+            await db.execute(
+                "UPDATE key_vault_items SET source_status = 'unknown' WHERE source_id = ? AND source_status = 'active'",
+                (source_id,),
+            )
+            for row in active_rows:
+                await db.execute(
+                    "INSERT INTO key_vault_status_history (run_id, source_id, token_ref, source_status) VALUES (?, ?, ?, 'unknown')",
+                    (run_id, source_id, row["token_ref"]),
+                )
         await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
     finally:
         await db.close()
 
@@ -444,7 +723,26 @@ async def _sources() -> list[dict[str, Any]]:
 
 
 async def poll_once() -> None:
-    for source in await _sources():
+    try:
+        sources = await _sources()
+    except Exception as exc:
+        db = await _db(readonly=True)
+        try:
+            known_sources = [
+                str(row["source_id"])
+                for row in await (
+                    await db.execute(
+                        "SELECT DISTINCT source_id FROM key_vault_items WHERE source_status = 'active'"
+                    )
+                ).fetchall()
+            ]
+        finally:
+            await db.close()
+        for source_id in known_sources:
+            await _record_failure(source_id, exc)
+        raise
+
+    for source in sources:
         source_id = str(source["id"])
         try:
             await _record_success(source, await _fetch_tokens(source))
@@ -496,6 +794,7 @@ def validate_runtime_settings() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_runtime_settings()
+    await init_db()
     await require_vault_schema()
     task = asyncio.create_task(_poll_loop())
     try:
@@ -522,13 +821,111 @@ async def summary(request: Request) -> dict[str, Any]:
         cursor = await db.execute(
             """SELECT sources.source_id, r.status AS last_status, r.created_at AS last_run_at,
                       r.item_count AS last_run_count, CASE WHEN r.status = 'error' THEN 'backup failed' ELSE NULL END AS last_error,
-                      (SELECT COUNT(*) FROM key_vault_items i WHERE i.source_id = sources.source_id AND i.active = 1) AS active_count,
-                      (SELECT COUNT(*) FROM key_vault_items i WHERE i.source_id = sources.source_id AND i.active = 1 AND i.recoverable = 1) AS stored_key_count
+                      COALESCE(r.lookup_error_count, 0) AS lookup_error_count,
+                      (SELECT COUNT(*) FROM key_vault_items i WHERE i.source_id = sources.source_id) AS total_count,
+                      (SELECT COUNT(*) FROM key_vault_items i WHERE i.source_id = sources.source_id AND i.source_status = 'active') AS active_count,
+                      (SELECT COUNT(*) FROM key_vault_items i WHERE i.source_id = sources.source_id AND i.source_status = 'removed') AS removed_count,
+                      (SELECT COUNT(*) FROM key_vault_items i WHERE i.source_id = sources.source_id AND i.source_status = 'unknown') AS unknown_count,
+                      (SELECT COUNT(*) FROM key_vault_items i WHERE i.source_id = sources.source_id AND i.recoverable = 1) AS stored_key_count,
+                      (SELECT COALESCE(SUM(i.remain_quota), 0) FROM key_vault_items i WHERE i.source_id = sources.source_id AND i.source_status = 'active') AS active_remain_quota
                FROM (SELECT source_id FROM key_vault_runs UNION SELECT source_id FROM key_vault_items) sources
                LEFT JOIN key_vault_runs r ON r.id = (SELECT id FROM key_vault_runs WHERE source_id = sources.source_id ORDER BY id DESC LIMIT 1)
                ORDER BY sources.source_id"""
         )
         return {"sources": [dict(row) for row in await cursor.fetchall()]}
+    finally:
+        await db.close()
+
+
+def _admin_item(row: dict[str, Any], *, include_full_key: bool) -> dict[str, Any]:
+    full_key = None
+    if include_full_key and row.get("recoverable") and row.get("key_nonce") and row.get("key_ciphertext"):
+        try:
+            value = json.loads(AES.decrypt(row["key_nonce"], row["key_ciphertext"], None))
+            full_key = value if isinstance(value, str) else None
+        except Exception:
+            full_key = None
+    return {
+        key: row.get(key)
+        for key in (
+            "source_id", "token_ref", "token_id", "token_name", "key_masked", "recoverable",
+            "key_lookup_status", "key_lookup_error", "key_lookup_last_attempt_at", "source_status",
+            "removed_at", "first_seen_at", "last_seen_at", "status", "remain_quota", "used_quota",
+            "total_quota", "group_name",
+        )
+    } | {"key_value": full_key}
+
+
+@app.get("/internal/key-vault/items/{source_id}")
+async def inventory(request: Request, source_id: str) -> dict[str, Any]:
+    _authorize(request)
+    db = await _db(readonly=True)
+    try:
+        cursor = await db.execute(
+            """SELECT * FROM key_vault_items WHERE source_id = ?
+               ORDER BY CASE source_status WHEN 'active' THEN 0 WHEN 'unknown' THEN 1 ELSE 2 END,
+                        token_name COLLATE NOCASE, token_ref""",
+            (source_id,),
+        )
+        return {"items": [_admin_item(dict(row), include_full_key=True) for row in await cursor.fetchall()]}
+    finally:
+        await db.close()
+
+
+@app.get("/internal/key-vault/runs/{source_id}")
+async def runs(request: Request, source_id: str) -> dict[str, Any]:
+    _authorize(request)
+    db = await _db(readonly=True)
+    try:
+        cursor = await db.execute(
+            """SELECT id, source_id, status, item_count, lookup_error_count,
+                      CASE WHEN status = 'error' THEN error_message ELSE NULL END AS error_message, created_at
+                 FROM key_vault_runs WHERE source_id = ? ORDER BY id DESC LIMIT 200""",
+            (source_id,),
+        )
+        return {"runs": [dict(row) for row in await cursor.fetchall()]}
+    finally:
+        await db.close()
+
+
+@app.get("/internal/key-vault/item")
+async def item_detail(request: Request) -> dict[str, Any]:
+    _authorize(request)
+    source_id = str(request.query_params.get("source_id") or "").strip()
+    token_ref = str(request.query_params.get("token_ref") or "").strip()
+    if not source_id or not token_ref:
+        raise HTTPException(status_code=422, detail="source_id and token_ref are required")
+    db = await _db(readonly=True)
+    try:
+        current = await (
+            await db.execute(
+                "SELECT * FROM key_vault_items WHERE source_id = ? AND token_ref = ? LIMIT 1",
+                (source_id, token_ref),
+            )
+        ).fetchone()
+        if current is None:
+            return {"item": None, "history": [], "status_history": []}
+        history = await (
+            await db.execute(
+                """SELECT run_id, source_status, key_masked, key_lookup_status, status,
+                          remain_quota, used_quota, total_quota, group_name, observed_at
+                     FROM key_vault_item_history
+                    WHERE source_id = ? AND token_ref = ? ORDER BY id DESC""",
+                (source_id, token_ref),
+            )
+        ).fetchall()
+        status_history = await (
+            await db.execute(
+                """SELECT run_id, source_status, changed_at FROM key_vault_status_history
+                    WHERE source_id = ? AND token_ref = ? ORDER BY id DESC""",
+                (source_id, token_ref),
+            )
+        ).fetchall()
+        return {
+            "item": _admin_item(dict(current), include_full_key=True),
+            "history": [dict(row) for row in history],
+            "status_history": [dict(row) for row in status_history],
+        }
     finally:
         await db.close()
 
