@@ -244,7 +244,7 @@ async def sync_once(session: aiohttp.ClientSession | None = None) -> int | None:
         headers = {"X-Control-Plane-Token": settings.portal_internal_token}
         etag = await get_setting(ETAG_KEY)
         applied_checksum = await get_setting(CHECKSUM_KEY)
-        if applied_checksum and etag == f'"{applied_checksum}"':
+        if applied_checksum and etag and etag.removeprefix("W/") == f'"{applied_checksum}"':
             headers["If-None-Match"] = etag
         async with client.get(
             url,
@@ -260,7 +260,7 @@ async def sync_once(session: aiohttp.ClientSession | None = None) -> int | None:
             response.raise_for_status()
             snapshot = await response.json()
             response_etag = response.headers.get("ETag", "")
-        if response_etag and (not isinstance(snapshot, dict) or response_etag != f'"{snapshot.get("checksum", "")}"'):
+        if response_etag and (not isinstance(snapshot, dict) or response_etag.removeprefix("W/") != f'"{snapshot.get("checksum", "")}"'):
             raise ValueError("Control-plane ETag does not match the snapshot checksum")
         revision = await apply_snapshot(snapshot)
         if revision != int(snapshot.get("revision") or 0):

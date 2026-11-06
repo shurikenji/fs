@@ -208,7 +208,7 @@ class ControlSyncGuardTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_sync_recovers_ack_after_not_modified(self):
         payload = snapshot(1, [self.source])
-        first = MagicMock(status=200, headers={"ETag": '"' + payload["checksum"] + '"'})
+        first = MagicMock(status=200, headers={"ETag": 'W/"' + payload["checksum"] + '"'})
         first.json = AsyncMock(return_value=payload)
         not_modified = MagicMock(status=304)
         ack_failure = MagicMock()
