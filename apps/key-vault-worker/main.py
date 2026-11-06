@@ -33,7 +33,7 @@ CONTROL_PLANE_URL = os.getenv("CONTROL_PLANE_URL", "").rstrip("/")
 CONTROL_PLANE_TOKEN = os.getenv("CONTROL_PLANE_TOKEN", "")
 API_TOKEN = os.getenv("KEY_VAULT_API_TOKEN", "")
 LOOKUP_SECRET = os.getenv("KEY_VAULT_LOOKUP_SECRET", "")
-POLL_SECONDS = max(60, int(os.getenv("KEY_VAULT_POLL_SECONDS", "600")))
+POLL_SECONDS = max(60, int(os.getenv("KEY_VAULT_POLL_SECONDS", "1800")))
 SNAPSHOT_RETENTION_DAYS = max(1, int(os.getenv("KEY_VAULT_SNAPSHOT_RETENTION_DAYS", "7")))
 MISSING_RETENTION_DAYS = max(1, int(os.getenv("KEY_VAULT_MISSING_RETENTION_DAYS", "90")))
 SENSITIVE_FIELDS = {"key", "api_key", "apikey", "token", "access_token", "secret", "secret_key"}
@@ -449,7 +449,18 @@ async def poll_once() -> None:
         try:
             await _record_success(source, await _fetch_tokens(source))
         except Exception as exc:
-            logger.warning("key-vault poll failed for %s (%s)", source_id, type(exc).__name__)
+            if isinstance(exc, httpx.HTTPStatusError):
+                path = exc.request.url.path
+                endpoint = "batch-keys" if path.endswith("/api/token/batch/keys") else "token-list" if path.endswith("/api/token/") else "upstream"
+                logger.warning(
+                    "key-vault poll failed for %s (HTTPStatusError status=%s retry_after=%s endpoint=%s)",
+                    source_id,
+                    exc.response.status_code,
+                    exc.response.headers.get("Retry-After", "NONE"),
+                    endpoint,
+                )
+            else:
+                logger.warning("key-vault poll failed for %s (%s)", source_id, type(exc).__name__)
             await _record_failure(source_id, exc)
 
 
