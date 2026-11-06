@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,14 @@ LOOKUP_SECRET = os.getenv("KEY_VAULT_LOOKUP_SECRET", "")
 POLL_SECONDS = max(60, int(os.getenv("KEY_VAULT_POLL_SECONDS", "1800")))
 SNAPSHOT_RETENTION_DAYS = max(1, int(os.getenv("KEY_VAULT_SNAPSHOT_RETENTION_DAYS", "7")))
 MISSING_RETENTION_DAYS = max(1, int(os.getenv("KEY_VAULT_MISSING_RETENTION_DAYS", "90")))
+LOOKUP_INITIAL_BATCH_SIZE = min(100, max(1, int(os.getenv("KEY_VAULT_LOOKUP_INITIAL_BATCH_SIZE", "20"))))
+LOOKUP_MAX_BATCH_SIZE = min(100, max(LOOKUP_INITIAL_BATCH_SIZE, int(os.getenv("KEY_VAULT_LOOKUP_MAX_BATCH_SIZE", "50"))))
+LOOKUP_CYCLE_LIMIT = max(1, int(os.getenv("KEY_VAULT_LOOKUP_CYCLE_LIMIT", "50")))
+LOOKUP_FALLBACK_RETRY_SECONDS = max(30, int(os.getenv("KEY_VAULT_LOOKUP_FALLBACK_RETRY_SECONDS", "300")))
+LOOKUP_MAX_RETRY_SECONDS = max(
+    LOOKUP_FALLBACK_RETRY_SECONDS,
+    int(os.getenv("KEY_VAULT_LOOKUP_MAX_RETRY_SECONDS", "3600")),
+)
 SENSITIVE_FIELDS = {"key", "api_key", "apikey", "token", "access_token", "secret", "secret_key"}
 
 
@@ -106,16 +115,116 @@ def _int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _lookup_batch_size(value: Any) -> int:
+    return min(LOOKUP_MAX_BATCH_SIZE, max(1, _int(value, LOOKUP_INITIAL_BATCH_SIZE)))
+
+
+def _retry_after_seconds(value: Any) -> int:
+    raw = str(value or "").strip()
+    if raw.isdecimal():
+        return min(LOOKUP_MAX_RETRY_SECONDS, max(1, int(raw)))
+    return LOOKUP_FALLBACK_RETRY_SECONDS
+
+
+def _network_backoff_seconds(failure_count: int) -> int:
+    steps = (5, 15, 30, 60, 120, 300)
+    return min(LOOKUP_MAX_RETRY_SECONDS, steps[min(max(failure_count - 1, 0), len(steps) - 1)])
+
+
+async def _lookup_source_state(source_id: str) -> dict[str, int]:
+    db = await _db(readonly=True)
+    try:
+        row = await (
+            await db.execute(
+                "SELECT batch_size, next_retry_at, failure_count FROM key_vault_lookup_state WHERE source_id = ?",
+                (source_id,),
+            )
+        ).fetchone()
+        if row is None:
+            return {"batch_size": LOOKUP_INITIAL_BATCH_SIZE, "next_retry_at": 0, "failure_count": 0}
+        return {
+            "batch_size": _lookup_batch_size(row["batch_size"]),
+            "next_retry_at": max(0, _int(row["next_retry_at"])),
+            "failure_count": max(0, _int(row["failure_count"])),
+        }
+    finally:
+        await db.close()
+
+
+async def _save_lookup_source_state(
+    source_id: str,
+    *,
+    batch_size: int,
+    next_retry_at: int = 0,
+    failure_count: int = 0,
+) -> None:
+    db = await _db()
+    try:
+        await db.execute(
+            """INSERT INTO key_vault_lookup_state (source_id, batch_size, next_retry_at, failure_count, updated_at)
+               VALUES (?, ?, NULLIF(?, 0), ?, datetime('now'))
+               ON CONFLICT(source_id) DO UPDATE SET
+                   batch_size=excluded.batch_size,
+                   next_retry_at=excluded.next_retry_at,
+                   failure_count=excluded.failure_count,
+                   updated_at=datetime('now')""",
+            (source_id, _lookup_batch_size(batch_size), max(0, next_retry_at), max(0, failure_count)),
+        )
+        await db.commit()
+    finally:
+        await db.close()
+
+
+async def _checkpoint_lookup_keys(source_id: str, resolved: dict[int, str]) -> None:
+    if not resolved:
+        return
+    db = await _db()
+    try:
+        await db.execute("BEGIN")
+        for token_id, full_key in resolved.items():
+            nonce, ciphertext = _encrypt(full_key)
+            await db.execute(
+                """INSERT INTO key_vault_lookup_cache
+                   (source_id, token_id, key_fingerprint, key_nonce, key_ciphertext, updated_at)
+                   VALUES (?, ?, ?, ?, ?, datetime('now'))
+                   ON CONFLICT(source_id, token_id) DO UPDATE SET
+                       key_fingerprint=excluded.key_fingerprint,
+                       key_nonce=excluded.key_nonce,
+                       key_ciphertext=excluded.key_ciphertext,
+                       updated_at=datetime('now')""",
+                (source_id, str(token_id), _fingerprint(full_key), nonce, ciphertext),
+            )
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        raise
+    finally:
+        await db.close()
+
+
 async def _resolve_token_keys_batch(
     client: httpx.AsyncClient,
     source: dict[str, Any],
     token_ids: list[int],
-) -> tuple[dict[int, str], dict[int, str]]:
+) -> tuple[dict[int, str], dict[int, str], set[int], int]:
+    source_id = str(source.get("id") or "").strip()
     base_url = str(source.get("upstream_base_url") or "").rstrip("/")
     resolved: dict[int, str] = {}
     errors: dict[int, str] = {}
-    for offset in range(0, len(token_ids), 100):
-        batch = token_ids[offset : offset + 100]
+    attempted: set[int] = set()
+    state = await _lookup_source_state(source_id)
+    batch_size = _lookup_batch_size(state["batch_size"])
+    failure_count = state["failure_count"]
+    now = int(time.time())
+    next_retry_at = state["next_retry_at"]
+    if next_retry_at > now:
+        return resolved, errors, attempted, next_retry_at
+
+    selected = token_ids[:LOOKUP_CYCLE_LIMIT]
+    offset = 0
+    while offset < len(selected):
+        batch = selected[offset : offset + batch_size]
+        attempted.update(batch)
         try:
             response = await client.post(
                 f"{base_url}/api/token/batch/keys",
@@ -130,39 +239,104 @@ async def _resolve_token_keys_batch(
             code = f"api_http_{status}" + (f"_retry_{retry_after}" if retry_after.isdecimal() else "")
             for token_id in batch:
                 errors[token_id] = code
+            batch_size = max(1, batch_size // 2)
+            failure_count += 1
             if status == 429:
-                for token_id in token_ids[offset + len(batch) :]:
-                    errors[token_id] = code
+                next_retry_at = int(time.time()) + _retry_after_seconds(retry_after)
+                await _save_lookup_source_state(
+                    source_id,
+                    batch_size=batch_size,
+                    next_retry_at=next_retry_at,
+                    failure_count=failure_count,
+                )
                 logger.warning(
                     "full-key lookup deferred for source %s (status=429 retry_after=%s remaining=%s)",
-                    source.get("id"),
+                    source_id,
                     retry_after or "NONE",
-                    len(token_ids) - offset,
+                    len(token_ids) - len(attempted),
                 )
                 break
+            if status in {401, 403} or status >= 500:
+                delay = LOOKUP_FALLBACK_RETRY_SECONDS if status in {401, 403} else _network_backoff_seconds(failure_count)
+                next_retry_at = int(time.time()) + delay
+                await _save_lookup_source_state(
+                    source_id,
+                    batch_size=batch_size,
+                    next_retry_at=next_retry_at,
+                    failure_count=failure_count,
+                )
+                break
+            await _save_lookup_source_state(
+                source_id,
+                batch_size=batch_size,
+                failure_count=failure_count,
+            )
+            offset += len(batch)
             continue
         except httpx.RequestError:
-            for token_id in token_ids[offset:]:
+            for token_id in batch:
                 errors[token_id] = "network_error"
+            batch_size = max(1, batch_size // 2)
+            failure_count += 1
+            next_retry_at = int(time.time()) + _network_backoff_seconds(failure_count)
+            await _save_lookup_source_state(
+                source_id,
+                batch_size=batch_size,
+                next_retry_at=next_retry_at,
+                failure_count=failure_count,
+            )
+            logger.warning(
+                "full-key lookup deferred for source %s (network_error remaining=%s)",
+                source_id,
+                len(token_ids) - len(attempted),
+            )
             break
         except (TypeError, ValueError, json.JSONDecodeError):
             for token_id in batch:
                 errors[token_id] = "invalid_response"
+            batch_size = max(1, batch_size // 2)
+            failure_count += 1
+            await _save_lookup_source_state(
+                source_id,
+                batch_size=batch_size,
+                failure_count=failure_count,
+            )
+            offset += len(batch)
             continue
         data = payload.get("data") if isinstance(payload, dict) else None
         keys = data.get("keys") if isinstance(data, dict) else None
         if not isinstance(payload, dict) or payload.get("success") is False or not isinstance(keys, dict):
             for token_id in batch:
                 errors[token_id] = "invalid_response"
+            batch_size = max(1, batch_size // 2)
+            failure_count += 1
+            await _save_lookup_source_state(
+                source_id,
+                batch_size=batch_size,
+                failure_count=failure_count,
+            )
+            offset += len(batch)
             continue
+        batch_resolved: dict[int, str] = {}
         for token_id in batch:
             value = keys.get(str(token_id))
             key = value.strip() if isinstance(value, str) else ""
             if not key or any(mask in key for mask in ("*", "...", "\u2026")):
                 errors[token_id] = "full_key_unavailable"
                 continue
-            resolved[token_id] = key if key.startswith("sk-") else f"sk-{key}"
-    return resolved, errors
+            batch_resolved[token_id] = key if key.startswith("sk-") else f"sk-{key}"
+        resolved.update(batch_resolved)
+        await _checkpoint_lookup_keys(source_id, batch_resolved)
+        failure_count = 0
+        batch_size = min(LOOKUP_MAX_BATCH_SIZE, batch_size + 10)
+        next_retry_at = 0
+        await _save_lookup_source_state(
+            source_id,
+            batch_size=batch_size,
+            failure_count=0,
+        )
+        offset += len(batch)
+    return resolved, errors, attempted, next_retry_at
 
 
 def _token_item(raw: dict[str, Any], source_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -178,6 +352,7 @@ def _token_item(raw: dict[str, Any], source_id: str) -> tuple[dict[str, Any], di
     remain = _int(raw.get("remain_quota", raw.get("remainQuota")))
     used = _int(raw.get("used_quota", raw.get("usedQuota")))
     total = _int(raw.get("total_quota", raw.get("totalQuota")), remain + used)
+    lookup_next_retry_at = _int(raw.get("_vault_lookup_next_retry_at")) or None
     row = {
         "source_id": source_id,
         "token_ref": token_ref,
@@ -189,6 +364,7 @@ def _token_item(raw: dict[str, Any], source_id: str) -> tuple[dict[str, Any], di
         "key_lookup_status": str(raw.get("_vault_lookup_status") or ("available" if full_key else "unverified")),
         "key_lookup_error": str(raw.get("_vault_lookup_error") or "").strip() or None,
         "key_lookup_attempted": 1 if raw.get("_vault_lookup_attempted") else 0,
+        "key_lookup_next_retry_at": lookup_next_retry_at,
         "status": _int(raw.get("status"), 1),
         "remain_quota": remain,
         "used_quota": used,
@@ -269,6 +445,8 @@ async def init_db() -> None:
                 key_lookup_status TEXT NOT NULL DEFAULT 'unverified',
                 key_lookup_error TEXT,
                 key_lookup_last_attempt_at TEXT,
+                key_lookup_attempts INTEGER NOT NULL DEFAULT 0,
+                key_lookup_next_retry_at INTEGER,
                 last_seen_at TEXT DEFAULT (datetime('now')),
                 PRIMARY KEY(source_id, token_ref)
             );
@@ -296,6 +474,23 @@ async def init_db() -> None:
                 source_status TEXT NOT NULL,
                 changed_at TEXT DEFAULT (datetime('now'))
             );
+            CREATE TABLE IF NOT EXISTS key_vault_lookup_state (
+                source_id TEXT PRIMARY KEY,
+                batch_size INTEGER NOT NULL DEFAULT 20,
+                next_retry_at INTEGER,
+                failure_count INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS key_vault_lookup_cache (
+                source_id TEXT NOT NULL,
+                token_id TEXT NOT NULL,
+                key_fingerprint TEXT NOT NULL,
+                key_nonce BLOB NOT NULL,
+                key_ciphertext BLOB NOT NULL,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY(source_id, token_id)
+            );
             CREATE INDEX IF NOT EXISTS idx_key_vault_fingerprint ON key_vault_items(source_id, key_fingerprint, active);
             CREATE INDEX IF NOT EXISTS idx_key_vault_token_id ON key_vault_items(source_id, token_id, active);
             CREATE INDEX IF NOT EXISTS idx_key_vault_history_item ON key_vault_item_history(source_id, token_ref, observed_at);
@@ -315,6 +510,8 @@ async def init_db() -> None:
             "key_lookup_status": "ALTER TABLE key_vault_items ADD COLUMN key_lookup_status TEXT NOT NULL DEFAULT 'unverified'",
             "key_lookup_error": "ALTER TABLE key_vault_items ADD COLUMN key_lookup_error TEXT",
             "key_lookup_last_attempt_at": "ALTER TABLE key_vault_items ADD COLUMN key_lookup_last_attempt_at TEXT",
+            "key_lookup_attempts": "ALTER TABLE key_vault_items ADD COLUMN key_lookup_attempts INTEGER NOT NULL DEFAULT 0",
+            "key_lookup_next_retry_at": "ALTER TABLE key_vault_items ADD COLUMN key_lookup_next_retry_at INTEGER",
         }
         for column, sql in migrations.items():
             if column not in item_columns:
@@ -389,15 +586,21 @@ async def require_vault_schema(*, readonly: bool = False) -> None:
     try:
         cursor = await db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
         tables = {row[0] for row in await cursor.fetchall()}
-        if not {"vault_metadata", "key_vault_items", "key_vault_snapshots", "key_vault_runs", "key_vault_item_history", "key_vault_status_history"} <= tables:
+        if not {
+            "vault_metadata", "key_vault_items", "key_vault_snapshots", "key_vault_runs",
+            "key_vault_item_history", "key_vault_status_history", "key_vault_lookup_state",
+            "key_vault_lookup_cache",
+        } <= tables:
             raise RuntimeError("Vault database must be explicitly initialized before startup")
         required = {
             "vault_metadata": {"key", "value"},
-            "key_vault_items": {"source_id", "token_ref", "token_id", "token_name", "key_fingerprint", "key_nonce", "key_ciphertext", "key_masked", "recoverable", "active", "missing_since", "source_status", "removed_at", "first_seen_at", "key_lookup_status", "key_lookup_error", "key_lookup_last_attempt_at", "last_seen_at", "raw_json", "status", "remain_quota", "used_quota", "total_quota", "group_name"},
+            "key_vault_items": {"source_id", "token_ref", "token_id", "token_name", "key_fingerprint", "key_nonce", "key_ciphertext", "key_masked", "recoverable", "active", "missing_since", "source_status", "removed_at", "first_seen_at", "key_lookup_status", "key_lookup_error", "key_lookup_last_attempt_at", "key_lookup_attempts", "key_lookup_next_retry_at", "last_seen_at", "raw_json", "status", "remain_quota", "used_quota", "total_quota", "group_name"},
             "key_vault_snapshots": {"id", "source_id", "nonce", "ciphertext", "item_count", "created_at"},
             "key_vault_runs": {"id", "source_id", "status", "item_count", "lookup_error_count", "error_message", "created_at"},
             "key_vault_item_history": {"id", "run_id", "source_id", "token_ref", "source_status", "key_masked", "key_lookup_status", "status", "remain_quota", "used_quota", "total_quota", "group_name", "raw_json", "observed_at"},
             "key_vault_status_history": {"id", "run_id", "source_id", "token_ref", "source_status", "changed_at"},
+            "key_vault_lookup_state": {"source_id", "batch_size", "next_retry_at", "failure_count", "updated_at"},
+            "key_vault_lookup_cache": {"source_id", "token_id", "key_fingerprint", "key_nonce", "key_ciphertext", "created_at", "updated_at"},
         }
         for table, columns in required.items():
             cursor = await db.execute(f"PRAGMA table_info({table})")
@@ -434,6 +637,7 @@ async def _stored_key_state(source_id: str) -> list[dict[str, Any]]:
             (source_id,),
         )
         result = []
+        by_id: dict[str, dict[str, Any]] = {}
         for saved in await cursor.fetchall():
             row = dict(saved)
             row["full_key_valid"] = False
@@ -444,6 +648,42 @@ async def _stored_key_state(source_id: str) -> list[dict[str, Any]]:
                 except Exception:
                     pass
             result.append(row)
+            if str(row.get("token_id") or "").strip():
+                by_id[str(row["token_id"])] = row
+
+        cache = await db.execute(
+            "SELECT token_id, key_nonce, key_ciphertext FROM key_vault_lookup_cache WHERE source_id = ?",
+            (source_id,),
+        )
+        for saved in await cache.fetchall():
+            token_id = str(saved["token_id"] or "").strip()
+            if not token_id:
+                continue
+            existing = by_id.get(token_id)
+            if existing and existing.get("full_key_valid"):
+                continue
+            try:
+                value = json.loads(AES.decrypt(saved["key_nonce"], saved["key_ciphertext"], None))
+            except Exception:
+                continue
+            if not isinstance(value, str) or not value.strip():
+                continue
+            if existing:
+                existing["full_key_valid"] = True
+                existing["cached_full_key"] = value
+            else:
+                row = {
+                    "token_ref": token_id,
+                    "token_id": token_id,
+                    "key_masked": None,
+                    "recoverable": 1,
+                    "key_nonce": saved["key_nonce"],
+                    "key_ciphertext": saved["key_ciphertext"],
+                    "full_key_valid": True,
+                    "cached_full_key": value,
+                }
+                result.append(row)
+                by_id[token_id] = row
         return result
     finally:
         await db.close()
@@ -512,6 +752,9 @@ async def _fetch_tokens(source: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
 
             if existing and existing.get("full_key_valid"):
+                cached_full_key = existing.get("cached_full_key")
+                if isinstance(cached_full_key, str) and cached_full_key:
+                    item["key"] = cached_full_key
                 item["_vault_lookup_status"] = "available"
                 continue
 
@@ -524,19 +767,35 @@ async def _fetch_tokens(source: dict[str, Any]) -> list[dict[str, Any]]:
                 item["_vault_lookup_status"] = "unverified"
                 item["_vault_lookup_error"] = "lookup_not_supported"
                 continue
-            item["_vault_lookup_attempted"] = True
             unresolved.append((item, int(token_id)))
 
         if unresolved:
-            keys, errors = await _resolve_token_keys_batch(client, source, [token_id for _, token_id in unresolved])
+            keys, errors, attempted, next_retry_at = await _resolve_token_keys_batch(
+                client,
+                source,
+                [token_id for _, token_id in unresolved],
+            )
             for item, token_id in unresolved:
+                if token_id in attempted:
+                    item["_vault_lookup_attempted"] = True
                 if token_id in keys:
                     item["key"] = keys[token_id]
                     item["_vault_lookup_status"] = "available"
                     item.pop("_vault_lookup_error", None)
-                else:
+                    item.pop("_vault_lookup_next_retry_at", None)
+                elif next_retry_at:
+                    item["_vault_lookup_status"] = "retry_wait"
+                    item["_vault_lookup_next_retry_at"] = next_retry_at
+                    if token_id in errors:
+                        item["_vault_lookup_error"] = errors[token_id]
+                    else:
+                        item.pop("_vault_lookup_error", None)
+                elif token_id in attempted:
                     item["_vault_lookup_status"] = "error"
                     item["_vault_lookup_error"] = errors.get(token_id, "full_key_unavailable")
+                else:
+                    item["_vault_lookup_status"] = "pending"
+                    item.pop("_vault_lookup_error", None)
         return all_items
 
 
@@ -545,8 +804,8 @@ async def _record_success(source: dict[str, Any], raw_items: list[dict[str, Any]
     converted = [_token_item(item, source_id) for item in raw_items]
     rows = [item[0] for item in converted]
     snapshot = [item[1] for item in converted]
-    lookup_error_count = sum(1 for row in rows if row["key_lookup_status"] in {"error", "unverified"})
-    run_status = "partial" if lookup_error_count else "success"
+    lookup_error_count = sum(1 for row in rows if row["key_lookup_error"])
+    run_status = "partial" if any(row["key_lookup_status"] != "available" for row in rows) else "success"
     db = await _db()
     try:
         await db.execute("BEGIN")
@@ -617,8 +876,8 @@ async def _record_success(source: dict[str, Any], raw_items: list[dict[str, Any]
                     source_id, token_ref, token_id, token_name, key_fingerprint, key_nonce, key_ciphertext,
                     key_masked, recoverable, status, remain_quota, used_quota, total_quota, group_name,
                     raw_json, active, missing_since, source_status, removed_at, first_seen_at,
-                    key_lookup_status, key_lookup_error, last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, 'active', NULL, datetime('now'), ?, ?, datetime('now'))
+                    key_lookup_status, key_lookup_error, key_lookup_next_retry_at, last_seen_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, 'active', NULL, datetime('now'), ?, ?, ?, datetime('now'))
                 ON CONFLICT(source_id, token_ref) DO UPDATE SET
                     token_id=excluded.token_id, token_name=excluded.token_name,
                     key_fingerprint=excluded.key_fingerprint,
@@ -630,18 +889,22 @@ async def _record_success(source: dict[str, Any], raw_items: list[dict[str, Any]
                     total_quota=excluded.total_quota, group_name=excluded.group_name,
                     raw_json=excluded.raw_json, active=1, missing_since=NULL, source_status='active', removed_at=NULL,
                     key_lookup_status=excluded.key_lookup_status, key_lookup_error=excluded.key_lookup_error,
+                    key_lookup_next_retry_at=excluded.key_lookup_next_retry_at,
                     last_seen_at=datetime('now')
                 """,
                 (
                     row["source_id"], row["token_ref"], row["token_id"], row["token_name"],
                     key_fingerprint, key_nonce, key_ciphertext, row["key_masked"], recoverable,
                     row["status"], row["remain_quota"], row["used_quota"], row["total_quota"],
-                    row["group_name"], row["raw_json"], lookup_status, lookup_error,
+                    row["group_name"], row["raw_json"], lookup_status, lookup_error, row["key_lookup_next_retry_at"],
                 ),
             )
             if row["key_lookup_attempted"]:
                 await db.execute(
-                    "UPDATE key_vault_items SET key_lookup_last_attempt_at = datetime('now') WHERE source_id = ? AND token_ref = ?",
+                    """UPDATE key_vault_items
+                          SET key_lookup_last_attempt_at = datetime('now'),
+                              key_lookup_attempts = key_lookup_attempts + 1
+                        WHERE source_id = ? AND token_ref = ?""",
                     (source_id, row["token_ref"]),
                 )
             if not previous or previous.get("source_status") != "active":

@@ -118,17 +118,20 @@ class VaultSafetyTests(unittest.IsolatedAsyncioTestCase):
         }
         with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
             items = await main._fetch_tokens(source)
-        self.assertEqual(batches, [list(range(1, 101)), [101]])
+        self.assertEqual(batches, [list(range(1, 21)), list(range(21, 51))])
         self.assertEqual(items[0]["key"], "sk-secret-1")
-        self.assertEqual(items[-1]["key"], "sk-secret-101")
+        self.assertEqual(items[49]["key"], "sk-secret-50")
+        self.assertTrue(all(item["_vault_lookup_status"] == "pending" for item in items[50:]))
 
     async def test_batch_key_lookup_stops_after_rate_limit(self):
         posts = 0
+        batches = []
 
         def handler(request):
             nonlocal posts
             if request.method == "POST":
                 posts += 1
+                batches.append(json.loads(request.content)["ids"])
                 return httpx.Response(429, headers={"Retry-After": "300"})
             page = int(request.url.params["p"])
             items = [{"id": token_id, "key": "sk-***"} for token_id in range(1, 101)] if page == 1 else [{"id": 101, "key": "sk-***"}]
@@ -137,12 +140,15 @@ class VaultSafetyTests(unittest.IsolatedAsyncioTestCase):
         transport = httpx.MockTransport(handler)
         client_class = httpx.AsyncClient
         source = {"id": "one", "upstream_base_url": "https://example.test", "supports_key_lookup_by_id": 1}
-        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)), \
+             patch.object(main.time, "time", return_value=1000):
             items = await main._fetch_tokens(source)
         self.assertEqual(posts, 1)
+        self.assertEqual(batches, [list(range(1, 21))])
         self.assertEqual(len(items), 101)
-        self.assertTrue(all(item["_vault_lookup_status"] == "error" for item in items))
-        self.assertTrue(all(item["_vault_lookup_error"] == "api_http_429_retry_300" for item in items))
+        self.assertTrue(all(item["_vault_lookup_status"] == "retry_wait" for item in items))
+        self.assertTrue(all(item["_vault_lookup_error"] == "api_http_429_retry_300" for item in items[:20]))
+        self.assertTrue(all("_vault_lookup_error" not in item for item in items[20:]))
         await main._record_success(source, items)
         db = await main._db()
         try:
@@ -150,10 +156,53 @@ class VaultSafetyTests(unittest.IsolatedAsyncioTestCase):
                 "SELECT status, item_count, lookup_error_count FROM key_vault_runs ORDER BY id DESC LIMIT 1"
             )).fetchone()
             count = (await (await db.execute("SELECT COUNT(*) FROM key_vault_items WHERE source_status = 'active'")).fetchone())[0]
+            retry_rows = await (await db.execute(
+                "SELECT token_id, key_lookup_attempts, key_lookup_next_retry_at FROM key_vault_items ORDER BY CAST(token_id AS INTEGER)"
+            )).fetchall()
         finally:
             await db.close()
-        self.assertEqual(tuple(run), ("partial", 101, 101))
+        self.assertEqual(tuple(run), ("partial", 101, 20))
         self.assertEqual(count, 101)
+        self.assertTrue(all(row["key_lookup_attempts"] == 1 for row in retry_rows[:20]))
+        self.assertTrue(all(row["key_lookup_attempts"] == 0 for row in retry_rows[20:]))
+        self.assertTrue(all(row["key_lookup_next_retry_at"] == 1300 for row in retry_rows))
+
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)), \
+             patch.object(main.time, "time", return_value=1001):
+            deferred = await main._fetch_tokens(source)
+        self.assertEqual(posts, 1)
+        self.assertTrue(all(item["_vault_lookup_status"] == "retry_wait" for item in deferred))
+
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)), \
+             patch.object(main.time, "time", return_value=1301):
+            await main._fetch_tokens(source)
+        self.assertEqual(posts, 2)
+        self.assertEqual(batches[-1], list(range(1, 11)))
+
+    async def test_lookup_checkpoint_is_reused_before_record_success(self):
+        posts = 0
+
+        def handler(request):
+            nonlocal posts
+            if request.method == "POST":
+                posts += 1
+                return httpx.Response(200, json={"success": True, "data": {"keys": {"1": "checkpoint-full-key"}}})
+            return httpx.Response(
+                200,
+                json={"success": True, "data": {"total": 1, "items": [{"id": 1, "key": "sk-***"}]}},
+            )
+
+        transport = httpx.MockTransport(handler)
+        client_class = httpx.AsyncClient
+        source = {"id": "one", "upstream_base_url": "https://example.test", "supports_key_lookup_by_id": 1}
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
+            first = await main._fetch_tokens(source)
+            second = await main._fetch_tokens(source)
+
+        self.assertEqual(posts, 1)
+        self.assertEqual(first[0]["key"], "sk-checkpoint-full-key")
+        self.assertEqual(second[0]["key"], "sk-checkpoint-full-key")
+        self.assertEqual(second[0]["_vault_lookup_status"], "available")
 
     async def test_full_key_lookup_only_runs_for_new_or_unresolved_keys(self):
         await main._record_success(
