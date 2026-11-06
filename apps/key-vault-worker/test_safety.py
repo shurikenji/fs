@@ -95,13 +95,19 @@ class VaultSafetyTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
             self.assertEqual(len(await main._fetch_tokens(source)), 2)
 
-    async def test_masked_token_is_resolved_by_id_when_enabled(self):
+    async def test_masked_tokens_are_resolved_in_batches_when_enabled(self):
+        batches = []
+
         def handler(request):
             if request.method == "POST":
-                self.assertEqual(request.url.path, "/api/token/7/key")
+                self.assertEqual(request.url.path, "/api/token/batch/keys")
                 self.assertEqual(request.headers["Content-Type"], "application/json")
-                return httpx.Response(200, json={"success": True, "data": {"key": "secret-value"}})
-            return httpx.Response(200, json={"success": True, "data": {"total": 1, "items": [{"id": 7, "key": "sk-***"}]}})
+                ids = json.loads(request.content)["ids"]
+                batches.append(ids)
+                return httpx.Response(200, json={"success": True, "data": {"keys": {str(token_id): f"secret-{token_id}" for token_id in ids}}})
+            page = int(request.url.params["p"])
+            items = [{"id": token_id, "key": "sk-***"} for token_id in range(1, 101)] if page == 1 else [{"id": 101, "key": "sk-***"}]
+            return httpx.Response(200, json={"success": True, "data": {"total": 101, "items": items}})
 
         transport = httpx.MockTransport(handler)
         client_class = httpx.AsyncClient
@@ -109,11 +115,12 @@ class VaultSafetyTests(unittest.IsolatedAsyncioTestCase):
             "id": "one",
             "upstream_base_url": "https://example.test",
             "supports_key_lookup_by_id": 1,
-            "token_key_endpoint_template": "/api/token/{id}/key",
         }
         with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
             items = await main._fetch_tokens(source)
-        self.assertEqual(items[0]["key"], "sk-secret-value")
+        self.assertEqual(batches, [list(range(1, 101)), [101]])
+        self.assertEqual(items[0]["key"], "sk-secret-1")
+        self.assertEqual(items[-1]["key"], "sk-secret-101")
 
     async def test_error_storage_and_urls_do_not_expose_credentials(self):
         secret = "sensitive-test-credential"

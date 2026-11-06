@@ -16,7 +16,7 @@ import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urlsplit
 
 import aiosqlite
 import httpx
@@ -37,7 +37,6 @@ POLL_SECONDS = max(60, int(os.getenv("KEY_VAULT_POLL_SECONDS", "600")))
 SNAPSHOT_RETENTION_DAYS = max(1, int(os.getenv("KEY_VAULT_SNAPSHOT_RETENTION_DAYS", "7")))
 MISSING_RETENTION_DAYS = max(1, int(os.getenv("KEY_VAULT_MISSING_RETENTION_DAYS", "90")))
 SENSITIVE_FIELDS = {"key", "api_key", "apikey", "token", "access_token", "secret", "secret_key"}
-KEY_FIELDS = ("key", "api_key", "apiKey", "token", "access_token", "accessToken", "secret", "secret_key")
 
 
 def _master_key() -> bytes:
@@ -107,44 +106,33 @@ def _int(value: Any, default: int = 0) -> int:
         return default
 
 
-def _extract_full_key(payload: Any) -> str:
-    queue = [payload]
-    while queue:
-        current = queue.pop(0)
-        if isinstance(current, dict):
-            for field in KEY_FIELDS:
-                value = current.get(field)
-                if not isinstance(value, str):
-                    continue
-                key = value.strip()
-                if key and not any(mask in key for mask in ("*", "...", "\u2026")):
-                    return key if key.startswith("sk-") else f"sk-{key}"
-            queue.extend(value for value in current.values() if isinstance(value, (dict, list, tuple)))
-        elif isinstance(current, (list, tuple)):
-            queue.extend(value for value in current if isinstance(value, (dict, list, tuple)))
-    return ""
-
-
-async def _resolve_token_key(client: httpx.AsyncClient, source: dict[str, Any], token_id: str) -> str:
-    if not token_id.isascii() or not token_id.isdecimal() or int(token_id) <= 0:
-        raise ValueError("masked token has no usable token ID")
-    template = str(source.get("token_key_endpoint_template") or "/api/token/{id}/key").strip()
-    endpoint = template.format(id=int(token_id))
-    base_url = str(source.get("upstream_base_url") or "").rstrip("/") + "/"
-    url = endpoint if endpoint.startswith(("http://", "https://")) else urljoin(base_url, endpoint.lstrip("/"))
-    base = urlsplit(base_url)
-    target = urlsplit(url)
-    if (target.scheme, target.hostname, target.port) != (base.scheme, base.hostname, base.port):
-        raise ValueError("token key endpoint must use the upstream origin")
-    response = await client.post(url, headers=_headers(source))
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, dict) or payload.get("success") is False:
-        raise ValueError("token key endpoint returned an invalid payload")
-    full_key = _extract_full_key(payload)
-    if not full_key:
-        raise ValueError("token key endpoint returned no full key")
-    return full_key
+async def _resolve_token_keys_batch(
+    client: httpx.AsyncClient,
+    source: dict[str, Any],
+    token_ids: list[int],
+) -> dict[int, str]:
+    base_url = str(source.get("upstream_base_url") or "").rstrip("/")
+    resolved: dict[int, str] = {}
+    for offset in range(0, len(token_ids), 100):
+        batch = token_ids[offset : offset + 100]
+        response = await client.post(
+            f"{base_url}/api/token/batch/keys",
+            headers=_headers(source),
+            json={"ids": batch},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        data = payload.get("data") if isinstance(payload, dict) else None
+        keys = data.get("keys") if isinstance(data, dict) else None
+        if not isinstance(payload, dict) or payload.get("success") is False or not isinstance(keys, dict):
+            raise ValueError("batch token key endpoint returned an invalid payload")
+        for token_id in batch:
+            value = keys.get(str(token_id))
+            key = value.strip() if isinstance(value, str) else ""
+            if not key or any(mask in key for mask in ("*", "...", "\u2026")):
+                raise ValueError("batch token key endpoint returned no full key")
+            resolved[token_id] = key if key.startswith("sk-") else f"sk-{key}"
+    return resolved
 
 
 def _token_item(raw: dict[str, Any], source_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -328,24 +316,29 @@ async def _fetch_tokens(source: dict[str, Any]) -> list[dict[str, Any]]:
                 if token_ref in seen:
                     raise ValueError("upstream token pagination contains duplicate items")
                 seen.add(token_ref)
-            if source.get("supports_key_lookup_by_id"):
-                for item in items:
-                    raw_key = str(item.get("key") or "").strip()
-                    if raw_key and not any(mask in raw_key for mask in ("*", "...", "\u2026")):
-                        all_items.append(item)
-                        continue
-                    token_id = str(item.get("id") or item.get("token_id") or item.get("tokenId") or "").strip()
-                    item = dict(item)
-                    item["key"] = await _resolve_token_key(client, source, token_id)
-                    all_items.append(item)
-            else:
-                all_items.extend(items)
+            all_items.extend(items)
             if len(all_items) > total or (not items and len(all_items) < total):
                 raise ValueError("upstream token pagination is incomplete")
             if len(all_items) == total:
-                return all_items
+                break
             page += 1
-    raise ValueError("upstream token pagination exceeded the safety limit")
+        else:
+            raise ValueError("upstream token pagination exceeded the safety limit")
+
+        if source.get("supports_key_lookup_by_id"):
+            masked: list[tuple[dict[str, Any], int]] = []
+            for item in all_items:
+                raw_key = str(item.get("key") or "").strip()
+                if raw_key and not any(mask in raw_key for mask in ("*", "...", "\u2026")):
+                    continue
+                token_id = str(item.get("id") or item.get("token_id") or item.get("tokenId") or "").strip()
+                if not token_id.isascii() or not token_id.isdecimal() or int(token_id) <= 0:
+                    raise ValueError("masked token has no usable token ID")
+                masked.append((item, int(token_id)))
+            keys = await _resolve_token_keys_batch(client, source, [token_id for _, token_id in masked])
+            for item, token_id in masked:
+                item["key"] = keys[token_id]
+        return all_items
 
 
 async def _record_success(source: dict[str, Any], raw_items: list[dict[str, Any]]) -> None:
