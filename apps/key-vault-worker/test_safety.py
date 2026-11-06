@@ -99,6 +99,7 @@ class VaultSafetyTests(unittest.IsolatedAsyncioTestCase):
         def handler(request):
             if request.method == "POST":
                 self.assertEqual(request.url.path, "/api/token/7/key")
+                self.assertEqual(request.headers["Content-Type"], "application/json")
                 return httpx.Response(200, json={"success": True, "data": {"key": "secret-value"}})
             return httpx.Response(200, json={"success": True, "data": {"total": 1, "items": [{"id": 7, "key": "sk-***"}]}})
 

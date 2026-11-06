@@ -284,7 +284,7 @@ async def require_vault_schema(*, readonly: bool = False) -> None:
 
 
 def _headers(source: dict[str, Any]) -> dict[str, str]:
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
     user_value = str(source.get("auth_user_value") or "").strip()
     user_header = str(source.get("auth_user_header") or "").strip()
     if user_value:
