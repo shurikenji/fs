@@ -1,0 +1,14 @@
+[Unit]
+Description=Shupremium verified SQLite backup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+UMask=0077
+Environment=SHUPREMIUM_BACKUP_ROOT=/home/ubuntu/shupremium-backups/sqlite
+Environment=SHUPREMIUM_BACKUP_RETENTION_DAYS=14
+ExecStart=/usr/bin/python3 /srv/shupremium-stack/repo/ops/scripts/backup-sqlite-databases.py
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Shupremium SQLite backup daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=30m
+Unit=shupremium-sqlite-backup.service
+
+[Install]
+WantedBy=timers.target
