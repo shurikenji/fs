@@ -136,9 +136,17 @@ async def get_db() -> aiosqlite.Connection:
 
 async def init_db() -> None:
     db = await get_db()
+    seed_service_sources = not await _table_exists(db, "service_sources")
+    seed_proxy_endpoints = not await _table_exists(db, "proxy_endpoints")
+    seed_portal_modules = not await _table_exists(db, "portal_modules")
     await db.executescript(CREATE_TABLES)
     await _ensure_schema(db)
-    await _seed_data(db)
+    await _seed_data(
+        db,
+        seed_service_sources=seed_service_sources,
+        seed_proxy_endpoints=seed_proxy_endpoints,
+        seed_portal_modules=seed_portal_modules,
+    )
     await db.commit()
 
 
@@ -149,29 +157,44 @@ async def close_db() -> None:
         _db = None
 
 
-async def _seed_data(db: aiosqlite.Connection) -> None:
-    for item in _SEED_SERVICE_SOURCES:
-        await db.execute(
-            """
-            INSERT OR IGNORE INTO service_sources (
-                id, name, upstream_base_url, public_base_url, source_type, enabled,
-                public_pricing_enabled, public_balance_enabled, public_keys_enabled, public_logs_enabled, balance_rate
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                item["id"],
-                item["name"],
-                item["upstream_base_url"],
-                item["public_base_url"],
-                item["source_type"],
-                item["enabled"],
-                item["public_pricing_enabled"],
-                item["public_balance_enabled"],
-                item["public_keys_enabled"],
-                item["public_logs_enabled"],
-                item["balance_rate"],
-            ),
-        )
+async def _table_exists(db: aiosqlite.Connection, table_name: str) -> bool:
+    cursor = await db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    )
+    return await cursor.fetchone() is not None
+
+
+async def _seed_data(
+    db: aiosqlite.Connection,
+    *,
+    seed_service_sources: bool = True,
+    seed_proxy_endpoints: bool = True,
+    seed_portal_modules: bool = True,
+) -> None:
+    if seed_service_sources:
+        for item in _SEED_SERVICE_SOURCES:
+            await db.execute(
+                """
+                INSERT OR IGNORE INTO service_sources (
+                    id, name, upstream_base_url, public_base_url, source_type, enabled,
+                    public_pricing_enabled, public_balance_enabled, public_keys_enabled, public_logs_enabled, balance_rate
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item["id"],
+                    item["name"],
+                    item["upstream_base_url"],
+                    item["public_base_url"],
+                    item["source_type"],
+                    item["enabled"],
+                    item["public_pricing_enabled"],
+                    item["public_balance_enabled"],
+                    item["public_keys_enabled"],
+                    item["public_logs_enabled"],
+                    item["balance_rate"],
+                ),
+            )
 
     cursor = await db.execute("PRAGMA table_info(proxy_endpoints)")
     columns = {row[1] for row in await cursor.fetchall()}
@@ -207,26 +230,28 @@ async def _seed_data(db: aiosqlite.Connection) -> None:
         "INSERT OR IGNORE INTO config_state (id, revision) VALUES (1, 0)"
     )
 
-    for endpoint_id, source_id, name, domain, target_host, target_protocol, tls_skip_verify, port, status in _SEED_PROXY_ENDPOINTS:
-        await db.execute(
-            """
-            INSERT OR IGNORE INTO proxy_endpoints (
-                id, source_id, name, domain, target_host, target_protocol, tls_skip_verify, port, status,
-                route_presets_json, custom_route_prefixes_json, max_body_size
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '["openai_compatible","newapi_billing"]', '[]', '600m')
-            """,
-            (endpoint_id, source_id or None, name, domain, target_host, target_protocol, tls_skip_verify, port, status),
-        )
+    if seed_proxy_endpoints:
+        for endpoint_id, source_id, name, domain, target_host, target_protocol, tls_skip_verify, port, status in _SEED_PROXY_ENDPOINTS:
+            await db.execute(
+                """
+                INSERT OR IGNORE INTO proxy_endpoints (
+                    id, source_id, name, domain, target_host, target_protocol, tls_skip_verify, port, status,
+                    route_presets_json, custom_route_prefixes_json, max_body_size
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '["openai_compatible","newapi_billing"]', '[]', '600m')
+                """,
+                (endpoint_id, source_id or None, name, domain, target_host, target_protocol, tls_skip_verify, port, status),
+            )
 
-    for module in _SEED_PORTAL_MODULES:
-        await db.execute(
-            """
-            INSERT OR IGNORE INTO portal_modules (
-                id, name, path, public_url, icon, description, enabled, is_public, sort_order
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            module,
-        )
+    if seed_portal_modules:
+        for module in _SEED_PORTAL_MODULES:
+            await db.execute(
+                """
+                INSERT OR IGNORE INTO portal_modules (
+                    id, name, path, public_url, icon, description, enabled, is_public, sort_order
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                module,
+            )
 
     await db.execute(
         """
