@@ -13,12 +13,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from bot.callback_data.factories import WalletActionCB, WalletTopupAmountCB, BackCB
-from bot.keyboards.inline_kb import wallet_menu_kb, wallet_topup_amounts_kb, back_only_kb
+from bot.keyboards.inline_kb import (
+    WALLET_TOPUP_PRESET_AMOUNTS,
+    wallet_menu_kb,
+    wallet_topup_amounts_kb,
+    back_only_kb,
+)
 from bot.utils.formatting import format_vnd, status_emoji, format_time_vn
 from bot.utils.order_code import generate_order_code
-from bot.services.vietqr import build_qr_url, build_qr_caption, download_qr_photo
+from bot.utils.purchase_nonce import callback_purchase_nonce, message_purchase_nonce
+from bot.services.vietqr import build_qr_photo, build_qr_caption
 from db.queries.wallets import get_balance, get_wallet_transactions, count_wallet_transactions
-from db.queries.orders import create_order
+from db.queries.orders import create_order_idempotent
 from db.queries.settings import get_setting_int
 
 router = Router(name="wallet")
@@ -65,6 +71,9 @@ async def wallet_topup_preset(
     db_user: dict,
 ) -> None:
     """Xử lý nạp ví với số tiền preset → tạo QR."""
+    if callback_data.amount not in WALLET_TOPUP_PRESET_AMOUNTS:
+        await callback.answer("❌ Số tiền nạp không hợp lệ.", show_alert=True)
+        return
     await _create_topup_order(callback, db_user, callback_data.amount)
 
 
@@ -129,7 +138,8 @@ async def wallet_topup_custom_input(
     expire_min = await get_setting_int("order_expire_min", 30)
     expired_at = (get_now_vn() + timedelta(minutes=expire_min)).isoformat()
 
-    order_id = await create_order(
+    order, _ = await create_order_idempotent(
+        purchase_nonce=message_purchase_nonce(message),
         order_code=order_code,
         user_id=db_user["id"],
         product_type="wallet_topup",
@@ -138,14 +148,16 @@ async def wallet_topup_custom_input(
         product_name="Nạp ví",
         expired_at=expired_at,
     )
+    order_id = int(order["id"])
+    order_code = str(order["order_code"])
+    amount = int(order["amount"])
 
     # Tạo QR
-    qr_url = await build_qr_url(amount, order_code)
     caption = await build_qr_caption(amount, order_code, expire_min)
 
     from bot.keyboards.inline_kb import order_cancel_kb
     await message.answer_photo(
-        photo=await download_qr_photo(qr_url),
+        photo=await build_qr_photo(amount, order_code),
         caption=caption,
         parse_mode="HTML",
         reply_markup=order_cancel_kb(order_id)
@@ -162,7 +174,8 @@ async def _create_topup_order(
     expire_min = await get_setting_int("order_expire_min", 30)
     expired_at = (get_now_vn() + timedelta(minutes=expire_min)).isoformat()
 
-    order_id = await create_order(
+    order, _ = await create_order_idempotent(
+        purchase_nonce=callback_purchase_nonce(callback),
         order_code=order_code,
         user_id=db_user["id"],
         product_type="wallet_topup",
@@ -171,15 +184,17 @@ async def _create_topup_order(
         product_name="Nạp ví",
         expired_at=expired_at,
     )
+    order_id = int(order["id"])
+    order_code = str(order["order_code"])
+    amount = int(order["amount"])
 
-    qr_url = await build_qr_url(amount, order_code)
     caption = await build_qr_caption(amount, order_code, expire_min)
 
     # Xóa message cũ, gửi ảnh QR
     from bot.keyboards.inline_kb import order_cancel_kb
     await callback.message.delete()
     await callback.message.answer_photo(
-        photo=await download_qr_photo(qr_url),
+        photo=await build_qr_photo(amount, order_code),
         caption=caption,
         parse_mode="HTML",
         reply_markup=order_cancel_kb(order_id)

@@ -1,23 +1,21 @@
 # GitNexus And Risk Map
 
-Updated: 2026-06-23
+Updated: 2026-11-09
 
-Local GitNexus index was refreshed with:
+The current `fs` GitNexus entry was indexed on 2026-11-02. `list_repos` reported:
 
 ```bash
 npx gitnexus analyze
 ```
 
-Analyzer output reported:
+- `3,705` nodes
+- `11,968` edges
+- `160` communities
+- `300` processes
 
-- `2,902` nodes
-- `10,213` edges
-- `160` clusters
-- `235` flows
+Use this document as a risk map, not as a replacement for live GitNexus queries. Uncommitted working-tree changes can be newer than the index even when the indexed commit matches `HEAD`.
 
-Use this document as a risk map, not as a replacement for live GitNexus queries. If GitNexus reports the index is stale, re-run analysis before relying on results.
-
-`.gitnexus/` is local generated analysis state. Keep it out of public GitHub, but do not delete it from the working machine unless you are ready to regenerate the index.
+`.gitnexus/` is local generated analysis state. Keep it out of Git, but do not delete it from the working machine unless you are ready to regenerate the index.
 
 ## Required workflow for code edits
 
@@ -53,6 +51,9 @@ gitnexus_detect_changes(scope="all")
 | `apps/platform-control/app/pricing_hub_client.py:pricing_import_control_plane` | Platform-control to portal pricing bridge |
 | `apps/shopbot/bot/services/payment_poller.py` | Payment matching, order status, dedup logic |
 | `apps/shopbot/bot/services/mbbank.py` | Bank scanner integration contract |
+| `apps/shopbot/db/financial_migration.py` | Required financial tables/indexes and migration version |
+| `apps/shopbot/db/queries/orders.py` | Purchase idempotency and order creation |
+| `apps/key-vault-worker/main.py` | Encrypted key retention, upstream polling, internal vault API |
 
 ## Deploy graph notes
 
@@ -62,12 +63,13 @@ Deploy scripts share one library:
 - `deploy-platform-control.sh`
 - `deploy-shopbot.sh`
 - `deploy-proxy-gateway.sh`
+- `deploy-key-vault-worker.sh`
 - `rollback-app.sh`
 
 All source `ops/deploy/lib.sh`, so changes there affect:
 
 - release extraction
-- shared `.env/data/venv` linking
+- shared `.env`/`data` linking and release-local Python virtualenv creation
 - dependency install
 - validation
 - current symlink switching
@@ -101,6 +103,14 @@ Do not merge these token boundaries without a separate security review.
 
 Shopbot is not a child module of platform-control. It owns its DB, bot process, payment poller, admin UI, and fulfillment logic. Platform-control only opens Shopbot admin through signed launch token flow.
 
+The current runtime also supervises fulfillment and notification workers, limits Telegram updates to `message`/`callback_query`, and requires the explicit financial schema before startup/deploy preflight. Purchase creation uses a user-scoped `purchase_nonce` uniqueness guard for pending orders.
+
+## Key vault contract
+
+`key-vault-worker` runs as a separate systemd Python app on the `combined` role. It gets source configuration from `platform-control`, stores encrypted historical key data in its own SQLite DB, and exposes authenticated internal summary/lookup endpoints on `127.0.0.1:8093`.
+
+The deploy validator requires an absolute DB path under `shared/key-vault-worker/data`, valid non-default credentials, and an explicitly initialized vault schema.
+
 MBBank v3 scanner facts:
 
 - request URL is `{MB_API_URL}/{MB_API_KEY}/?version=3`
@@ -126,6 +136,6 @@ Known behavior from prior production debugging:
 
 ## Residual risk
 
-- Some older docs and local runbooks may contain historical VPS output; verify production live state before using them.
-- Public GitHub history may contain old secrets from scratch scripts. Rotate any affected provider tokens rather than relying only on file deletion.
-- During the Singapore ARM migration, verify the new host through role files, `/srv/shupremium-stack`, PM2/systemd state, nginx, and DNS-resolved smoke checks before cutover.
+- Historical inventory/runbook files may contain old VPS output; verify live state before using host-specific values.
+- If repository history contains an old secret, rotate the affected credential rather than relying only on file deletion.
+- GitNexus does not fully model shell deploy behavior; inspect the deploy scripts directly before changing release/restart/rollback logic.

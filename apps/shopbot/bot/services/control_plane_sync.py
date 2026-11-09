@@ -3,22 +3,27 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
+import math
+import hmac
 from typing import Any
 from urllib.parse import urlparse
 
 import aiohttp
 
 from bot.config import settings
-from db.database import get_db
+from db.database import open_write_transaction
 from db.queries.settings import get_setting, get_setting_int, set_setting
-from db.queries.servers import get_all_servers
 
 logger = logging.getLogger(__name__)
 
 REVISION_KEY = "control_plane_applied_revision"
 STATUS_KEY = "control_plane_sync_status"
 ETAG_KEY = "control_plane_snapshot_etag"
+CHECKSUM_KEY = "control_plane_applied_checksum"
+PENDING_ACK_KEY = "control_plane_pending_ack"
 
 
 def _value(source: dict[str, Any], key: str, default: Any = None) -> Any:
@@ -29,6 +34,19 @@ def _value(source: dict[str, Any], key: str, default: Any = None) -> Any:
 def _server_values(source: dict[str, Any], existing: dict[str, Any] | None) -> dict[str, Any]:
     old = existing or {}
     profile = source
+    bot_multiple = source.get("shopbot_quota_multiple")
+    if bot_multiple is None:
+        if existing is None:
+            raise ValueError("New Shopbot source requires a separate quota multiplier")
+        bot_multiple = old.get("quota_multiple")
+        if bot_multiple is None:
+            bot_multiple = 1.0
+    try:
+        bot_multiple = float(bot_multiple)
+    except (TypeError, ValueError):
+        raise ValueError("Invalid Shopbot quota multiplier") from None
+    if not math.isfinite(bot_multiple) or bot_multiple <= 0:
+        raise ValueError("Invalid Shopbot quota multiplier")
     return {
         "name": _value(source, "name", old.get("name", "Unnamed source")),
         "base_url": _value(source, "public_base_url") or _value(source, "upstream_base_url", old.get("base_url", "")),
@@ -36,7 +54,7 @@ def _server_values(source: dict[str, Any], existing: dict[str, Any] | None) -> d
         "access_token": _value(source, "auth_token", old.get("access_token", "")),
         "price_per_unit": int(_value(profile, "price_per_unit", old.get("price_per_unit", 0)) or 0),
         "dollar_per_unit": float(_value(profile, "dollar_per_unit", old.get("dollar_per_unit", 10.0)) or 10.0),
-        "quota_multiple": float(_value(source, "quota_multiple", old.get("quota_multiple", 1.0)) or 1.0),
+        "quota_multiple": bot_multiple,
         "quota_per_unit": int(_value(profile, "quota_per_unit", old.get("quota_per_unit", 0)) or 0),
         "default_group": _value(profile, "default_group", old.get("default_group", "")) or "",
         "sort_order": int(_value(profile, "profile_sort_order", source.get("sort_order", old.get("sort_order", 0))) or 0),
@@ -55,7 +73,7 @@ def _server_values(source: dict[str, Any], existing: dict[str, Any] | None) -> d
         "supports_key_lookup_by_id": int(_value(profile, "supports_key_lookup_by_id", old.get("supports_key_lookup_by_id", 0)) or 0),
         "token_key_endpoint_template": _value(profile, "token_key_endpoint_template", old.get("token_key_endpoint_template", "/api/token/{id}/key")),
         "control_plane_source_id": str(source["id"]),
-        "is_active": 1,
+        "is_active": old.get("is_active", 1),
     }
 
 
@@ -64,9 +82,9 @@ def _validate_snapshot_sources(sources: list[Any]) -> None:
     for source in sources:
         if not isinstance(source, dict):
             raise ValueError("Control-plane snapshot contains a non-object source")
-        source_id = str(source.get("id") or "").strip()
+        source_id = source.get("id")
         name = str(source.get("name") or "").strip()
-        if not source_id or len(source_id) > 128 or source_id in seen:
+        if not isinstance(source_id, str) or not source_id or source_id != source_id.strip() or len(source_id) > 128 or source_id in seen:
             raise ValueError("Control-plane snapshot contains a duplicate or invalid source ID")
         if not name or len(name) > 256:
             raise ValueError(f"Control-plane source {source_id} has an invalid name")
@@ -83,36 +101,74 @@ def _validate_snapshot_sources(sources: list[Any]) -> None:
             value = source.get(field)
             if value is not None:
                 try:
-                    float(value)
+                    numeric = float(value)
                 except (TypeError, ValueError):
                     raise ValueError(f"Control-plane source {source_id} has an invalid {field}") from None
+                if not math.isfinite(numeric):
+                    raise ValueError(f"Control-plane source {source_id} has an invalid {field}")
         seen.add(source_id)
 
 
 async def apply_snapshot(snapshot: dict[str, Any]) -> int:
-    revision = int(snapshot.get("revision") or 0)
-    current_revision = await get_setting_int(REVISION_KEY, 0)
-    if revision <= current_revision:
-        return current_revision
-
+    if not isinstance(snapshot, dict) or type(snapshot.get("revision")) is not int or snapshot["revision"] < 0:
+        raise ValueError("Control-plane snapshot revision is invalid")
+    revision = snapshot["revision"]
     sources = snapshot.get("sources")
     if not isinstance(sources, list):
         raise ValueError("Control-plane snapshot sources must be an array")
+    checksum = snapshot.get("checksum")
+    try:
+        expected = hashlib.sha256(json.dumps(
+            {"revision": revision, "sources": sources}, ensure_ascii=True,
+            sort_keys=True, separators=(",", ":"), default=str,
+        ).encode()).hexdigest()
+    except (ValueError, TypeError):
+        raise ValueError("Control-plane snapshot cannot be checksummed") from None
+    if not isinstance(checksum, str) or len(checksum) != 64 or any(c not in "0123456789abcdef" for c in checksum) or not hmac.compare_digest(expected, checksum):
+        raise ValueError("Control-plane snapshot checksum is invalid")
     _validate_snapshot_sources(sources)
 
-    existing_rows = await get_all_servers()
-    by_source = {str(row.get("control_plane_source_id")): row for row in existing_rows if row.get("control_plane_source_id")}
-    db = await get_db()
-    await db.execute("BEGIN")
+    db = await open_write_transaction()
     try:
+        cursor = await db.execute("SELECT value FROM settings WHERE key = ?", (REVISION_KEY,))
+        row = await cursor.fetchone()
+        current_revision = int(row["value"]) if row and row["value"] else 0
+        cursor = await db.execute("SELECT value FROM settings WHERE key = ?", (CHECKSUM_KEY,))
+        checksum_row = await cursor.fetchone()
+        current_checksum = checksum_row["value"] if checksum_row else None
+        if revision < current_revision:
+            await db.rollback()
+            return current_revision
+        if revision == current_revision and current_checksum:
+            if not hmac.compare_digest(current_checksum, checksum):
+                raise ValueError("Control-plane checksum changed without a new revision")
+            await db.rollback()
+            return current_revision
+
+        cursor = await db.execute("SELECT * FROM api_servers")
+        existing_rows = [dict(row) for row in await cursor.fetchall()]
+        by_source = {str(row["control_plane_source_id"]): row for row in existing_rows if row.get("control_plane_source_id")}
+        unlinked = [row for row in existing_rows if not row.get("control_plane_source_id")]
+        for source in sources:
+            if str(source["id"]) in by_source:
+                continue
+            source_hosts = {
+                urlparse(str(source.get(field) or "")).hostname
+                for field in ("upstream_base_url", "public_base_url")
+            } - {None}
+            source_name = str(source.get("name") or "").strip().casefold()
+            for old in unlinked:
+                legacy_host = urlparse(str(old.get("base_url") or "")).hostname
+                legacy_name = str(old.get("name") or "").strip().casefold()
+                if (legacy_host and legacy_host in source_hosts) or (legacy_name and legacy_name == source_name):
+                    raise ValueError("Control-plane source may duplicate an unmapped Shopbot server; review mapping first")
+
         seen: set[str] = set()
         for source in sources:
-            if not isinstance(source, dict) or not source.get("id"):
-                raise ValueError("Control-plane snapshot contains an invalid source")
             source_id = str(source["id"])
             seen.add(source_id)
-            values = _server_values(source, by_source.get(source_id))
             existing = by_source.get(source_id)
+            values = _server_values(source, existing)
             if existing:
                 assignments = ", ".join(f"{key} = ?" for key in values)
                 await db.execute(
@@ -127,20 +183,54 @@ async def apply_snapshot(snapshot: dict[str, Any]) -> int:
                     list(values.values()),
                 )
 
-        for source_id, row in by_source.items():
+        for source_id, old in by_source.items():
             if source_id not in seen:
                 await db.execute(
                     "UPDATE api_servers SET is_active = 0, updated_at = datetime('now', '+7 hours') WHERE id = ?",
-                    (row["id"],),
+                    (old["id"],),
                 )
+        pending_ack = json.dumps([revision, checksum], separators=(",", ":"))
+        for key, value in ((REVISION_KEY, str(revision)), (CHECKSUM_KEY, checksum), (PENDING_ACK_KEY, pending_ack), (STATUS_KEY, "healthy")):
+            await db.execute(
+                """INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now', '+7 hours'))
+                   ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at""",
+                (key, value),
+            )
         await db.commit()
-    except Exception:
+        return revision
+    except BaseException:
         await db.rollback()
         raise
+    finally:
+        await db.close()
 
-    await set_setting(REVISION_KEY, str(revision))
-    await set_setting(STATUS_KEY, "healthy")
-    return revision
+
+async def _ack_pending(client: aiohttp.ClientSession, headers: dict[str, str]) -> None:
+    pending = await get_setting(PENDING_ACK_KEY)
+    if not pending:
+        return
+    try:
+        revision, checksum = json.loads(pending)
+        if type(revision) is not int or revision < 0 or not isinstance(checksum, str) or len(checksum) != 64:
+            raise ValueError
+    except (TypeError, ValueError):
+        raise ValueError("Stored control-plane acknowledgement is invalid") from None
+    async with client.post(
+        f"{settings.platform_admin_url.rstrip('/')}/api/internal/config/consumers/shopbot/status",
+        json={"revision": revision, "status": "healthy", "checksum": checksum},
+        headers=headers,
+        timeout=aiohttp.ClientTimeout(total=10),
+    ) as response:
+        response.raise_for_status()
+    db = await open_write_transaction()
+    try:
+        await db.execute("DELETE FROM settings WHERE key = ? AND value = ?", (PENDING_ACK_KEY, pending))
+        await db.commit()
+    except BaseException:
+        await db.rollback()
+        raise
+    finally:
+        await db.close()
 
 
 async def sync_once(session: aiohttp.ClientSession | None = None) -> int | None:
@@ -153,7 +243,8 @@ async def sync_once(session: aiohttp.ClientSession | None = None) -> int | None:
     try:
         headers = {"X-Control-Plane-Token": settings.portal_internal_token}
         etag = await get_setting(ETAG_KEY)
-        if etag:
+        applied_checksum = await get_setting(CHECKSUM_KEY)
+        if applied_checksum and etag == f'"{applied_checksum}"':
             headers["If-None-Match"] = etag
         async with client.get(
             url,
@@ -161,37 +252,35 @@ async def sync_once(session: aiohttp.ClientSession | None = None) -> int | None:
             timeout=aiohttp.ClientTimeout(total=20),
         ) as response:
             if response.status == 304:
+                if "If-None-Match" not in headers:
+                    raise ValueError("Control-plane returned 304 without a verified local snapshot")
+                await _ack_pending(client, headers)
                 await set_setting(STATUS_KEY, "healthy")
                 return await get_setting_int(REVISION_KEY, 0)
             response.raise_for_status()
             snapshot = await response.json()
             response_etag = response.headers.get("ETag", "")
+        if response_etag and (not isinstance(snapshot, dict) or response_etag != f'"{snapshot.get("checksum", "")}"'):
+            raise ValueError("Control-plane ETag does not match the snapshot checksum")
         revision = await apply_snapshot(snapshot)
+        if revision != int(snapshot.get("revision") or 0):
+            raise ValueError("Control-plane snapshot revision is older than applied configuration")
         if response_etag:
             await set_setting(ETAG_KEY, response_etag)
-        if revision:
-            try:
-                async with client.post(
-                    f"{settings.platform_admin_url.rstrip('/')}/api/internal/config/consumers/shopbot/status",
-                    json={"revision": revision, "status": "healthy", "checksum": snapshot.get("checksum", "")},
-                    headers={"X-Control-Plane-Token": settings.portal_internal_token},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ):
-                    pass
-            except Exception:
-                logger.warning("Unable to acknowledge control-plane revision %s", revision)
+        await _ack_pending(client, {"X-Control-Plane-Token": settings.portal_internal_token})
         return revision
     except Exception as exc:
         await set_setting(STATUS_KEY, "degraded")
-        logger.warning("Control-plane sync degraded: %s", exc)
+        logger.warning("Control-plane sync degraded (%s)", type(exc).__name__)
         if isinstance(snapshot, dict):
             try:
-                await client.post(
+                async with client.post(
                     f"{settings.platform_admin_url.rstrip('/')}/api/internal/config/consumers/shopbot/status",
-                    json={"revision": int(snapshot.get("revision") or 0), "status": "degraded", "error": str(exc)[:1000]},
+                    json={"revision": int(snapshot.get("revision") or 0), "status": "degraded", "error": type(exc).__name__},
                     headers={"X-Control-Plane-Token": settings.portal_internal_token},
                     timeout=aiohttp.ClientTimeout(total=10),
-                )
+                ) as response:
+                    response.raise_for_status()
             except Exception:
                 pass
         return None

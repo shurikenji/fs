@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form, entity_state_checkbox %}
+{% from "_entity_controls.html" import entity_state_badge, entity_toggle_form, entity_state_checkbox with context %}
 {% block title %}API Sources & Group Policy{% endblock %}
 {% block content %}
 
@@ -141,7 +141,7 @@
                             data-edit-modal-url="/servers/{{ s.id }}/edit-modal"
                             data-edit-modal-init="initializeServerEditModal"
                         >Edit</a>
-                        <a href="/servers/{{ s.id }}/delete" class="btn btn-sm btn-outline-danger" onclick="return confirmDelete()">Delete</a>
+                        <form method="POST" action="/servers/{{ s.id }}/delete" onsubmit="return confirmDelete()"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-sm btn-outline-danger">Delete</button></form>
                     </div>
                 </td>
             </tr>
@@ -162,7 +162,7 @@
 <div class="modal fade" id="addModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <form method="POST" action="/servers/add" id="addForm">
+            <form method="POST" action="/servers/add" id="addForm"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div class="modal-header">
                     <h5 class="modal-title">Create API Source</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -361,7 +361,7 @@
             </div>
         </div>
         <div class="d-flex gap-2">
-            <form method="POST" action="/servers/{{ groups_server.id }}/groups/refresh">
+            <form method="POST" action="/servers/{{ groups_server.id }}/groups/refresh"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <button type="submit" class="btn btn-sm btn-outline-primary">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="23 4 23 10 17 10"></polyline>
@@ -384,7 +384,9 @@
         </div>
         {% endif %}
 
-        <form method="POST" action="/servers/{{ groups_server.id }}/groups/save" id="groupsConfigForm">
+        {% if groups_server.control_plane_source_id %}<div class="alert alert-warning">Group policy do Control quản lý; hãy sửa tại Control.</div>{% endif %}
+        <form method="POST" action="/servers/{{ groups_server.id }}/groups/save" id="groupsConfigForm"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
+            <fieldset {% if groups_server.control_plane_source_id %}disabled{% endif %}>
             <div class="mb-3">
                     <label class="form-label">Available Groups</label>{{ field_tooltip("Chọn các group sẽ tạo thành policy mặc định của API Source.") }}
                 {% if groups_data %}
@@ -483,6 +485,7 @@
                     data-edit-modal-init="initializeServerEditModal"
                 >Edit Source</a>
             </div>
+            </fieldset>
         </form>
 
     </div>

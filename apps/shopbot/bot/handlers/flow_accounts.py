@@ -25,10 +25,11 @@ from bot.keyboards.inline_kb import back_only_kb, categories_kb, payment_method_
 from bot.services.pricing_resolver import quote_non_api_product
 from bot.utils.formatting import format_vnd
 from bot.utils.order_code import generate_order_code
+from bot.utils.purchase_nonce import callback_purchase_nonce
 from bot.utils.time_utils import get_now_vn
 
 from db.queries.categories import get_active_categories
-from db.queries.orders import create_order, update_order_status
+from db.queries.orders import create_order_idempotent, update_order_status
 from db.queries.products import get_active_products_by_category, get_product_by_id
 from db.queries.settings import get_setting_int
 from db.queries.wallets import get_balance
@@ -151,6 +152,7 @@ async def _create_upgrade_order(
     db_user: dict,
     product: dict,
     user_input: str,
+    purchase_nonce: str,
 ) -> tuple[int, str, int, str]:
     product_name = product.get("name") or "Dịch vụ"
     product_type = product.get("product_type") or "service_upgrade"
@@ -161,7 +163,8 @@ async def _create_upgrade_order(
     expire_min = await get_setting_int("order_expire_min", 30)
     expired_at = (get_now_vn() + timedelta(minutes=expire_min)).isoformat()
 
-    order_id = await create_order(
+    order, _ = await create_order_idempotent(
+        purchase_nonce=purchase_nonce,
         order_code=order_code,
         user_id=db_user["id"],
         product_id=product["id"],
@@ -181,6 +184,9 @@ async def _create_upgrade_order(
             else None
         ),
     )
+    order_id = int(order["id"])
+    order_code = str(order["order_code"])
+    price_vnd = int(order["amount"])
 
     await update_order_status(
         order_id,
@@ -366,6 +372,7 @@ async def upgrade_user_input_confirm(
         db_user=db_user,
         product=product,
         user_input=user_input,
+        purchase_nonce=callback_purchase_nonce(callback),
     )
     balance = await get_balance(db_user["id"])
     show_qr = price_vnd >= 1000

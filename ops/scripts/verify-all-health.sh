@@ -13,6 +13,12 @@ source "$DEPLOY_DIR/lib.sh"
 source "$MANIFEST_FILE"
 
 HOST_ROLE_VALUE="$(resolve_host_role "${1:-}")"
+case "$HOST_ROLE_VALUE" in
+  arm) EXPECTED_COUNT=3 ;;
+  shopbot) EXPECTED_COUNT=1 ;;
+  combined) EXPECTED_COUNT=5 ;;
+  *) echo "Unsupported host role: $HOST_ROLE_VALUE" >&2; exit 1 ;;
+esac
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -46,7 +52,7 @@ run_app_health_check() {
   local output
 
   load_app_config "$app"
-  if [[ "$HOST_ROLE" != "$HOST_ROLE_VALUE" ]]; then
+  if [[ "$HOST_ROLE_VALUE" != "combined" && "$HOST_ROLE" != "$HOST_ROLE_VALUE" ]]; then
     return 0
   fi
 
@@ -57,6 +63,9 @@ run_app_health_check() {
 
   if output="$(
     run_runtime_smoke_checks
+    if [[ "$HOST_ROLE_VALUE" == "combined" && "$APP_ID" == "shopbot" ]]; then
+      SMOKE_URLS='http://127.0.0.1:8092/health|200' run_http_smoke_checks
+    fi
   )" 2>&1; then
     print_result ok "$APP_ID" "Healthy"
     if [[ -n "$output" ]]; then
@@ -81,8 +90,12 @@ while IFS= read -r app; do
   echo ""
 done < <(list_manifest_apps)
 
+if [[ $((PASS_COUNT + FAIL_COUNT)) -ne "$EXPECTED_COUNT" ]]; then
+  print_result fail "health-verifier" "Expected $EXPECTED_COUNT app checks; manifest may be incomplete"
+fi
+
 echo "Summary: $PASS_COUNT passed, $FAIL_COUNT failed"
 
-if [[ "$FAIL_COUNT" -gt 0 ]]; then
+if [[ "$FAIL_COUNT" -gt 0 || "$PASS_COUNT" -eq 0 ]]; then
   exit 1
 fi

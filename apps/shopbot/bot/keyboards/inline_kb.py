@@ -471,12 +471,13 @@ def wallet_menu_kb() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+WALLET_TOPUP_PRESET_AMOUNTS = (50_000, 100_000, 200_000, 500_000, 1_000_000)
+
+
 def wallet_topup_amounts_kb() -> InlineKeyboardMarkup:
     """Inline keyboard chọn số tiền nạp ví (preset + custom)."""
-    presets = [50_000, 100_000, 200_000, 500_000, 1_000_000]
-
     builder = InlineKeyboardBuilder()
-    for amt in presets:
+    for amt in WALLET_TOPUP_PRESET_AMOUNTS:
         builder.button(
             text=format_vnd(amt),
             callback_data=WalletTopupAmountCB(amount=amt),

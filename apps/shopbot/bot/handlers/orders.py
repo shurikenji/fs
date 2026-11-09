@@ -194,7 +194,9 @@ async def cancel_order_cb(
         await callback.answer(_cannot_cancel_order_text(), show_alert=True)
         return
 
-    await cancel_order(order["id"])
+    if not await cancel_order(order["id"]):
+        await callback.answer(_cannot_cancel_order_text(), show_alert=True)
+        return
     cancel_text = _cancelled_order_text(order)
     if callback.message.photo:
         await callback.message.edit_caption(

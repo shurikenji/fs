@@ -84,7 +84,7 @@ async def adjust_wallet(request: Request, user_id: Annotated[int, Path()]) -> Re
     return RedirectResponse(f"/users/{user_id}", status_code=303)
 
 
-@router.get("/{user_id}/toggle-admin")
+@router.post("/{user_id}/toggle-admin")
 async def toggle_admin(user_id: Annotated[int, Path()]) -> RedirectResponse:
     user = await get_user_by_id(user_id)
     if user:
@@ -92,7 +92,7 @@ async def toggle_admin(user_id: Annotated[int, Path()]) -> RedirectResponse:
     return RedirectResponse(f"/users/{user_id}", status_code=303)
 
 
-@router.get("/{user_id}/toggle-ban")
+@router.post("/{user_id}/toggle-ban")
 async def toggle_ban(user_id: Annotated[int, Path()]) -> RedirectResponse:
     user = await get_user_by_id(user_id)
     if user:
@@ -100,7 +100,7 @@ async def toggle_ban(user_id: Annotated[int, Path()]) -> RedirectResponse:
     return RedirectResponse(f"/users/{user_id}", status_code=303)
 
 
-@router.get("/{user_id}/toggle-discounts")
+@router.post("/{user_id}/toggle-discounts")
 async def toggle_discounts(user_id: Annotated[int, Path()]) -> RedirectResponse:
     user = await get_user_by_id(user_id)
     if user:

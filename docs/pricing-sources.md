@@ -1,10 +1,10 @@
 # Pricing Source Configuration Reference
 
-Updated: 2026-06-23
+Updated: 2026-11-09
 
 This file documents how pricing sources should be configured. It intentionally does not store production tokens, cookies, API keys, or provider credentials.
 
-GitHub is currently public. Treat every value in this document as public-safe example data only.
+Treat every value in this document as public-safe example data only, regardless of repository visibility.
 
 ## Where sources are managed
 
@@ -45,19 +45,19 @@ platform-control
 | `hidden_groups_json` | Groups hidden from public output |
 | `excluded_models_json` | Models hidden from public output |
 
-## Active source IDs
+## Known source IDs
 
-Current active IDs known from production docs and memory:
+These IDs and public domains are established repository/runtime conventions. They are not a live production inventory; verify current enablement and upstream settings in `platform-control` before changing production.
 
 | ID | Public base URL | Notes |
 | --- | --- | --- |
 | `gpt1` | `https://gpt1.shupremium.com` | NewAPI/catalog-list style |
 | `gpt2` | `https://gpt2.shupremium.com` | RixAPI/inline ratio style |
-| `gpt3` | `https://gpt3.shupremium.com` | Proxy runtime exists; verify pricing source before editing |
+| `gpt3` | `https://gpt3.shupremium.com` | Verify current pricing source before editing |
 | `gpt4` | `https://gpt4.shupremium.com` | NewAPI/catalog-list style |
 | `gpt5` | `https://gpt5.shupremium.com` | NewAPI/catalog-list style |
 | `sv1` | `https://sv1.shupremium.com` | Yunwu/NewAPI-like payload behavior |
-| `sv2` | `https://sv2.shupremium.com` | Proxy runtime exists; verify pricing source before editing |
+| `sv2` | `https://sv2.shupremium.com` | Verify current pricing source before editing |
 
 Do not treat this table as a credential source. Verify live values in `platform-control` before production changes.
 
@@ -88,7 +88,7 @@ Excluded models JSON: []
 
 - Never paste real tokens into Markdown.
 - Never commit screenshots or copied admin pages containing tokens.
-- If a token was committed to public GitHub, rotate it at the provider immediately.
+- If a token was committed to Git history, rotate it at the provider immediately.
 - Keep source IDs stable because order history, pricing cache, and admin workflows may reference them.
 - Preserve `quota_multiple` in pricing output.
 - Prefer payload-shape detection over trusting only the configured `source_type`.

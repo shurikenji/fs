@@ -4,6 +4,7 @@ admin/deps.py - Shared helpers and dependencies for admin routers.
 from __future__ import annotations
 
 import math
+import secrets
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -32,6 +33,7 @@ def get_templates() -> Jinja2Templates:
         _templates.env.globals["status_emoji"] = status_emoji
         _templates.env.globals["status_text_vi"] = status_text_vi
         _templates.env.globals["platform_admin_url"] = settings.platform_admin_url.rstrip("/")
+        _templates.env.globals["csrf_token"] = csrf_token
         _templates.env.filters["time_vn"] = format_time_vn
     return _templates
 
@@ -52,12 +54,40 @@ async def get_admin_or_redirect(request: Request) -> Optional[dict]:
     return request.session.get("admin")
 
 
+def csrf_token(request: Request) -> str:
+    token = request.session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        request.session["csrf_token"] = token
+    return token
+
+
+async def verify_csrf(request: Request) -> None:
+    if request.method in {"GET", "HEAD", "OPTIONS"}:
+        return
+    expected = request.session.get("csrf_token")
+    provided = request.headers.get("x-csrf-token", "")
+    if not provided:
+        content_type = request.headers.get("content-type", "")
+        if "application/json" in content_type:
+            try:
+                payload = await request.json()
+            except ValueError:
+                payload = {}
+            provided = str(payload.get("csrf_token") or "") if isinstance(payload, dict) else ""
+        else:
+            form = await request.form()
+            provided = str(form.get("csrf_token") or "")
+    if not isinstance(expected, str) or not provided or not secrets.compare_digest(provided.encode(), expected.encode()):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+
+
 def protected_router(*, prefix: str = "", tags: list[str] | None = None) -> APIRouter:
     """Create an admin router protected by the session dependency."""
     return APIRouter(
         prefix=prefix,
         tags=tags,
-        dependencies=[Depends(require_admin)],
+        dependencies=[Depends(require_admin), Depends(verify_csrf)],
     )
 
 

@@ -16,6 +16,7 @@ with tempfile.TemporaryDirectory() as temp_dir:
     import main
 
     async def check() -> None:
+        main.DB_PATH.touch(mode=0o600, exist_ok=False)
         await main.init_db()
         await main._record_success(
             {"id": "source-1"},

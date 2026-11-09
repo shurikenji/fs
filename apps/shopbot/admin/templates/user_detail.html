@@ -76,15 +76,15 @@
                 </table>
             </div>
             <div class="card-body" style="border-top: 1px solid var(--border);">
-                <a href="/users/{{ user.id }}/toggle-admin" class="btn btn-outline-primary btn-sm">
+                <form method="POST" action="/users/{{ user.id }}/toggle-admin" style="display:inline-block"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-outline-primary btn-sm">
                     {{ 'Remove Admin Access' if user.is_admin else 'Grant Admin Access' }}
-                </a>
-                <a href="/users/{{ user.id }}/toggle-ban" class="btn btn-outline-danger btn-sm">
+                </button></form>
+                <form method="POST" action="/users/{{ user.id }}/toggle-ban" style="display:inline-block"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-outline-danger btn-sm">
                     {{ 'Unlock Account' if user.is_banned else 'Lock Account' }}
-                </a>
-                <a href="/users/{{ user.id }}/toggle-discounts" class="btn btn-outline-warning btn-sm">
+                </button></form>
+                <form method="POST" action="/users/{{ user.id }}/toggle-discounts" style="display:inline-block"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}"><button class="btn btn-outline-warning btn-sm">
                     {{ 'Re-enable Discounts' if user.disable_discounts else 'Disable Discounts' }}
-                </a>
+                </button></form>
             </div>
         </div>
     </div>
@@ -98,7 +98,7 @@
                 <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-bottom: 1rem;">
                     {{ format_vnd(wallet.balance) }}
                 </div>
-                <form method="POST" action="/users/{{ user.id }}/adjust-wallet">
+                <form method="POST" action="/users/{{ user.id }}/adjust-wallet"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                     <div class="row g-2">
                         <div class="col-8">
                             <label class="form-label">Adjustment amount</label>{{ field_tooltip("Nhập số dương để cộng hoặc số âm để trừ số dư ví của khách hàng.") }}

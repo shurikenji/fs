@@ -10,13 +10,13 @@ from db.queries._helpers import execute_commit, fetch_all_dicts, fetch_one_dict,
 
 _PRODUCT_WITH_REAL_STOCK_QUERY = """
     SELECT p.*,
-           (SELECT COUNT(id) FROM account_stocks WHERE product_id = p.id AND is_sold = 0) as real_stock
+           (SELECT COUNT(id) FROM account_stocks WHERE product_id = p.id AND is_sold = 0 AND (sold_order_id IS NULL OR sold_order_id = 0)) as real_stock
     FROM products p
 """
 
 _PRODUCT_WITH_CATEGORY_QUERY = """
     SELECT p.*,
-           (SELECT COUNT(id) FROM account_stocks WHERE product_id = p.id AND is_sold = 0) as real_stock,
+           (SELECT COUNT(id) FROM account_stocks WHERE product_id = p.id AND is_sold = 0 AND (sold_order_id IS NULL OR sold_order_id = 0)) as real_stock,
            COALESCE(c.sort_order, 0) as cat_sort_order,
            COALESCE(c.name, '') as cat_sort_name
     FROM products p

@@ -5,7 +5,8 @@ list_manifest_apps() {
     portal \
     platform-control \
     shopbot \
-    proxy-gateway
+    proxy-gateway \
+    key-vault-worker
 }
 
 app_manifest() {
@@ -61,6 +62,17 @@ app_manifest() {
       RUNTIME_KIND="systemd-python"
       SYSTEMD_UNIT="shopbot"
       PYTHON_REQUIREMENTS="requirements.txt"
+      ;;
+    key-vault-worker)
+      APP_ID="key-vault-worker"
+      HOST_ROLE="combined"
+      SOURCE_PATH="apps/key-vault-worker"
+      SOURCE_STRIP_COMPONENTS="2"
+      SHARED_NAME="key-vault-worker"
+      RUNTIME_KIND="systemd-python"
+      SYSTEMD_UNIT="key-vault-worker"
+      PYTHON_REQUIREMENTS="requirements.txt"
+      SMOKE_URLS='http://127.0.0.1:8093/health|200'
       ;;
     proxy-gateway)
       APP_ID="proxy-gateway"

@@ -81,7 +81,7 @@ async def account_stock_add(request: Request):
     return RedirectResponse("/account-stock", status_code=303)
 
 
-@router.get("/{account_id}/delete")
+@router.post("/{account_id}/delete")
 async def account_stock_delete(account_id: Annotated[int, Path()]):
     await delete_account(account_id)
     return RedirectResponse("/account-stock", status_code=303)

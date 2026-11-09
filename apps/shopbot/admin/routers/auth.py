@@ -4,13 +4,14 @@ IP-based throttling helps reduce brute-force attempts.
 """
 from __future__ import annotations
 
-import hashlib
 import time
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from admin.deps import get_templates
+from admin.deps import get_templates, verify_csrf
+from admin.passwords import hash_password, verify_password
+from db.database import open_write_transaction
 from db.queries.settings import get_setting
 from bot.config import settings
 
@@ -19,11 +20,6 @@ router = APIRouter(tags=["auth"])
 _login_attempts: dict[str, dict] = {}
 MAX_ATTEMPTS = 5
 LOCKOUT_MINUTES = 5
-
-
-def _hash_password(raw_password: str) -> str:
-    """Hash the password before comparison to avoid plaintext-only checks."""
-    return hashlib.sha256(raw_password.encode("utf-8")).hexdigest()
 
 
 @router.get(settings.admin_login_path, response_class=HTMLResponse)
@@ -37,7 +33,7 @@ async def login_page(request: Request):
     )
 
 
-@router.post(settings.admin_login_path)
+@router.post(settings.admin_login_path, dependencies=[Depends(verify_csrf)])
 async def login_submit(request: Request):
     client_ip = request.client.host if request.client else "unknown"
     now = time.time()
@@ -61,12 +57,30 @@ async def login_submit(request: Request):
     form = await request.form()
     password = form.get("password", "")
 
-    saved_password = await get_setting("admin_password") or "admin123"
-
-    hashed_input = _hash_password(password)
-    is_valid = (password == saved_password) or (hashed_input == saved_password)
+    saved_password = await get_setting("admin_password") or ""
+    is_valid, needs_rehash = verify_password(password, saved_password)
 
     if is_valid:
+        if needs_rehash:
+            db = await open_write_transaction()
+            try:
+                cursor = await db.execute(
+                    """UPDATE settings SET value = ?, updated_at = datetime('now', '+7 hours')
+                       WHERE key = 'admin_password' AND value = ?""",
+                    (hash_password(password), saved_password),
+                )
+                if cursor.rowcount != 1:
+                    await db.rollback()
+                    is_valid = False
+                else:
+                    await db.commit()
+            except BaseException:
+                await db.rollback()
+                raise
+            finally:
+                await db.close()
+    if is_valid:
+        request.session.clear()
         request.session["admin"] = {"source": "password"}
         _login_attempts.pop(client_ip, None)
         return RedirectResponse("/", status_code=303)
@@ -89,7 +103,7 @@ async def login_submit(request: Request):
     )
 
 
-@router.get("/logout")
+@router.post("/logout", dependencies=[Depends(verify_csrf)])
 async def logout(request: Request):
     request.session.clear()
     return RedirectResponse(settings.admin_login_path, status_code=303)

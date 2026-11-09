@@ -6,16 +6,10 @@ from __future__ import annotations
 import math
 from typing import Annotated
 
-from fastapi import Path, Request
+from fastapi import HTTPException, Path, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from admin.deps import get_templates, protected_router
-from bot.services.admin_order_notifications import (
-    notify_admin_order_refunded,
-    notify_admin_service_completed,
-)
-from bot.services.notifier import notify_user
-from bot.services.spend_ledger import SpendLedgerService
 from bot.utils.formatting import format_vnd
 from db.queries.logs import add_log
 from db.queries.orders import (
@@ -23,13 +17,12 @@ from db.queries.orders import (
     count_all_orders,
     get_all_orders,
     get_order_by_id,
-    update_order_status,
 )
 from db.queries.servers import get_server_by_id
 from db.queries.wallets import refund_order_to_wallet
 
 router = protected_router(prefix="/orders", tags=["orders"])
-_REFUNDABLE_ORDER_STATUSES = frozenset({"paid", "processing", "completed"})
+_REFUNDABLE_ORDER_STATUSES = frozenset({"paid"})
 
 
 def _redirect_to_orders() -> RedirectResponse:
@@ -51,21 +44,10 @@ def _can_refund_order(order: dict) -> bool:
     return (
         order["status"] in _REFUNDABLE_ORDER_STATUSES
         and order["product_type"] != "wallet_topup"
-    )
-
-
-def _completed_service_upgrade_message(order: dict) -> str:
-    return (
-        f"✅ Đơn dịch vụ <b>{order['order_code']}</b> của bạn đã được Admin xử lý hoàn tất!\n\n"
-        "🎉 Cảm ơn bạn đã sử dụng dịch vụ."
-    )
-
-
-def _refund_notification_message(order: dict, new_balance: int) -> str:
-    return (
-        f"↩️ Đơn <b>{order['order_code']}</b> đã bị hủy.\n\n"
-        f"💳 Bạn được hoàn <b>{format_vnd(order['amount'])}</b> vào số dư ví.\n"
-        f"👛 Số dư mới: <b>{format_vnd(new_balance)}</b>"
+        and not order.get("is_refunded")
+        and not order.get("api_key")
+        and not order.get("delivery_info")
+        and not order.get("api_token_name")
     )
 
 
@@ -99,6 +81,35 @@ async def orders_list(request: Request):
     )
 
 
+@router.get("/reconciliation", response_class=HTMLResponse)
+async def reconciliation_page(request: Request):
+    """Show bounded financial work needing an operator's attention."""
+    from db.database import get_db
+
+    db = await get_db()
+    cursor = await db.execute(
+        """SELECT id, transaction_id, amount, transaction_time, order_code, status, last_error
+           FROM payment_receipts WHERE status IN ('unmatched', 'late', 'needs_review')
+           ORDER BY id DESC LIMIT 100"""
+    )
+    receipts = [dict(row) for row in await cursor.fetchall()]
+    cursor = await db.execute(
+        """SELECT j.id, j.status, j.last_error, o.id AS order_id, o.order_code, o.product_type
+           FROM fulfillment_jobs j JOIN orders o ON o.id = j.order_id
+           WHERE j.status IN ('pending', 'processing', 'needs_review') ORDER BY j.id DESC LIMIT 100"""
+    )
+    jobs = [dict(row) for row in await cursor.fetchall()]
+    cursor = await db.execute(
+        """SELECT id, event_type, order_id, attempts, last_error FROM notification_outbox
+           WHERE status = 'failed' ORDER BY id DESC LIMIT 100"""
+    )
+    failed_notifications = [dict(row) for row in await cursor.fetchall()]
+    return get_templates().TemplateResponse(
+        "reconciliation.html",
+        {"request": request, "receipts": receipts, "jobs": jobs, "failed_notifications": failed_notifications},
+    )
+
+
 @router.get("/{order_id}", response_class=HTMLResponse)
 async def order_detail(request: Request, order_id: Annotated[int, Path()]):
     order = await get_order_by_id(order_id)
@@ -110,10 +121,22 @@ async def order_detail(request: Request, order_id: Annotated[int, Path()]):
         if server:
             server_name = server.get("name")
 
+    can_reconcile_topup = False
+    if order["product_type"] == "key_topup" and order["status"] == "processing" and order.get("quantity") == 1:
+        from db.database import get_db
+
+        db = await get_db()
+        cursor = await db.execute(
+            """SELECT 1 FROM fulfillment_jobs j WHERE j.order_id = ? AND j.status = 'needs_review'
+               AND NOT EXISTS (SELECT 1 FROM fulfillment_operations f WHERE f.job_id = j.id)""", (order_id,)
+        )
+        can_reconcile_topup = await cursor.fetchone() is not None
+
     templates = get_templates()
     return templates.TemplateResponse(
         "order_detail.html",
-        {"request": request, "order": order, "server_name": server_name},
+        {"request": request, "order": order, "server_name": server_name, "can_refund": _can_refund_order(order),
+         "can_reconcile_topup": can_reconcile_topup},
     )
 
 
@@ -124,21 +147,40 @@ async def order_complete(order_id: Annotated[int, Path()]):
     if isinstance(order, RedirectResponse):
         return order
 
-    await update_order_status(order_id, "completed")
-    await notify_user(order["user_id"], _completed_service_upgrade_message(order))
-    completed_order = await get_order_by_id(order_id)
-    if completed_order:
-        await notify_admin_service_completed(completed_order)
+    from db.queries.fulfillment import complete_manual_service
+
+    await complete_manual_service(order_id)
     return _redirect_to_order_detail(order_id)
 
 
-@router.get("/{order_id}/cancel")
+@router.post("/{order_id}/complete-manual-topup")
+async def manual_topup_complete(request: Request, order_id: Annotated[int, Path()]):
+    from db.queries.manual_topup import complete_manual_topup
+
+    form = await request.form()
+    if form.get("confirmed") != "yes":
+        raise HTTPException(status_code=400, detail="Cần xác nhận đã kiểm tra upstream")
+    admin = request.session.get("admin") or {}
+    try:
+        completed = await complete_manual_topup(
+            order_id, int(form.get("token_id", "")), int(form.get("total_before", "")),
+            int(form.get("total_after", "")), int(form.get("quota_added", "")),
+            str(form.get("evidence", "")), str(admin.get("source", "")),
+        )
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Dữ liệu không hợp lệ hoặc cần kiểm tra thêm") from None
+    if not completed:
+        raise HTTPException(status_code=409, detail="Đơn chưa ở trạng thái có thể đối soát hoặc đã được xử lý")
+    return _redirect_to_order_detail(order_id)
+
+
+@router.post("/{order_id}/cancel")
 async def order_cancel(order_id: Annotated[int, Path()]):
     await cancel_order(order_id)
     return _redirect_to_order_detail(order_id)
 
 
-@router.get("/{order_id}/refund")
+@router.post("/{order_id}/refund")
 async def order_refund(order_id: Annotated[int, Path()]):
     """Refund a paid order back to the user's wallet."""
     order = await _get_order_or_redirect(order_id)
@@ -156,15 +198,8 @@ async def order_refund(order_id: Annotated[int, Path()]):
     )
     if new_balance is None:
         return _redirect_to_order_detail(order_id)
-    await SpendLedgerService.record_order_refund(order)
-
     await add_log(
         f"Admin refunded order {order['order_code']}, amount {format_vnd(order['amount'])}",
         module="admin",
     )
-    await notify_user(order["user_id"], _refund_notification_message(order, new_balance))
-    refunded_order = await get_order_by_id(order_id)
-    if refunded_order:
-        await notify_admin_order_refunded(refunded_order, reason="Admin refund")
-
     return _redirect_to_order_detail(order_id)

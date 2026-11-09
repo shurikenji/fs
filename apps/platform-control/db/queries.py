@@ -52,18 +52,17 @@ async def record_consumer_sync_status(
     db = await get_db()
     await db.execute(
         """
-        INSERT INTO consumer_sync_state (consumer_id, desired_revision, applied_revision, applied_checksum, status, error_message, last_synced_at)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-        ON CONFLICT(consumer_id) DO UPDATE SET
-            applied_revision = MAX(consumer_sync_state.applied_revision, excluded.applied_revision),
-            applied_checksum = CASE WHEN excluded.applied_revision >= consumer_sync_state.applied_revision
-                                    THEN excluded.applied_checksum ELSE consumer_sync_state.applied_checksum END,
-            status = excluded.status,
-            error_message = excluded.error_message,
+        UPDATE consumer_sync_state SET
+            applied_revision = CASE WHEN ? = 'healthy' THEN ? ELSE applied_revision END,
+            applied_checksum = CASE WHEN ? = 'healthy' THEN ? ELSE applied_checksum END,
+            status = ?,
+            error_message = ?,
             last_synced_at = datetime('now'),
             updated_at = datetime('now')
+        WHERE consumer_id = ? AND desired_revision = ?
+          AND (? <> 'healthy' OR (desired_checksum IS NOT NULL AND desired_checksum = ?))
         """,
-        (consumer_id, revision, revision, checksum[:64] or None, status, error_message[:1000]),
+        (status, revision, status, checksum, status, error_message[:1000], consumer_id, revision, status, checksum),
     )
     await db.commit()
 
@@ -173,6 +172,7 @@ async def get_shopbot_config_snapshot() -> dict[str, Any]:
     sources_cursor = await db.execute(
         """
         SELECT s.*, p.price_per_unit, p.dollar_per_unit, p.quota_per_unit,
+               p.quota_multiple AS shopbot_quota_multiple,
                p.default_group, p.import_spend_accrual_enabled,
                p.discount_stack_mode, p.discount_allowed_stack_types,
                p.supports_key_lookup_by_id, p.token_key_endpoint_template,
@@ -200,10 +200,17 @@ async def set_consumer_desired_checksum(consumer_id: str, revision: int, checksu
     db = await get_db()
     await db.execute(
         """
-        UPDATE consumer_sync_state SET desired_checksum = ?, updated_at = datetime('now')
-         WHERE consumer_id = ? AND desired_revision = ?
+        INSERT INTO consumer_sync_state (consumer_id, desired_revision, desired_checksum, status)
+        SELECT ?, revision, ?, 'pending' FROM config_state WHERE id = 1 AND revision = ?
+        ON CONFLICT(consumer_id) DO UPDATE SET
+            desired_revision = excluded.desired_revision,
+            desired_checksum = excluded.desired_checksum,
+            status = CASE WHEN consumer_sync_state.applied_revision = excluded.desired_revision
+                           AND consumer_sync_state.applied_checksum = excluded.desired_checksum
+                          THEN consumer_sync_state.status ELSE 'pending' END,
+            updated_at = datetime('now')
         """,
-        (checksum[:64], consumer_id, revision),
+        (consumer_id, checksum[:64], revision),
     )
     await db.commit()
 

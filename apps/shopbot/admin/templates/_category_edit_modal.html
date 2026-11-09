@@ -3,7 +3,7 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             {% from "_field_tooltip.html" import field_tooltip %}
-            <form method="POST" action="/categories/{{ editing.id }}/edit">
+            <form method="POST" action="/categories/{{ editing.id }}/edit"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
                 <div class="modal-header">
                     <h5 class="modal-title">
                         <span style="margin-right: 0.4rem; font-size: 1.25rem;">{{ editing.icon }}</span>

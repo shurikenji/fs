@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import sqlite3
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +15,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from bot.config import settings
 from db.database import close_db
+from db.financial_migration import migrate
 from db.models import init_db
 from db.queries.categories import create_category
 from db.queries.orders import create_order, get_order_by_id, update_order_status
@@ -64,6 +66,11 @@ async def main() -> None:
 
         try:
             await init_db()
+            connection = sqlite3.connect(settings.db_path)
+            try:
+                migrate(connection)
+            finally:
+                connection.close()
 
             user = await create_user(
                 telegram_id=20001,
@@ -93,14 +100,16 @@ async def main() -> None:
             refund_order_id = await _seed_refundable_order(user["id"], product_id, server_id)
 
             from admin.app import create_admin_app
-            from admin.deps import require_admin
-            import admin.routers.orders as orders_router
+            from admin.deps import require_admin, verify_csrf
+            from bot.services import notification_worker
 
             notifications: list[tuple[int, str]] = []
             admin_events: list[tuple[str, str]] = []
 
-            async def _fake_notify_user(user_id: int, text: str) -> None:
+            async def _fake_notify_user(user_id: int, text: str, *, bot=None) -> bool:
+                _ = bot
                 notifications.append((user_id, text))
+                return True
 
             async def _fake_notify_admin_service_completed(order: dict, *, bot=None) -> tuple[int, int, int]:
                 _ = bot
@@ -119,13 +128,14 @@ async def main() -> None:
 
             app = create_admin_app()
             app.dependency_overrides[require_admin] = lambda: {"admin": True}
+            app.dependency_overrides[verify_csrf] = lambda: None
 
-            original_notify_user = orders_router.notify_user
-            original_notify_admin_service_completed = orders_router.notify_admin_service_completed
-            original_notify_admin_order_refunded = orders_router.notify_admin_order_refunded
-            orders_router.notify_user = _fake_notify_user
-            orders_router.notify_admin_service_completed = _fake_notify_admin_service_completed
-            orders_router.notify_admin_order_refunded = _fake_notify_admin_order_refunded
+            original_worker_notify_user = notification_worker.notify_user
+            original_notify_admin_service_completed = notification_worker.notify_admin_service_completed
+            original_notify_admin_order_refunded = notification_worker.notify_admin_order_refunded
+            notification_worker.notify_user = _fake_notify_user
+            notification_worker.notify_admin_service_completed = _fake_notify_admin_service_completed
+            notification_worker.notify_admin_order_refunded = _fake_notify_admin_order_refunded
             try:
                 with TestClient(app) as client:
                     detail_response = client.get(f"/orders/{refund_order_id}")
@@ -143,11 +153,13 @@ async def main() -> None:
                     completed_order = await get_order_by_id(complete_order_id)
                     assert completed_order is not None
                     assert completed_order["status"] == "completed"
+                    assert await notification_worker.run_one_notification(None)
+                    assert await notification_worker.run_one_notification(None)
                     assert any("ADMINCOMPLETE001" in text for _, text in notifications)
                     assert ("service_completed", "ADMINCOMPLETE001") in admin_events
                     print("[OK] order_complete marks service upgrades completed and notifies the user")
 
-                    refund_response = client.get(
+                    refund_response = client.post(
                         f"/orders/{refund_order_id}/refund",
                         follow_redirects=False,
                     )
@@ -157,15 +169,17 @@ async def main() -> None:
                     assert refunded_order is not None
                     assert refunded_order["status"] == "refunded"
                     assert refunded_order["is_refunded"] == 1
+                    assert await notification_worker.run_one_notification(None)
+                    assert await notification_worker.run_one_notification(None)
                     assert any("ADMINREFUND001" in text for _, text in notifications)
-                    assert ("order_refunded", "ADMINREFUND001|Admin hoàn tiền") in admin_events
+                    assert ("order_refunded", "ADMINREFUND001|Admin refund") in admin_events
                     print("[OK] order_refund credits the wallet and redirects back to order detail")
 
                 print("\n=== ADMIN ORDER ACTION VERIFICATION PASSED ===")
             finally:
-                orders_router.notify_user = original_notify_user
-                orders_router.notify_admin_service_completed = original_notify_admin_service_completed
-                orders_router.notify_admin_order_refunded = original_notify_admin_order_refunded
+                notification_worker.notify_user = original_worker_notify_user
+                notification_worker.notify_admin_service_completed = original_notify_admin_service_completed
+                notification_worker.notify_admin_order_refunded = original_notify_admin_order_refunded
         finally:
             await close_db()
             object.__setattr__(settings, "db_path", original_db_path)

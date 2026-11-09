@@ -15,7 +15,7 @@ if str(ROOT_DIR) not in sys.path:
 from bot.config import settings
 from db.database import close_db
 from db.models import init_db
-from db.queries.servers import create_server, get_server_by_id
+from db.queries.servers import create_server, get_server_by_id, update_server
 
 
 class _FakeGroupClient:
@@ -109,11 +109,12 @@ async def main() -> None:
             single_server_id = await _seed_single_group_server()
 
             from admin.app import create_admin_app
-            from admin.deps import require_admin
+            from admin.deps import require_admin, verify_csrf
             import admin.routers.servers as servers_router
 
             app = create_admin_app()
             app.dependency_overrides[require_admin] = lambda: {"admin": True}
+            app.dependency_overrides[verify_csrf] = lambda: None
 
             with TestClient(app) as client:
                 preview_response = client.post(
@@ -167,6 +168,17 @@ async def main() -> None:
                 assert single_server["default_group"] == "pro"
                 assert single_server["manual_groups"] == "basic,pro"
                 print("[OK] groups save handles single-group radio selection")
+
+                await update_server(single_server_id, control_plane_source_id="managed-test")
+                managed_page = client.get(f"/servers/{single_server_id}/groups")
+                assert managed_page.status_code == 200
+                assert "Group policy do Control quản lý" in managed_page.text
+                assert "<fieldset disabled>" in managed_page.text
+                managed_save = client.post(f"/servers/{single_server_id}/groups/save", data={"default_group": "wrong"}, follow_redirects=False)
+                assert managed_save.status_code == 303
+                single_server = await get_server_by_id(single_server_id)
+                assert single_server["default_group"] == "pro"
+                assert single_server["manual_groups"] == "basic,pro"
 
                 original_get_api_client = servers_router.get_api_client
                 original_get_translator = servers_router.get_translator

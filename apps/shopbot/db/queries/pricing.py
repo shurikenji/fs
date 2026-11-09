@@ -7,7 +7,7 @@ import json
 from typing import Any
 
 from bot.utils.time_utils import to_db_time_string
-from db.database import get_db
+from db.database import get_db, open_write_transaction
 from db.queries._helpers import fetch_all_dicts, fetch_one_dict, fetch_scalar
 from db.queries.servers import get_server_by_id
 
@@ -123,8 +123,7 @@ async def sync_server_pricing_version(server_id: int, *, effective_from: str | N
 
 
 async def replace_server_discount_tiers(server_id: int, tiers: list[dict[str, Any]]) -> None:
-    db = await get_db()
-    await db.execute("BEGIN IMMEDIATE")
+    db = await open_write_transaction()
     try:
         await db.execute(
             """DELETE FROM server_tier_benefits
@@ -166,6 +165,8 @@ async def replace_server_discount_tiers(server_id: int, tiers: list[dict[str, An
     except Exception:
         await db.rollback()
         raise
+    finally:
+        await db.close()
 
 
 async def get_server_discount_tiers(server_id: int) -> list[dict]:

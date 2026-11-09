@@ -6,11 +6,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib.sh
 source "$SCRIPT_DIR/lib.sh"
 
+if [[ "${1:-}" == "--stage-only" ]]; then
+  exec bash "$SCRIPT_DIR/stage-app.sh" shopbot "${2:-main}"
+fi
+reexec_with_deploy_lock "$0" "$@"
+
 REF="${1:-main}"
 HOST_ROLE_VALUE="$(resolve_host_role "${2:-}")"
 
 load_app_config shopbot
 ensure_host_role "$HOST_ROLE_VALUE"
+verify_shopbot_unit
 prepare_stack_dirs
 
 RESOLVED_REF="$(fetch_ref "$REF")"

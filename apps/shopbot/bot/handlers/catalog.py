@@ -473,8 +473,9 @@ async def _handle_standard_product(
     from bot.utils.group_labels import format_group_display_names
     from bot.utils.order_code import generate_order_code
     from bot.keyboards.inline_kb import payment_method_kb
-    from db.queries.orders import create_order
+    from db.queries.orders import create_order_idempotent
     from db.queries.wallets import get_balance
+    from bot.utils.purchase_nonce import callback_purchase_nonce
     # Lấy thông tin server nếu có
     server = None
     server_name = "N/A"
@@ -587,7 +588,8 @@ async def _handle_standard_product(
     expire_min = await get_setting_int("order_expire_min", 30)
     expired_at = (get_now_vn() + timedelta(minutes=expire_min)).isoformat()
 
-    order_id = await create_order(
+    order, _ = await create_order_idempotent(
+        purchase_nonce=callback_purchase_nonce(callback),
         order_code=order_code,
         user_id=db_user["id"],
         product_id=product["id"],
@@ -613,15 +615,17 @@ async def _handle_standard_product(
             else None
         ),
     )
+    order_id = int(order["id"])
+    order_code = str(order["order_code"])
 
     # [NEW] Nếu là tài khoản có sẵn, lập tức xí chỗ (reserve)
     if product["product_type"] == "account_stocked":
         from db.queries.account_stocks import reserve_accounts
-        from db.queries.orders import update_order_status
+        from db.queries.orders import cancel_order
         reserved_accounts = await reserve_accounts(product["id"], order_id, quantity)
         if len(reserved_accounts) < quantity:
             # Thu hồi đơn vừa tạo và báo lỗi (ai đó đã nhanh tay hơn)
-            await update_order_status(order_id, "cancelled", cancel_reason="Hết hàng (Race condition)")
+            await cancel_order(order_id)
             await callback.answer("❌ Tồn kho không đủ cho số lượng bạn chọn. Vui lòng thử lại với số lượng thấp hơn.", show_alert=True)
             return
 

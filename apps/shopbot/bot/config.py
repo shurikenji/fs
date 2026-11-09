@@ -33,11 +33,12 @@ class Settings:
 
     # Admin panel
     admin_secret_key: str = field(
-        default_factory=lambda: _env("ADMIN_SECRET_KEY", secrets.token_hex(32))
+        default_factory=lambda: _env("ADMIN_SECRET_KEY") or secrets.token_hex(32)
     )
     admin_port: int = field(
         default_factory=lambda: int(_env("ADMIN_PORT", "8080"))
     )
+    admin_host: str = field(default_factory=lambda: _env("ADMIN_HOST") or "127.0.0.1")
     admin_login_path: str = field(
         default_factory=lambda: _env("ADMIN_LOGIN_PATH", "/login-shopbot-admin")
     )
@@ -53,6 +54,8 @@ class Settings:
     # Still used by VietQR rendering.
     mb_account_no: str = field(default_factory=lambda: _env("MB_ACCOUNT_NO"))
     mb_account_name: str = field(default_factory=lambda: _env("MB_ACCOUNT_NAME"))
+    mb_verified_account_no: str = field(default_factory=lambda: _env("MB_VERIFIED_ACCOUNT_NO"))
+    mb_verified_feed_timezone: str = field(default_factory=lambda: _env("MB_VERIFIED_FEED_TIMEZONE"))
     mb_bank_id: str = field(default_factory=lambda: _env("MB_BANK_ID", "MB"))
 
     # Poller
@@ -86,7 +89,7 @@ class Settings:
         default_factory=lambda: _env("KEY_VAULT_LOOKUP_SECRET")
     )
     portal_session_secret: str = field(
-        default_factory=lambda: _env("PORTAL_SESSION_SECRET", _env("ADMIN_SECRET_KEY", secrets.token_hex(32)))
+        default_factory=lambda: _env("PORTAL_SESSION_SECRET") or _env("ADMIN_SECRET_KEY") or secrets.token_hex(32)
     )
     admin_launch_secret: str = field(
         default_factory=lambda: _env("ADMIN_LAUNCH_SECRET")

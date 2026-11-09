@@ -35,7 +35,8 @@ from bot.services.pricing_resolver import quote_api_order
 from bot.utils.formatting import format_vnd, mask_api_key, quota_to_dollar
 from bot.utils.group_labels import format_group_display_names
 from bot.utils.order_code import generate_order_code
-from bot.services.vietqr import build_qr_url, build_qr_caption, download_qr_photo
+from bot.utils.purchase_nonce import message_purchase_nonce
+from bot.services.vietqr import build_qr_photo, build_qr_caption
 from bot.services.payment_poller import process_wallet_payment
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ from db.queries.products import (
     get_product_by_id,
 )
 from db.queries.servers import get_active_servers, get_server_by_id
-from db.queries.orders import create_order, get_order_by_id
+from db.queries.orders import create_order_idempotent, get_order_by_id
 from db.queries.user_keys import (
     get_user_keys,
     get_user_key_by_id,
@@ -563,6 +564,8 @@ async def input_key_received(
             )
         elif status == "no_change":
             accrual_lines.append("ℹ️ Key đã tồn tại trong hệ thống, chưa có giá trị tăng thêm để cộng tier.")
+        elif status == "pending_reconciliation":
+            accrual_lines.append("ℹ️ Key đang có đơn nạp chờ đối soát; chưa ghi nhận thêm chi tiêu từ key này.")
         else:
             accrual_lines.append(
                 "⚠️ Server không trả đủ `remain_quota` và `used_quota`, lần nhập này chỉ xác thực key."
@@ -855,7 +858,8 @@ async def custom_dollar_received(
     expire_min = await get_setting_int("order_expire_min", 30)
     expired_at = (get_now_vn() + timedelta(minutes=expire_min)).isoformat()
 
-    order_id = await create_order(
+    order, _ = await create_order_idempotent(
+        purchase_nonce=message_purchase_nonce(message),
         order_code=order_code,
         user_id=db_user["id"],
         product_type=product_type,
@@ -875,6 +879,8 @@ async def custom_dollar_received(
         applied_tier_id=quote.applied_tier_id,
         pricing_snapshot=json.dumps(quote.pricing_snapshot, ensure_ascii=True),
     )
+    order_id = int(order["id"])
+    order_code = str(order["order_code"])
 
     await state.update_data(current_order_id=order_id)
 
@@ -924,14 +930,13 @@ async def payment_qr(
     await update_order_status(order["id"], "pending", payment_method="qr")
 
     expire_min = await get_setting_int("order_expire_min", 30)
-    qr_url = await build_qr_url(order["amount"], order["order_code"])
     caption = await build_qr_caption(order["amount"], order["order_code"], expire_min)
 
     # Xóa inline message, gửi ảnh QR
     from bot.keyboards.inline_kb import order_cancel_kb
     await callback.message.delete()
     await callback.message.answer_photo(
-        photo=await download_qr_photo(qr_url),
+        photo=await build_qr_photo(order["amount"], order["order_code"]),
         caption=caption,
         parse_mode="HTML",
         reply_markup=order_cancel_kb(order["id"])

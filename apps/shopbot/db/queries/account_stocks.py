@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from db.database import get_db
+from db.database import get_db, open_write_transaction
 from db.queries._helpers import execute_commit, fetch_all_dicts, fetch_one_dict
 
 
@@ -64,16 +64,46 @@ async def reserve_account(product_id: int, order_id: int) -> Optional[dict]:
 
 
 async def reserve_accounts(product_id: int, order_id: int, quantity: int) -> list[dict]:
-    """Xí chỗ nhiều tài khoản cho cùng một đơn; rollback nếu không đủ."""
-    reserved: list[dict] = []
-    for _ in range(max(1, quantity)):
-        account = await reserve_account(product_id, order_id)
-        if not account:
-            if reserved:
-                await release_account_by_order(order_id)
+    """Giữ đủ tài khoản trong một transaction; gọi lại trả cùng reservation."""
+    if type(quantity) is not int or quantity <= 0:
+        return []
+    db = await open_write_transaction()
+    try:
+        cursor = await db.execute(
+            "SELECT status, product_id, product_type, quantity FROM orders WHERE id = ?", (order_id,)
+        )
+        order = await cursor.fetchone()
+        if not order or order["status"] != "pending" or order["product_id"] != product_id or order["product_type"] != "account_stocked" or order["quantity"] != quantity:
+            await db.rollback()
             return []
-        reserved.append(account)
-    return reserved
+        cursor = await db.execute(
+            "SELECT * FROM account_stocks WHERE sold_order_id = ? AND is_sold = 0 ORDER BY id", (order_id,)
+        )
+        existing = await cursor.fetchall()
+        if existing:
+            await db.rollback()
+            return [dict(row) for row in existing] if len(existing) == quantity and all(row["product_id"] == product_id for row in existing) else []
+        cursor = await db.execute(
+            """SELECT id FROM account_stocks WHERE product_id = ? AND is_sold = 0
+               AND (sold_order_id IS NULL OR sold_order_id = 0) ORDER BY id LIMIT ?""",
+            (product_id, quantity),
+        )
+        ids = [row["id"] for row in await cursor.fetchall()]
+        if len(ids) != quantity:
+            await db.rollback()
+            return []
+        await db.executemany("UPDATE account_stocks SET sold_order_id = ? WHERE id = ?", [(order_id, value) for value in ids])
+        cursor = await db.execute(
+            "SELECT * FROM account_stocks WHERE sold_order_id = ? AND is_sold = 0 ORDER BY id", (order_id,)
+        )
+        result = [dict(row) for row in await cursor.fetchall()]
+        await db.commit()
+        return result
+    except BaseException:
+        await db.rollback()
+        raise
+    finally:
+        await db.close()
 
 async def release_account_by_order(order_id: int) -> None:
     """Hủy xí chỗ cho đơn bị hủy/lỗi trước khi thanh toán."""
@@ -164,26 +194,17 @@ async def bulk_add_accounts(
 
 
 async def count_stock(product_id: int) -> dict:
-    """Đếm stock: tổng, đã bán, còn lại."""
+    """Đếm stock: tổng, đã bán, đã giữ chỗ và còn bán được."""
     db = await get_db()
-
     cursor = await db.execute(
-        "SELECT COUNT(*) FROM account_stocks WHERE product_id = ?",
+        """SELECT COUNT(*) AS total,
+                  COUNT(CASE WHEN is_sold = 1 THEN 1 END) AS sold,
+                  COUNT(CASE WHEN is_sold = 0 AND sold_order_id IS NOT NULL AND sold_order_id != 0 THEN 1 END) AS reserved,
+                  COUNT(CASE WHEN is_sold = 0 AND (sold_order_id IS NULL OR sold_order_id = 0) THEN 1 END) AS available
+           FROM account_stocks WHERE product_id = ?""",
         (product_id,),
     )
-    total = (await cursor.fetchone())[0]
-
-    cursor = await db.execute(
-        "SELECT COUNT(*) FROM account_stocks WHERE product_id = ? AND is_sold = 1",
-        (product_id,),
-    )
-    sold = (await cursor.fetchone())[0]
-
-    return {
-        "total": total,
-        "sold": sold,
-        "available": total - sold,
-    }
+    return dict(await cursor.fetchone())
 
 
 async def get_accounts_by_product(
@@ -206,7 +227,8 @@ async def get_accounts_by_product(
 
 
 async def delete_account(account_id: int) -> None:
-    """Xóa tài khoản khỏi stock."""
+    """Chỉ xóa tài khoản chưa bán và chưa được giữ chỗ."""
     await execute_commit(
-        "DELETE FROM account_stocks WHERE id = ?", (account_id,)
+        """DELETE FROM account_stocks WHERE id = ? AND is_sold = 0
+           AND (sold_order_id IS NULL OR sold_order_id = 0)""", (account_id,)
     )

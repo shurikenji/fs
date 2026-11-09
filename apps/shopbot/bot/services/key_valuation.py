@@ -9,7 +9,7 @@ from typing import Any
 
 from bot.services.pricing_resolver import vnd_from_quota
 from bot.utils.formatting import mask_api_key
-from db.database import get_db
+from db.database import open_write_transaction
 from db.queries.pricing import get_active_server_pricing_version, sync_server_pricing_version
 
 
@@ -52,6 +52,8 @@ class KeyValuationService:
         resulting_total_quota: int,
         source: str,
         source_ref: str | None = None,
+        _db=None,
+        _pricing_version: dict | None = None,
     ) -> dict[str, Any]:
         """Sync baseline quota for keys that were created or topped up by the platform."""
         normalized_key = normalize_api_key(api_key)
@@ -59,9 +61,13 @@ class KeyValuationService:
         quota_delta = max(0, int(quota_delta or 0))
         resulting_total_quota = max(0, int(resulting_total_quota or 0))
 
-        pricing_version = await get_active_server_pricing_version(server["id"])
-        if pricing_version is None:
-            pricing_version = await sync_server_pricing_version(server["id"])
+        if _db is not None and _pricing_version is None:
+            raise ValueError("An owning transaction requires an explicit pricing version")
+        pricing_version = _pricing_version
+        if _db is None:
+            pricing_version = await get_active_server_pricing_version(server["id"])
+            if pricing_version is None:
+                pricing_version = await sync_server_pricing_version(server["id"])
         if pricing_version is None:
             pricing_version = {
                 "id": None,
@@ -73,8 +79,8 @@ class KeyValuationService:
                 "rounding_step": 1,
             }
 
-        db = await get_db()
-        await db.execute("BEGIN IMMEDIATE")
+        owns_transaction = _db is None
+        db = await open_write_transaction() if owns_transaction else _db
         try:
             registry_cursor = await db.execute(
                 """SELECT *
@@ -143,16 +149,21 @@ class KeyValuationService:
                     ),
                 ),
             )
-            await db.commit()
+            if owns_transaction:
+                await db.commit()
             return {
                 "status": "platform_offset",
                 "registry_id": registry_id,
                 "previous_recorded_quota": previous_recorded_quota,
                 "recorded_total_quota": max(previous_recorded_quota, resulting_total_quota),
             }
-        except Exception:
-            await db.rollback()
+        except BaseException:
+            if owns_transaction:
+                await db.rollback()
             raise
+        finally:
+            if owns_transaction:
+                await db.close()
 
     @staticmethod
     async def evaluate_imported_key(
@@ -191,9 +202,20 @@ class KeyValuationService:
                 "rounding_step": 1,
             }
 
-        db = await get_db()
-        await db.execute("BEGIN IMMEDIATE")
+        db = await open_write_transaction()
         try:
+            cursor = await db.execute(
+                """SELECT 1 FROM orders WHERE server_id = ? AND product_type = 'key_topup'
+                   AND status IN ('paid', 'processing') AND COALESCE(is_refunded, 0) = 0 AND existing_key IN (?, ?) LIMIT 1""",
+                (server['id'], normalized_key, normalized_key[3:]),
+            )
+            if await cursor.fetchone():
+                await db.rollback()
+                return {
+                    'status': 'pending_reconciliation', 'credited_value_vnd': 0,
+                    'credited_delta_quota': 0, 'observed_total_quota': observed_total_quota,
+                    'registry_owner_user_id': None,
+                }
             registry_cursor = await db.execute(
                 """SELECT *
                    FROM api_key_registry
@@ -438,3 +460,5 @@ class KeyValuationService:
         except Exception:
             await db.rollback()
             raise
+        finally:
+            await db.close()

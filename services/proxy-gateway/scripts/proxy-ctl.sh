@@ -110,7 +110,7 @@ case "$1" in
         fi
 
         for port in $(seq 3001 3010); do
-            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:$port/_internal/health 2>/dev/null)
+            status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 http://localhost:$port/health 2>/dev/null)
             if [ "$status" = "200" ]; then
                 echo -e "Proxy Service (localhost:$port): ${GREEN}OK Online${NC}"
             elif [ "$status" = "000" ]; then

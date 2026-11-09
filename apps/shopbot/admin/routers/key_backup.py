@@ -7,6 +7,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from admin.deps import get_templates, protected_router
+from bot.config import settings
 from bot.services.key_backup_poller import backup_all_servers_now, backup_server_now
 from db.queries.key_backup import (
     get_backup_history,
@@ -17,6 +18,10 @@ from db.queries.key_backup import (
 from db.queries.servers import get_all_servers, get_server_by_id
 
 router = protected_router(prefix="/key-backup", tags=["key-backup"])
+
+
+def _remote_vault_configured() -> bool:
+    return bool(settings.key_vault_url or settings.key_vault_api_token or settings.key_vault_lookup_secret)
 
 
 def _clean_text(value: object) -> str:
@@ -92,7 +97,11 @@ async def _build_overview_rows() -> list[dict]:
 
 @router.get("", response_class=HTMLResponse)
 async def key_backup_dashboard(request: Request) -> HTMLResponse:
+    from bot.services.key_vault_client import get_summary
+
     rows = await _build_overview_rows()
+    remote_vault = _remote_vault_configured()
+    vault_summary = await get_summary() if remote_vault else None
     total_keys = sum(row["total_keys"] for row in rows)
     total_balance = sum(row["total_balance"] for row in rows)
     templates = get_templates()
@@ -100,6 +109,8 @@ async def key_backup_dashboard(request: Request) -> HTMLResponse:
         "key_backup.html",
         {
             "request": request,
+            "remote_vault": remote_vault,
+            "vault_summary": vault_summary,
             "rows": rows,
             "summary": {
                 "servers": len(rows),
@@ -124,6 +135,7 @@ async def key_backup_history(request: Request, server_id: int) -> HTMLResponse:
         "key_backup_detail.html",
         {
             "request": request,
+            "remote_vault": _remote_vault_configured(),
             "server": server,
             "items": [],
             "history": history,
@@ -149,6 +161,7 @@ async def key_backup_detail(request: Request, server_id: int) -> HTMLResponse:
         "key_backup_detail.html",
         {
             "request": request,
+            "remote_vault": _remote_vault_configured(),
             "server": server,
             "items": items,
             "history": history,
@@ -162,6 +175,8 @@ async def key_backup_detail(request: Request, server_id: int) -> HTMLResponse:
 
 @router.post("/trigger")
 async def trigger_key_backup_all() -> RedirectResponse:
+    if _remote_vault_configured():
+        return _redirect_with_flash("/key-backup", "error", "Remote Vault backup is not available from this page yet.")
     results = await backup_all_servers_now()
     error_count = sum(1 for result in results if result.get("status") != "success")
     total_keys = sum(int(result.get("total_keys") or 0) for result in results)
@@ -174,6 +189,8 @@ async def trigger_key_backup_all() -> RedirectResponse:
 
 @router.post("/trigger/{server_id}")
 async def trigger_key_backup_server(server_id: int) -> RedirectResponse:
+    if _remote_vault_configured():
+        return _redirect_with_flash(f"/key-backup/{server_id}", "error", "Remote Vault backup is not available from this page yet.")
     result = await backup_server_now(server_id)
     if result is None:
         return _redirect_with_flash("/key-backup", "error", "Server not found.")

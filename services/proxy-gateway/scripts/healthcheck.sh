@@ -15,9 +15,9 @@ if [ "$operator_status" != "online" ]; then
     echo "[$DATE] INFO: Attempted restart of proxy-operator" >> "$LOG_FILE"
 fi
 
-# Kiem tra cac proxy services qua internal health
+# Kiem tra cac proxy services qua health
 for port in $(seq 3001 3020); do
-    status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:$port/_internal/health 2>/dev/null)
+    status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 http://localhost:$port/health 2>/dev/null)
 
     if [ "$status" = "200" ]; then
         continue

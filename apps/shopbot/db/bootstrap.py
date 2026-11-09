@@ -53,6 +53,10 @@ _BEST_EFFORT_MIGRATIONS = [
     "ALTER TABLE orders ADD COLUMN completed_at TEXT",
     "ALTER TABLE orders ADD COLUMN api_token_name TEXT",
     "ALTER TABLE orders ADD COLUMN delivery_token_names TEXT",
+    "ALTER TABLE orders ADD COLUMN purchase_nonce TEXT",
+    """CREATE UNIQUE INDEX IF NOT EXISTS idx_ord_pending_purchase_nonce
+       ON orders(user_id, purchase_nonce)
+       WHERE purchase_nonce IS NOT NULL AND status = 'pending'""",
     """UPDATE orders
        SET completed_at = COALESCE(NULLIF(paid_at, ''), NULLIF(updated_at, ''))
        WHERE status = 'completed'

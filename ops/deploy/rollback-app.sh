@@ -5,6 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib.sh
 source "$SCRIPT_DIR/lib.sh"
+reexec_with_deploy_lock "$0" "$@"
 
 APP="${1:-}"
 TARGET_RELEASE="${2:-}"

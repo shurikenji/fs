@@ -1,10 +1,10 @@
 # Current State And Roadmap
 
-Updated: 2026-06-23
+Updated: 2026-11-09
 
-This replaces older rollout notes. The V4 migration is no longer a pending manual copy/scp rollout; the active target is the monorepo deploy model under `/srv/shupremium-stack`.
+The active deployment model is the monorepo release layout under `/srv/shupremium-stack`. Keep this file focused on current repository state and remaining work; historical rollout notes belong outside the active docs set.
 
-The current public GitHub repo must be treated as public. All docs and examples must stay sanitized.
+All committed docs and examples must stay sanitized regardless of repository visibility.
 
 ## Current state
 
@@ -14,15 +14,18 @@ The current public GitHub repo must be treated as public. All docs and examples 
 | `platform-control` | Active admin shell | ARM VPS, PM2, `/srv/shupremium-stack/current/platform-control` |
 | `proxy-gateway` | Active proxy plane | ARM VPS, PM2, `/srv/shupremium-stack/current/proxy-gateway` |
 | `shopbot` | Active commerce runtime | Shopbot VPS, systemd, `/srv/shupremium-stack/current/shopbot` |
+| `key-vault-worker` | Active deploy target | Combined role, systemd, `/srv/shupremium-stack/current/key-vault-worker` |
 | `balance-checker` | Archived legacy code | Not in active deploy manifest |
 
-## Current migration state
+## Current repository state
 
-- The existing ARM role is live and serving portal/admin/proxy traffic.
-- A new Singapore Oracle ARM VPS is being prepared as the replacement ARM role host.
-- DNS cutover is pending and must wait for VCN/UFW, nginx, wildcard cert, PM2 persistence, and local health checks.
-- The target OS for the new ARM host is Ubuntu 22.04 aarch64.
-- GitHub remains public for now, so `_local_cleanup/`, secrets, DBs, generated data, `node_modules`, logs, and design exports must remain out of Git.
+- `ops/deploy/app-manifest.sh` is the source of truth for five deployable apps and their host roles.
+- Python releases use a release-local `.venv`; persistent `.env` and `data/` remain under `shared/`.
+- Shopbot requires the explicit financial schema migration before release preflight succeeds.
+- Shopbot polling is limited to `message` and `callback_query`; purchase creation uses DB-backed idempotency via `purchase_nonce`.
+- Shopbot runs payment, fulfillment, notification, key-alert, and control-plane background tasks as one supervised runtime.
+- `key-vault-worker` is a separate systemd service for persistent encrypted key history and internal lookup/summary APIs.
+- `_local_cleanup/`, secrets, DBs, generated data, `node_modules`, logs, and design exports must remain out of Git.
 
 ## Completed direction
 
@@ -33,6 +36,8 @@ The current public GitHub repo must be treated as public. All docs and examples 
 - `portal` serves public Shupremium pages and runtime cache.
 - `shopbot` remains isolated on its own VPS and owns commerce data.
 - `proxy-gateway` remains on the ARM VPS and is managed through `proxy-operator`.
+- `key-vault-worker` is isolated behind localhost on the `combined` role and validates its DB/schema before release switch.
+- Shopbot money paths now include purchase idempotency, explicit financial migration/preflight, fulfillment queueing, notification queueing, and transaction ownership checks.
 - MBBank scanner integration in Shopbot uses MBBank v3:
   - base URL: `https://api.apicanhan.com/transactions/MB`
   - runtime URL: `{base_url}/{ApiKey}/?version=3`
@@ -41,12 +46,11 @@ The current public GitHub repo must be treated as public. All docs and examples 
 
 ## Near-term priorities
 
-1. Finish Singapore ARM host setup without switching DNS early.
-2. Keep the public GitHub repo sanitized until it is moved private, and keep the same hygiene after that.
-3. Verify the new ARM host with `ops/scripts/verify-all-health.sh`, PM2 persistence, nginx, and `curl --resolve`.
-4. Keep Shopbot deploys through `ops/deploy/deploy-shopbot.sh`, not through the old standalone path.
-5. Continue UI/content alignment from the redesign across portal and platform-control.
-6. Continue pricing cleanup by separating parser, pricing engine, translation/catalog, and public presenter responsibilities.
+1. Verify the actual host role, runtime manager, shared state, and health output before every production deploy; docs must not assume a historical VPS state.
+2. Keep Shopbot deploys through `ops/deploy/deploy-shopbot.sh` and run the explicit financial migration only against a backed-up DB when required.
+3. Deploy `key-vault-worker` only on the `combined` role after its `.env` and vault DB have been explicitly initialized.
+4. Keep the repository sanitized: secrets, DBs, generated data, logs, `node_modules`, and local cleanup snapshots stay outside Git.
+5. Continue pricing cleanup by separating parser, pricing engine, translation/catalog, and public presenter responsibilities.
 
 ## Future refactor targets
 
@@ -70,22 +74,22 @@ Current deploy tooling is usable and should stay script-based for now.
 Target:
 
 - keep deploy scripts as the only production release path
-- improve smoke coverage for proxy-service generated processes
+- improve smoke coverage for proxy-service generated processes when a concrete failure mode justifies it
 - keep audit log review simple
-- document every manual production exception in `memory.md`
+- keep production exceptions in operational runbooks instead of accumulating transient host snapshots in `memory.md`
 
 ### Secret hygiene
 
 Current rule:
 
 - real `.env`, provider tokens, API keys, cookies, SQLite DBs, logs, and local agent session files must never be committed.
-- current GitHub visibility is public, so every committed file must be safe to expose.
+- every committed file must be safe to expose.
 
 Target:
 
 - all docs use placeholders only
 - scratch scripts stay outside Git or use `.example` files only
-- public GitHub history containing old secrets should be treated as compromised until those secrets are rotated
+- if a secret was ever committed, treat it as compromised and rotate it rather than relying on file deletion
 - `_local_cleanup/` is a local quarantine only and must not be pushed.
 
 ## Acceptance checks for future changes

@@ -22,6 +22,8 @@ def create_admin_app() -> FastAPI:
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.admin_secret_key,
+        session_cookie="shopbot_admin_session_v2",
+        https_only=True,
     )
 
     static_dir = _BASE_DIR / "static"

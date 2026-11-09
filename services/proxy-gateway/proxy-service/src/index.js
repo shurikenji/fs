@@ -336,7 +336,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 async function start() {
     try {
         await setupProxy();
-        await app.listen({ port: PORT, host: '0.0.0.0' });
+        await app.listen({ port: PORT, host: process.env.PROXY_BIND_HOST || '0.0.0.0' });
         console.log(
             `[${SERVICE_NAME}] Started on port ${PORT} -> ${TARGET_PROTOCOL}://${TARGET_HOST} (verify=${TLS_SKIP_VERIFY ? 'off' : 'on'})`
         );

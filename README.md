@@ -4,12 +4,12 @@ Monorepo này là source of truth cho stack Shupremium đang chạy production. 
 
 ## Current status
 
-Updated: 2026-06-23
+Updated: 2026-11-09
 
 - Production deploy model is `/srv/shupremium-stack` with per-app releases and shared runtime state.
-- The ARM role currently runs `portal`, `platform-control`, and `proxy-gateway`.
-- A new Singapore Oracle ARM VPS is being prepared as the next ARM host. DNS should only be switched after local health checks and `curl --resolve` checks pass.
-- The Shopbot role remains separate and runs only `shopbot`.
+- The deploy manifest currently contains five apps: `portal`, `platform-control`, `shopbot`, `proxy-gateway`, and `key-vault-worker`.
+- Host placement is controlled by `/etc/shupremium-host-role`; the manifest maps the apps to `arm`, `shopbot`, and `combined` roles.
+- Python deploys create an isolated `.venv` inside each release; only `.env` and `data/` are shared across releases.
 - Local-only cleanup and sensitive/session files are kept under `_local_cleanup/` and are ignored by Git.
 - GitHub is still treated as public. Only sanitized source, examples, and docs may be pushed.
 
@@ -21,6 +21,7 @@ Updated: 2026-06-23
 | Platform Control | `apps/platform-control` | Python/FastAPI + PM2 | `arm` | Admin shell/control plane |
 | Shopbot | `apps/shopbot` | Python + systemd | `shopbot` | Telegram bot, payment poller, shop admin |
 | Proxy Gateway | `services/proxy-gateway` | Node.js + PM2 | `arm` | Proxy operator + generated proxy services |
+| Key Vault Worker | `apps/key-vault-worker` | Python/FastAPI + systemd | `combined` | Encrypted API-key history, source polling, internal lookup/summary API |
 
 `archive/services/balance-checker` là legacy code đã archive, không nằm trong active deploy manifest.
 
@@ -43,6 +44,11 @@ Proxy customers
 Telegram commerce
   -> shopbot on separate VPS
   -> systemd unit: shopbot
+
+Key vault
+  -> key-vault-worker on `combined` host role
+  -> systemd unit: key-vault-worker
+  -> localhost health/API on :8093
 ```
 
 ## Deploy model
@@ -54,7 +60,7 @@ Production layout is standardized:
   repo/       # git checkout
   releases/   # timestamped app releases
   current/    # active symlinks per app
-  shared/     # .env, data, venv, operator secrets, audit logs
+  shared/     # persistent .env, data, operator secrets, audit logs
 ```
 
 Deploy is always per app:
@@ -67,6 +73,7 @@ bash ops/deploy/deploy-portal.sh main
 bash ops/deploy/deploy-platform-control.sh main
 bash ops/deploy/deploy-proxy-gateway.sh main
 bash ops/deploy/deploy-shopbot.sh main
+bash ops/deploy/deploy-key-vault-worker.sh main
 ```
 
 Do not copy whole local folders to production. Do not commit or overwrite production `.env`, DB files, `data/`, `.venv`, `node_modules`, logs, or generated release artifacts.
@@ -75,11 +82,11 @@ For the current public GitHub repo, push source code and sanitized docs only. Do
 
 ## Important docs
 
-- [docs/design.md](docs/design.md): current architecture and data boundaries.
-- [docs/deployment-guide.md](docs/deployment-guide.md): deploy, rollback, health checks, and VPS layout.
-- [docs/server.md](docs/server.md): sanitized pricing source configuration reference.
-- [docs/implementation-plan.md](docs/implementation-plan.md): current state and future roadmap.
-- [docs/gitnexus-analysis.md](docs/gitnexus-analysis.md): code intelligence notes and high-risk areas.
+- [docs/architecture.md](docs/architecture.md): current architecture and data boundaries.
+- [docs/deployment-guide.md](docs/deployment-guide.md): deploy, rollback, backup/standby recovery, health checks, and VPS layout.
+- [docs/pricing-sources.md](docs/pricing-sources.md): sanitized pricing source configuration reference.
+- [docs/roadmap.md](docs/roadmap.md): current state and future roadmap.
+- [docs/code-risk-map.md](docs/code-risk-map.md): code intelligence notes and high-risk areas.
 - [memory.md](memory.md): compact handoff memory for future changes.
 
 ## Local workflow

@@ -277,10 +277,12 @@ async def main() -> None:
                 tx_type="refund",
                 description="Verification refund",
             )
-            assert refunded_balance is not None
+            assert refunded_balance is None  # This fixture has never been paid.
+            assert await get_user_server_total_spend(user["id"], server_id) == 35000
+            # Exercise the ledger reversal separately with the synthetic completion event above.
             await SpendLedgerService.record_order_refund(order)
             assert await get_user_server_total_spend(user["id"], server_id) == 15000
-            print("[OK] Refunding a completed API order appends a reversal and reduces spend summary")
+            print("[OK] Unpaid refund is rejected; ledger reversal records a synthetic correction")
 
             ledger_entries = await list_spend_ledger(user["id"], server_id)
             assert len(ledger_entries) == 4

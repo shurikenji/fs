@@ -1,0 +1,18 @@
+[Unit]
+Description=Shupremium Shopbot integrated runtime
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/etc/shupremium/shopbot-owner-disabled
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/srv/shupremium-stack/current/shopbot
+EnvironmentFile=/srv/shupremium-stack/shared/shopbot/.env
+ExecStart=/srv/shupremium-stack/current/shopbot/.venv/bin/python -m bot.main
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

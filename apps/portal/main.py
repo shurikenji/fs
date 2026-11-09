@@ -9,8 +9,19 @@ load_dotenv()
 from app.config import get_settings  # noqa: E402
 
 
+def validate_runtime_settings(settings) -> None:
+    fields = ["admin_secret", "pricing_admin_token"]
+    if settings.control_plane_sync_enabled:
+        fields.append("control_plane_token")
+    for name in fields:
+        value = getattr(settings, name, "")
+        if not value or not value.strip() or value.strip().lower().startswith("change-me"):
+            raise RuntimeError(f"{name.upper()} must be configured with a non-default value")
+
+
 def main() -> None:
     settings = get_settings()
+    validate_runtime_settings(settings)
     uvicorn.run(
         "app.app:create_app",
         factory=True,

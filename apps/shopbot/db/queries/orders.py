@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Optional
 
 from bot.utils.time_utils import to_db_time_string
-from db.database import get_db
+from db.database import get_db, open_write_transaction
 from db.queries.analytics import get_dashboard_overview
 from db.queries._helpers import execute_commit, fetch_all_dicts, fetch_one_dict, fetch_scalar
 
@@ -118,6 +118,92 @@ async def create_order(
     return cursor.lastrowid  # type: ignore[return-value]
 
 
+async def create_order_idempotent(
+    *,
+    purchase_nonce: str,
+    order_code: str,
+    user_id: int,
+    product_type: str,
+    amount: int,
+    payment_method: str,
+    quantity: int = 1,
+    product_id: Optional[int] = None,
+    product_name: Optional[str] = None,
+    server_id: Optional[int] = None,
+    group_name: Optional[str] = None,
+    existing_key: Optional[str] = None,
+    custom_quota: Optional[int] = None,
+    qr_content: Optional[str] = None,
+    expired_at: Optional[str] = None,
+    base_amount: Optional[int] = None,
+    discount_amount: int = 0,
+    cashback_amount: int = 0,
+    spend_credit_amount: int = 0,
+    pricing_version_id: Optional[int] = None,
+    applied_tier_id: Optional[int] = None,
+    pricing_snapshot: Optional[str] = None,
+    promotion_snapshot: Optional[str] = None,
+) -> tuple[dict, bool]:
+    """Create one pending order per user/purchase nonce."""
+    db = await open_write_transaction()
+    try:
+        cursor = await db.execute(
+            f"{_ORDER_SELECT} WHERE user_id = ? AND purchase_nonce = ? AND status = 'pending' LIMIT 1",
+            (user_id, purchase_nonce),
+        )
+        existing = await cursor.fetchone()
+        if existing is not None:
+            await db.rollback()
+            return dict(existing), False
+
+        cursor = await db.execute(
+            """INSERT INTO orders
+               (order_code, user_id, purchase_nonce, product_id, product_name, product_type,
+                amount, quantity, payment_method, server_id, group_name, existing_key,
+                custom_quota, qr_content, expired_at, base_amount, discount_amount,
+                cashback_amount, spend_credit_amount, pricing_version_id,
+                applied_tier_id, pricing_snapshot, promotion_snapshot)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                order_code,
+                user_id,
+                purchase_nonce,
+                product_id,
+                product_name,
+                product_type,
+                amount,
+                quantity,
+                payment_method,
+                server_id,
+                group_name,
+                existing_key,
+                custom_quota,
+                qr_content,
+                expired_at,
+                base_amount,
+                discount_amount,
+                cashback_amount,
+                spend_credit_amount,
+                pricing_version_id,
+                applied_tier_id,
+                pricing_snapshot,
+                promotion_snapshot,
+            ),
+        )
+        order_id = cursor.lastrowid
+        cursor = await db.execute(f"{_ORDER_SELECT} WHERE id = ?", (order_id,))
+        created = await cursor.fetchone()
+        if created is None:
+            raise RuntimeError("Created order could not be reloaded")
+        await db.commit()
+        return dict(created), True
+    except BaseException:
+        await db.rollback()
+        raise
+    finally:
+        await db.close()
+
+
 async def get_order_by_id(order_id: int) -> Optional[dict]:
     """Get an order by ID."""
     return await _fetch_order("id = ?", (order_id,))
@@ -185,20 +271,38 @@ async def update_order_status(
     await db.commit()
 
 
-async def cancel_order(order_id: int) -> None:
-    """Cancel an order and release reserved stock if any."""
-    await update_order_status(order_id, "cancelled")
-    from db.queries.account_stocks import release_account_by_order
+async def _close_pending_order(order_id: int, status: str) -> bool:
+    db = await open_write_transaction()
+    try:
+        cursor = await db.execute(
+            """UPDATE orders SET status = ?, expired_at = CASE WHEN ? = 'expired' THEN ? ELSE expired_at END,
+               updated_at = datetime('now', '+7 hours') WHERE id = ? AND status = 'pending'""",
+            (status, status, to_db_time_string(), order_id),
+        )
+        if cursor.rowcount != 1:
+            await db.rollback()
+            return False
+        await db.execute(
+            "UPDATE account_stocks SET sold_order_id = NULL WHERE sold_order_id = ? AND is_sold = 0",
+            (order_id,),
+        )
+        await db.commit()
+        return True
+    except BaseException:
+        await db.rollback()
+        raise
+    finally:
+        await db.close()
 
-    await release_account_by_order(order_id)
+
+async def cancel_order(order_id: int) -> bool:
+    """Cancel a pending order and release its reservations atomically."""
+    return await _close_pending_order(order_id, "cancelled")
 
 
-async def expire_order(order_id: int) -> None:
-    """Mark order as expired and release reserved stock if any."""
-    await update_order_status(order_id, "expired", expired_at=to_db_time_string())
-    from db.queries.account_stocks import release_account_by_order
-
-    await release_account_by_order(order_id)
+async def expire_order(order_id: int) -> bool:
+    """Expire a pending order and release its reservations atomically."""
+    return await _close_pending_order(order_id, "expired")
 
 
 async def mark_refunded(

@@ -57,6 +57,7 @@ async def consume_launch_token(request: Request, token: str = Form(...)):
         logger.warning("Rejected shopbot admin launch token: issuer=%s subject=%s nonce=%s", issuer, subject, nonce)
         return _render_login(request, "Lien ket admin khong hop le hoac da het han.")
 
+    request.session.clear()
     request.session["admin"] = {
         "source": "platform-control",
         "subject": subject,

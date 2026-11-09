@@ -32,7 +32,7 @@
     {% endfor %}
 </div>
 
-<form method="POST" action="/settings/save" id="settingsForm">
+<form method="POST" action="/settings/save" id="settingsForm"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
     <div class="row g-4 animate-fade-up">
         <div class="col-12 col-lg-7">
             <div class="settings-tab" id="tab-banking">
@@ -210,7 +210,7 @@
                             <div class="col-md-6">
                                 <div class="form-group">
                                     <label class="form-label">Admin Password</label>{{ field_tooltip("Mật khẩu đăng nhập Shopbot Admin; nên dùng chuỗi dài, riêng biệt và bảo quản an toàn.") }}
-                                    <input name="admin_password" type="password" class="form-control" value="{{ all_settings.get('admin_password', '') }}" placeholder="********">
+                                    <input name="admin_password" type="password" class="form-control" value="" placeholder="Để trống nếu không đổi mật khẩu" autocomplete="new-password">
                                 </div>
                             </div>
                             <div class="col-12">
@@ -270,7 +270,7 @@
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label class="form-label">VietQR Template</label>{{ field_tooltip("Tên template VietQR do nhà cung cấp hỗ trợ, ví dụ compact.") }}
+                                    <label class="form-label">VietQR Template</label>{{ field_tooltip("Template render offline: compact, print hoặc qr_only. Giá trị compact2 cũ vẫn được ánh xạ sang compact.") }}
                                     <input name="vietqr_template" class="form-control" value="{{ all_settings.get('vietqr_template', '') }}" placeholder="compact">
                                 </div>
                             </div>
@@ -489,6 +489,7 @@ async function testAI() {
     formData.append('api_key', apiKey);
     formData.append('model', model);
     formData.append('base_url', baseUrl);
+    formData.append('csrf_token', {{ csrf_token(request)|tojson }});
 
     try {
         const resp = await fetch('/settings/ai/test', { method: 'POST', body: formData });
