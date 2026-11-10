@@ -17,6 +17,7 @@ from aiogram.types import BotCommand
 from bot.config import settings
 from bot.handlers import setup_routers
 from bot.middlewares.auth import AuthMiddleware
+from bot.middlewares.navigation import MenuNavigationMiddleware
 from bot.middlewares.telemetry import CallbackDebounceMiddleware, MetricsMiddleware
 from bot.services.key_alert_poller import start_key_alert_poller
 from bot.services.key_backup_poller import start_key_backup_poller
@@ -59,6 +60,7 @@ def build_bot() -> Bot:
 
 def build_dispatcher() -> Dispatcher:
     dispatcher = Dispatcher(storage=SQLiteFSMStorage())
+    dispatcher.message.outer_middleware(MenuNavigationMiddleware(command.command for command in BOT_COMMANDS))
     metrics = MetricsMiddleware()
     dispatcher.message.middleware(metrics)
     dispatcher.callback_query.middleware(metrics)

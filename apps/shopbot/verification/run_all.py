@@ -11,6 +11,7 @@ SCRIPTS = [
     ROOT_DIR / "verification" / "verify_phase4_admin.py",
     ROOT_DIR / "verification" / "verify_phase5_orders_payments.py",
     ROOT_DIR / "verification" / "verify_purchase_hardening.py",
+    ROOT_DIR / "verification" / "verify_menu_navigation.py",
     ROOT_DIR / "verification" / "verify_order_admin_actions.py",
     ROOT_DIR / "verification" / "verify_payment_poller.py",
     ROOT_DIR / "verification" / "verify_vietqr.py",
