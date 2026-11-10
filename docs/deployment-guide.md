@@ -241,28 +241,27 @@ curl --resolve gpt1.shupremium.com:443:$TARGET_VPS_IP -I https://gpt1.shupremium
 
 ## Deploy commands on the single VPS
 
-Use the same SSH session and checkout for every app. Run only the deploy scripts for apps changed by the release. For the Shopbot pricing ownership change, update **Shopbot first**, then Platform Control:
+The operator's checkout is `deploy/staging-vietqr-20261106b` at `56a51c8`, with 16 production fixes absent from `main`. Use release `deploy/shopbot-local-pricing-20261111` at `00d1caf`, which includes those fixes plus Shopbot-local pricing. Do not reset/rebase the production branch to `main` or deploy `9012994` directly over it.
+
+When the working tree is clean, preserve its current commit and switch to the release branch:
 
 ```bash
-set -e
 cd /srv/shupremium-stack/repo
-git pull --ff-only origin main
-bash ops/deploy/deploy-shopbot.sh 9012994 combined
-bash ops/deploy/deploy-platform-control.sh 9012994 combined
+git fetch origin
+git status --short
+git branch backup/vps-before-local-pricing-20261111 HEAD
+git switch --track origin/deploy/shopbot-local-pricing-20261111
+```
+
+If the release branch already exists locally, switch to it and pull fast-forward-only from the matching remote branch. Do not switch with uncommitted production edits. Deploy Bot before Admin in the same SSH session:
+
+```bash
+bash ops/deploy/deploy-shopbot.sh 00d1caf combined &&
+bash ops/deploy/deploy-platform-control.sh 00d1caf combined &&
 bash ops/scripts/verify-all-health.sh combined
 ```
 
-Commit `9012994` contains the pricing ownership change. For later releases, pass the intended commit or ref instead. Stop if either deploy fails; do not continue to the next app. These scripts restart their own runtimes and attempt rollback on post-switch failure.
-
-Other apps are deployed on this same VPS when their code changes:
-
-```bash
-bash ops/deploy/deploy-portal.sh main combined
-bash ops/deploy/deploy-proxy-gateway.sh main combined
-bash ops/deploy/deploy-key-vault-worker.sh main combined
-```
-
-If the host has the `~/shupremium-repo` convenience symlink, it may be used instead of the canonical checkout path. Do not run additional Telegram polling instances during deployment.
+Both apps are pinned to the verified release. Other apps do not need redeployment for this change. The release retains the key-vault, offline VietQR, SQLite backup, weak ETag, upstream mapping and modal escaping fixes from the production branch.
 
 ## Deploy pipeline
 

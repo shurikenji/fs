@@ -1,5 +1,7 @@
 # Shupremium Stack Memory
 
+Production checkout reported by the operator on 2026-11-11: `deploy/staging-vietqr-20261106b` at `56a51c8`, with 16 commits absent from `main`. The prepared pricing release is `deploy/shopbot-local-pricing-20261111` at `00d1caf`, which extends that production branch. Do not deploy `main` or `9012994` directly over production until the histories are reconciled.
+
 Last updated: 2026-11-11
 
 This file is a compact handoff. Keep durable repository, deploy, and safety facts here; host snapshots and one-off migration notes belong in runbooks or inventory docs.
