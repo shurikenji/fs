@@ -1,6 +1,6 @@
 # Shupremium Stack Memory
 
-Last updated: 2026-11-09
+Last updated: 2026-11-11
 
 This file is a compact handoff. Keep durable repository, deploy, and safety facts here; host snapshots and one-off migration notes belong in runbooks or inventory docs.
 
@@ -18,14 +18,14 @@ GitNexus `list_repos` on 2026-11-09 reported the current `fs` index (indexed 202
 
 ## Active deploy targets
 
-The source of truth is `ops/deploy/app-manifest.sh`.
+Production is **one VPS**, confirmed by the user on 2026-11-11. Do not infer two VPSs from the old `arm` and `shopbot` role names. Use `combined` for production deploy and health commands. The manifest describes compatible app roles; `ensure_host_role` accepts all five apps on `combined`. The live role file and runtime health were not inspected during this correction.
 
-| App | Host role | Runtime |
+| App | Current deployment role | Runtime |
 | --- | --- | --- |
-| `portal` | `arm` | PM2 + Python |
-| `platform-control` | `arm` | PM2 + Python |
-| `proxy-gateway` | `arm` | PM2 + Node.js |
-| `shopbot` | `shopbot` | systemd + Python |
+| `portal` | `combined` | PM2 + Python |
+| `platform-control` | `combined` | PM2 + Python |
+| `proxy-gateway` | `combined` | PM2 + Node.js |
+| `shopbot` | `combined` | systemd + Python |
 | `key-vault-worker` | `combined` | systemd + Python |
 
 `archive/services/balance-checker` is archived source and is not in the active manifest.
@@ -42,13 +42,15 @@ Canonical layout:
   shared/
 ```
 
-Deploy only through the matching `ops/deploy/deploy-*.sh` script.
+Deploy only through the matching `ops/deploy/deploy-*.sh` script on the shared VPS, passing `combined`. Run `bash ops/scripts/verify-all-health.sh combined`. For pricing-ownership releases, deploy Shopbot first, then Platform Control.
 
 Python releases create their own `.venv`. Persistent `.env` and `data/` are linked from `shared/<app>`; do not keep a shared Python venv as part of the current deploy contract.
 
 Normal release flow is extract -> prepare -> validate -> switch `current/<app>` -> restart -> smoke -> rollback on restart/smoke failure. Deploy audit records go to `/srv/shupremium-stack/shared/_ops/deploy-audit.jsonl`.
 
 ## Shopbot facts
+
+- Selling prices, quota conversion, discounts, tiers, spend accrual and sales groups belong to Shopbot Admin (`/servers`); central connection snapshots must not overwrite them.
 
 - Canonical systemd working directory: `/srv/shupremium-stack/current/shopbot`.
 - Canonical executable: `/srv/shupremium-stack/current/shopbot/.venv/bin/python -m bot.main`.

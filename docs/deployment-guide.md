@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Updated: 2026-11-09
+Updated: 2026-11-11
 
 This is the current deploy guide for `shupremium-stack`. The production contract is:
 
@@ -11,29 +11,35 @@ This is the current deploy guide for `shupremium-stack`. The production contract
 - Manual folder copy/scp deploy is not the normal path.
 - Repository content must always be safe to expose; never commit runtime secrets or copied production data.
 
-## Hosts and roles
+## Current production host and roles
 
-| Host | Role file | Apps |
+Production is consolidated onto **one VPS**, confirmed by the operator on 2026-11-11. All five apps run on that host with separate processes, releases, environments and databases.
+
+| Production host | Expected role file | Apps |
 | --- | --- | --- |
-| ARM VPS | `/etc/shupremium-host-role = arm` | `portal`, `platform-control`, `proxy-gateway` |
-| Shopbot VPS | `/etc/shupremium-host-role = shopbot` | `shopbot` |
-| Combined VPS | `/etc/shupremium-host-role = combined` | `key-vault-worker` |
+| Single shared VPS | `/etc/shupremium-host-role = combined` | `portal`, `platform-control`, `shopbot`, `proxy-gateway`, `key-vault-worker` |
 
-Set role:
+The manifest keeps `arm` and `shopbot` as per-app compatibility roles. `ensure_host_role` accepts those apps on `combined`; `verify-all-health.sh combined` checks all five apps. These names are not evidence of separate production machines.
+
+Check the role file on the VPS:
 
 ```bash
-echo arm | sudo tee /etc/shupremium-host-role
-echo shopbot | sudo tee /etc/shupremium-host-role
+cat /etc/shupremium-host-role
+```
+
+The expected value is `combined`. For a newly bootstrapped single-VPS host, initialize it once:
+
+```bash
 echo combined | sudo tee /etc/shupremium-host-role
 ```
 
-Only set the role that matches the current VPS.
+This documentation correction uses operator-confirmed placement and the repository scripts; it does not claim that the live role file, processes, DNS or ports were inspected. Do not change a live role file merely to suppress an unexplained deploy error.
 
-## ARM host baseline
+## Shared VPS baseline
 
-Recommended baseline for the ARM host role:
+Recommended baseline for the single VPS:
 
-- Ubuntu aarch64 with `python3`, `python3-venv`, git, curl, tar, nginx, and systemd.
+- Ubuntu with `python3`, `python3-venv`, git, curl, tar, nginx, and systemd; use packages matching the VPS architecture.
 - Node.js 20+, npm, and PM2 for `proxy-gateway`.
 - Provider firewall/security groups and the OS firewall should expose only the public ingress that is actually required, normally SSH plus HTTP/HTTPS.
 
@@ -44,6 +50,8 @@ Do not expose internal app ports publicly:
 | `8080` | `portal` | localhost/nginx only |
 | `8090` | `platform-control` | localhost/nginx only |
 | `8091` | `proxy-operator` | localhost/internal admin only |
+| `8092` | Shopbot admin | localhost/nginx only |
+| `8093` | `key-vault-worker` | localhost/internal API only |
 | proxy service ports | generated `proxy-service` processes | localhost/nginx only |
 
 Example UFW sequence when UFW is the host firewall:
@@ -126,13 +134,13 @@ bash ops/deploy/bootstrap-host.sh
 Bootstrap creates the top-level deploy directories. It does not invent production secrets.
 If the Git remote changes, use the current canonical remote rather than copying an old URL from this document.
 
-For a replacement ARM host, set the role before first deploy:
+For a replacement single-VPS host, set the role before first deploy:
 
 ```bash
-echo arm | sudo tee /etc/shupremium-host-role
+echo combined | sudo tee /etc/shupremium-host-role
 ```
 
-Keep the current ARM host serving traffic until the replacement passes local and DNS-resolved checks.
+Keep the current production host serving traffic until the replacement passes local and DNS-resolved checks.
 
 ## Shared runtime preparation
 
@@ -197,7 +205,7 @@ cp /path/to/known-good-proxy-operator.env /srv/shupremium-stack/shared/proxy-gat
 
 Node dependencies are installed inside releases during deploy; do not copy `node_modules` into Git.
 
-## DNS and TLS for ARM host replacement
+## DNS and TLS for a replacement VPS
 
 Wildcard certificate is expected at:
 
@@ -222,52 +230,39 @@ sudo certbot certonly --dns-cloudflare \
   --non-interactive --agree-tos -m admin@shupremium.com
 ```
 
-Do not switch DNS to a replacement ARM IP until that host passes local checks. Before cutover, test public hostnames against the target IP:
+Do not switch DNS to a replacement VPS IP until that host passes local checks. Before cutover, test public hostnames against the target IP:
 
 ```bash
-TARGET_ARM_IP=<target-ip>
-curl --resolve shupremium.com:443:$TARGET_ARM_IP -I https://shupremium.com/
-curl --resolve admin.shupremium.com:443:$TARGET_ARM_IP -I https://admin.shupremium.com/
-curl --resolve gpt1.shupremium.com:443:$TARGET_ARM_IP -I https://gpt1.shupremium.com/
+TARGET_VPS_IP=<target-ip>
+curl --resolve shupremium.com:443:$TARGET_VPS_IP -I https://shupremium.com/
+curl --resolve admin.shupremium.com:443:$TARGET_VPS_IP -I https://admin.shupremium.com/
+curl --resolve gpt1.shupremium.com:443:$TARGET_VPS_IP -I https://gpt1.shupremium.com/
 ```
 
-## Deploy commands
+## Deploy commands on the single VPS
 
-### ARM VPS
+Use the same SSH session and checkout for every app. Run only the deploy scripts for apps changed by the release. For the Shopbot pricing ownership change, update **Shopbot first**, then Platform Control:
 
 ```bash
+set -e
 cd /srv/shupremium-stack/repo
-git fetch origin
 git pull --ff-only origin main
-bash ops/deploy/deploy-portal.sh main
-bash ops/deploy/deploy-platform-control.sh main
-bash ops/deploy/deploy-proxy-gateway.sh main
+bash ops/deploy/deploy-shopbot.sh 9012994 combined
+bash ops/deploy/deploy-platform-control.sh 9012994 combined
+bash ops/scripts/verify-all-health.sh combined
 ```
 
-### Shopbot VPS
+Commit `9012994` contains the pricing ownership change. For later releases, pass the intended commit or ref instead. Stop if either deploy fails; do not continue to the next app. These scripts restart their own runtimes and attempt rollback on post-switch failure.
+
+Other apps are deployed on this same VPS when their code changes:
 
 ```bash
-cd /srv/shupremium-stack/repo
-git fetch origin
-git pull --ff-only origin main
-bash ops/deploy/deploy-shopbot.sh main
+bash ops/deploy/deploy-portal.sh main combined
+bash ops/deploy/deploy-proxy-gateway.sh main combined
+bash ops/deploy/deploy-key-vault-worker.sh main combined
 ```
 
-### Combined VPS
-
-```bash
-cd /srv/shupremium-stack/repo
-git fetch origin
-git pull --ff-only origin main
-bash ops/deploy/deploy-key-vault-worker.sh main
-```
-
-If the host has convenience symlinks:
-
-```bash
-cd ~/shupremium-repo
-bash ops/deploy/deploy-shopbot.sh main
-```
+If the host has the `~/shupremium-repo` convenience symlink, it may be used instead of the canonical checkout path. Do not run additional Telegram polling instances during deployment.
 
 ## Deploy pipeline
 
@@ -309,15 +304,10 @@ Run the host-wide verifier:
 
 ```bash
 cd /srv/shupremium-stack/repo
-bash ops/scripts/verify-all-health.sh
+bash ops/scripts/verify-all-health.sh combined
 ```
 
-Explicit host role:
-
-```bash
-bash ops/scripts/verify-all-health.sh arm
-bash ops/scripts/verify-all-health.sh shopbot
-```
+The combined verifier checks all five apps, including the Shopbot admin on localhost `8092`. Legacy `arm`/`shopbot` filters remain available for targeted diagnostics; they do not describe separate current VPSs.
 
 Manual spot checks:
 
@@ -328,7 +318,7 @@ readlink -f /srv/shupremium-stack/current/proxy-gateway
 readlink -f /srv/shupremium-stack/current/shopbot
 ```
 
-ARM runtime:
+PM2 runtimes on the shared VPS:
 
 ```bash
 pm2 ls
@@ -337,7 +327,7 @@ curl -fsS http://127.0.0.1:8090/ -o /dev/null
 curl -fsS http://127.0.0.1:8091/health
 ```
 
-Shopbot runtime:
+Shopbot runtime on the same VPS:
 
 ```bash
 systemctl status shopbot --no-pager
@@ -363,7 +353,7 @@ Rollback uses the same restart and smoke logic as deploy. If rollback target als
 
 ## Shopbot backup and standby recovery
 
-Back up the primary Shopbot VPS from the current release:
+Back up the Shopbot runtime on the shared VPS from its current release:
 
 ```bash
 cd /srv/shupremium-stack/current/shopbot
@@ -372,9 +362,9 @@ bash scripts/backup_shopbot.sh
 
 Keep the SQLite snapshot from `shared/shopbot/data`, `/srv/shupremium-stack/shared/shopbot/.env`, and the current git commit/release timestamp together. Do not commit backups to Git.
 
-To restore a standby host:
+To restore Shopbot on a replacement combined host (restore the other apps separately):
 
-1. Prepare the canonical `/srv/shupremium-stack` layout and set `/etc/shupremium-host-role` to `shopbot`.
+1. Prepare the canonical `/srv/shupremium-stack` layout and set `/etc/shupremium-host-role` to `combined`.
 2. Restore `.env` and the DB snapshot into `/srv/shupremium-stack/shared/shopbot`.
 3. If the restored DB predates the current financial schema, back it up again and run:
 
@@ -383,7 +373,7 @@ To restore a standby host:
    python3 scripts/migrate_financial.py /srv/shupremium-stack/shared/shopbot/data/<database>.db
    ```
 
-4. Update the repository, run `bash ops/deploy/bootstrap-host.sh`, then deploy with `bash ops/deploy/deploy-shopbot.sh main`.
+4. Update the repository, run `bash ops/deploy/bootstrap-host.sh`, then deploy with `bash ops/deploy/deploy-shopbot.sh main combined`.
 5. Reload and restart the service:
 
    ```bash

@@ -4,23 +4,24 @@ Monorepo này là source of truth cho stack Shupremium đang chạy production. 
 
 ## Current status
 
-Updated: 2026-11-09
+Updated: 2026-11-11
 
 - Production deploy model is `/srv/shupremium-stack` with per-app releases and shared runtime state.
 - The deploy manifest currently contains five apps: `portal`, `platform-control`, `shopbot`, `proxy-gateway`, and `key-vault-worker`.
-- Host placement is controlled by `/etc/shupremium-host-role`; the manifest maps the apps to `arm`, `shopbot`, and `combined` roles.
+- Production now runs all five apps on **one VPS**, as confirmed by the operator on 2026-11-11. Use the `combined` deployment role.
+- The manifest retains `arm`/`shopbot` app compatibility roles; these do not mean separate production VPSs. The expected host-role file is `/etc/shupremium-host-role = combined`; its live value still needs checking on the VPS.
 - Python deploys create an isolated `.venv` inside each release; only `.env` and `data/` are shared across releases.
 - Local-only cleanup and sensitive/session files are kept under `_local_cleanup/` and are ignored by Git.
 - GitHub is still treated as public. Only sanitized source, examples, and docs may be pushed.
 
 ## Thành phần active
 
-| App | Path | Runtime | Host role | Vai trò |
+| App | Path | Runtime | Current deployment role | Vai trò |
 | --- | --- | --- | --- | --- |
-| Portal | `apps/portal` | Python/FastAPI + PM2 | `arm` | Public site: pricing, balance, keys, logs, status |
-| Platform Control | `apps/platform-control` | Python/FastAPI + PM2 | `arm` | Admin shell/control plane |
-| Shopbot | `apps/shopbot` | Python + systemd | `shopbot` | Telegram bot, payment poller, shop admin |
-| Proxy Gateway | `services/proxy-gateway` | Node.js + PM2 | `arm` | Proxy operator + generated proxy services |
+| Portal | `apps/portal` | Python/FastAPI + PM2 | `combined` | Public site: pricing, balance, keys, logs, status |
+| Platform Control | `apps/platform-control` | Python/FastAPI + PM2 | `combined` | Admin shell/control plane |
+| Shopbot | `apps/shopbot` | Python + systemd | `combined` | Telegram bot, payment poller, shop admin |
+| Proxy Gateway | `services/proxy-gateway` | Node.js + PM2 | `combined` | Proxy operator + generated proxy services |
 | Key Vault Worker | `apps/key-vault-worker` | Python/FastAPI + systemd | `combined` | Encrypted API-key history, source polling, internal lookup/summary API |
 
 `archive/services/balance-checker` là legacy code đã archive, không nằm trong active deploy manifest.
@@ -30,11 +31,11 @@ Updated: 2026-11-09
 ```text
 Users
   -> https://shupremium.com
-  -> portal (:8080 on ARM VPS)
+  -> portal (localhost :8080 on the shared VPS)
 
 Admins
   -> https://admin.shupremium.com
-  -> platform-control (:8090 on ARM VPS)
+  -> platform-control (localhost :8090 on the same VPS)
   -> linked launch to shopbot admin when needed
 
 Proxy customers
@@ -42,7 +43,7 @@ Proxy customers
   -> proxy-service processes managed by proxy-operator (:8091)
 
 Telegram commerce
-  -> shopbot on separate VPS
+  -> shopbot on the same VPS; admin on localhost :8092
   -> systemd unit: shopbot
 
 Key vault
@@ -63,17 +64,15 @@ Production layout is standardized:
   shared/     # persistent .env, data, operator secrets, audit logs
 ```
 
-Deploy is always per app:
+Deploy is always per app, on the same VPS. Run only the scripts for apps changed by the release. For the Shopbot pricing ownership change, deploy Shopbot before Platform Control:
 
 ```bash
 cd /srv/shupremium-stack/repo
 git fetch origin
 git pull --ff-only origin main
-bash ops/deploy/deploy-portal.sh main
-bash ops/deploy/deploy-platform-control.sh main
-bash ops/deploy/deploy-proxy-gateway.sh main
-bash ops/deploy/deploy-shopbot.sh main
-bash ops/deploy/deploy-key-vault-worker.sh main
+bash ops/deploy/deploy-shopbot.sh main combined
+bash ops/deploy/deploy-platform-control.sh main combined
+bash ops/scripts/verify-all-health.sh combined
 ```
 
 Do not copy whole local folders to production. Do not commit or overwrite production `.env`, DB files, `data/`, `.venv`, `node_modules`, logs, or generated release artifacts.

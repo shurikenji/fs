@@ -1,6 +1,6 @@
 # Ops Scripts
 
-Updated: 2026-06-23
+Updated: 2026-11-11
 
 Thư mục này dành cho các script phụ trợ không phải deploy trực tiếp.
 
@@ -16,7 +16,7 @@ Hiện tại các script deploy chính nằm trong `ops/deploy/`.
 Script kiểm tra chính sau deploy hoặc khi dựng host mới:
 
 ```bash
-bash ops/scripts/verify-all-health.sh
-bash ops/scripts/verify-all-health.sh arm
-bash ops/scripts/verify-all-health.sh shopbot
+bash ops/scripts/verify-all-health.sh combined
 ```
+
+Production uses one VPS with role `combined`; this checks all five apps. The `arm` and `shopbot` filters are retained for targeted diagnostics, not as current host placement.

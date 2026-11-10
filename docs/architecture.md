@@ -1,8 +1,10 @@
 # Current Architecture
 
-Updated: 2026-11-09
+Updated: 2026-11-11
 
 ## Overview
+
+All five apps run on one production VPS, confirmed by the operator on 2026-11-11. The diagram shows service/data boundaries on that VPS, not separate machines. `combined` is the deployment role for this topology; no live host inspection was performed for this documentation update.
 
 ```text
                          Public users
@@ -11,7 +13,7 @@ Updated: 2026-11-09
                     +-------------------+
                     | portal            |
                     | shupremium.com    |
-                    | ARM role :8080    |
+                    | localhost :8080    |
                     +---------+---------+
                               |
                               v
@@ -25,8 +27,8 @@ Admins
   v
 +-----------------------+        +---------------------+
 | platform-control      |------->| proxy-operator      |
-| admin.shupremium.com  |        | ARM role :8091      |
-| ARM role :8090        |        +----------+----------+
+| admin.shupremium.com  |        | localhost :8091      |
+| localhost :8090        |        +----------+----------+
 +-----------+-----------+                   |
             |                               v
             |                    +---------------------+
@@ -38,7 +40,7 @@ Admins
             v
 +-----------------------+
 | shopbot               |
-| separate Shopbot VPS  |
+| same VPS, admin :8092  |
 | Telegram + admin + DB |
 +-----------------------+
 
@@ -66,7 +68,7 @@ platform-control
 - deploy job history
 - linked launch into Shopbot admin
 
-It runs on the ARM host role, normally on port `8090`, behind `admin.shupremium.com`.
+It runs on the shared production VPS, on localhost port `8090`, behind `admin.shupremium.com`.
 
 ### `portal`
 
@@ -92,7 +94,7 @@ Nginx/certificate/proxy changes should flow through `proxy-operator` or the depl
 
 ### `shopbot`
 
-`shopbot` is intentionally isolated on its own VPS. It owns:
+`shopbot` runs as its own systemd service on the same VPS as the other apps, with its admin on localhost `8092`. It owns:
 
 - Telegram bot runtime
 - payment polling
@@ -100,7 +102,7 @@ Nginx/certificate/proxy changes should flow through `proxy-operator` or the depl
 - Shopbot admin UI
 - its own SQLite DB
 
-`platform-control` does not write Shopbot DB directly. It only opens Shopbot admin through a short-lived signed launch token.
+`platform-control` does not write Shopbot DB directly. It provides connection configuration through the internal snapshot API and opens Shopbot admin through a short-lived signed launch token. Shopbot keeps its selling prices, quota conversion, discounts, tiers, spend accrual and sales groups locally; connection sync must preserve these settings.
 
 ### `key-vault-worker`
 
@@ -135,13 +137,13 @@ Its HTTP service binds to `127.0.0.1:8093`. Runtime secrets and its SQLite DB li
 
 | Role | Apps | Notes |
 | --- | --- | --- |
-| `arm` | `portal`, `platform-control`, `proxy-gateway` | Public portal, admin shell, proxy operator, and generated proxy services. |
-| `shopbot` | `shopbot` | Runs Telegram commerce and payment polling separately from the ARM proxy/admin plane. |
-| `combined` | `key-vault-worker` | Runs the internal vault service on systemd and binds it to localhost only. |
+| `combined` | All five apps | Current single-VPS deployment; accepts apps whose manifest compatibility role is `arm`, `shopbot`, or `combined`. |
+| `arm` | `portal`, `platform-control`, `proxy-gateway` | Retained split-host compatibility; not the current production topology. |
+| `shopbot` | `shopbot` | Retained split-host compatibility; not a separate current production VPS. |
 
-The expected role file on each host is `/etc/shupremium-host-role`.
+The expected role file on the production VPS is `/etc/shupremium-host-role` containing `combined`.
 
-Do not hard-code VPS instance names in architecture docs. The source of truth is the deploy manifest, host role file, `/srv/shupremium-stack` layout, PM2/systemd health, and current DNS/runtime checks.
+Do not hard-code VPS instance names in architecture docs. The operator-confirmed topology is one VPS. The deploy manifest describes app compatibility, while the live host-role file, `/srv/shupremium-stack` layout, PM2/systemd health, and DNS/runtime checks establish actual runtime state.
 
 ## Deprecated or archived components
 

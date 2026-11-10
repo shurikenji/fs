@@ -1,6 +1,6 @@
 # Current State And Roadmap
 
-Updated: 2026-11-09
+Updated: 2026-11-11
 
 The active deployment model is the monorepo release layout under `/srv/shupremium-stack`. Keep this file focused on current repository state and remaining work; historical rollout notes belong outside the active docs set.
 
@@ -8,18 +8,20 @@ All committed docs and examples must stay sanitized regardless of repository vis
 
 ## Current state
 
+Production is consolidated onto one VPS (operator confirmation, 2026-11-11); deploy with role `combined`. App process and database boundaries remain separate. This update does not claim live inspection of the VPS.
+
 | Component | State | Canonical runtime |
 | --- | --- | --- |
-| `portal` | Active public runtime | ARM VPS, PM2, `/srv/shupremium-stack/current/portal` |
-| `platform-control` | Active admin shell | ARM VPS, PM2, `/srv/shupremium-stack/current/platform-control` |
-| `proxy-gateway` | Active proxy plane | ARM VPS, PM2, `/srv/shupremium-stack/current/proxy-gateway` |
-| `shopbot` | Active commerce runtime | Shopbot VPS, systemd, `/srv/shupremium-stack/current/shopbot` |
-| `key-vault-worker` | Active deploy target | Combined role, systemd, `/srv/shupremium-stack/current/key-vault-worker` |
+| `portal` | Active public runtime | Same VPS (`combined`), PM2, `/srv/shupremium-stack/current/portal` |
+| `platform-control` | Active admin shell | Same VPS (`combined`), PM2, `/srv/shupremium-stack/current/platform-control` |
+| `proxy-gateway` | Active proxy plane | Same VPS (`combined`), PM2, `/srv/shupremium-stack/current/proxy-gateway` |
+| `shopbot` | Active commerce runtime | Same VPS (`combined`), systemd, `/srv/shupremium-stack/current/shopbot` |
+| `key-vault-worker` | Active deploy target | Same VPS (`combined`), systemd, `/srv/shupremium-stack/current/key-vault-worker` |
 | `balance-checker` | Archived legacy code | Not in active deploy manifest |
 
 ## Current repository state
 
-- `ops/deploy/app-manifest.sh` is the source of truth for five deployable apps and their host roles.
+- `ops/deploy/app-manifest.sh` defines five deployable apps and their compatibility roles; `combined` deploys all five on the current single VPS.
 - Python releases use a release-local `.venv`; persistent `.env` and `data/` remain under `shared/`.
 - Shopbot requires the explicit financial schema migration before release preflight succeeds.
 - Shopbot polling is limited to `message` and `callback_query`; purchase creation uses DB-backed idempotency via `purchase_nonce`.
@@ -34,8 +36,8 @@ All committed docs and examples must stay sanitized regardless of repository vis
 - Runtime state is separated into `/srv/shupremium-stack/shared`.
 - `platform-control` is the admin/control-plane entry point.
 - `portal` serves public Shupremium pages and runtime cache.
-- `shopbot` remains isolated on its own VPS and owns commerce data.
-- `proxy-gateway` remains on the ARM VPS and is managed through `proxy-operator`.
+- `shopbot` owns commerce data and runs in its own systemd service on the shared VPS. Prices, discounts and spend tiers are managed in Shopbot Admin.
+- `proxy-gateway` runs on the same VPS and is managed through `proxy-operator`.
 - `key-vault-worker` is isolated behind localhost on the `combined` role and validates its DB/schema before release switch.
 - Shopbot money paths now include purchase idempotency, explicit financial migration/preflight, fulfillment queueing, notification queueing, and transaction ownership checks.
 - MBBank scanner integration in Shopbot uses MBBank v3:
