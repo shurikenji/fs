@@ -104,7 +104,7 @@ class LocalPricingTests(unittest.IsolatedAsyncioTestCase):
         await apply_snapshot(snapshot(2, {**self.source, "name": "API1 updated"}))
         server = await get_server_by_id(server_id)
         self.assertEqual(server["name"], "API1 updated")
-        self.assertEqual(server["base_url"], "https://proxy.test")
+        self.assertEqual(server["base_url"], "https://provider.test")
         self.assertEqual(server["auth_token"], "central-token")
         self.assertEqual(server["api_type"], "newapi")
         for key in ("price_per_unit", "quota_per_unit", "dollar_per_unit", "quota_multiple"):

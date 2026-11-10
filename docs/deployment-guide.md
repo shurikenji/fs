@@ -241,27 +241,31 @@ curl --resolve gpt1.shupremium.com:443:$TARGET_VPS_IP -I https://gpt1.shupremium
 
 ## Deploy commands on the single VPS
 
-The operator's checkout is `deploy/staging-vietqr-20261106b` at `56a51c8`, with 16 production fixes absent from `main`. Use release `deploy/shopbot-local-pricing-20261111` at `00d1caf`, which includes those fixes plus Shopbot-local pricing. Do not reset/rebase the production branch to `main` or deploy `9012994` directly over it.
+`main` now includes the production-only fixes from `deploy/staging-vietqr-20261106b` through `56a51c8`, the pricing release `00d1caf`, and main's purchase-idempotency/telemetry changes. Use `main` as the canonical branch going forward.
 
-When the working tree is clean, preserve its current commit and switch to the release branch:
+For the first switch from the old staging or pricing branch, use a clean checkout, preserve the current commit and verify it is an ancestor of the merged main:
 
 ```bash
-cd /srv/shupremium-stack/repo
-git fetch origin
-git status --short
-git branch backup/vps-before-local-pricing-20261111 HEAD
-git switch --track origin/deploy/shopbot-local-pricing-20261111
+cd /srv/shupremium-stack/repo &&
+git fetch origin &&
+test -z "$(git status --porcelain)" &&
+git branch "backup/vps-before-main-$(date +%Y%m%d-%H%M%S)" HEAD &&
+git merge-base --is-ancestor HEAD origin/main &&
+git switch main &&
+git merge --ff-only origin/main
 ```
 
-If the release branch already exists locally, switch to it and pull fast-forward-only from the matching remote branch. Do not switch with uncommitted production edits. Deploy Bot before Admin in the same SSH session:
+Do not force-reset local changes or drop commits if this fails. On subsequent updates while already on `main`, use `git pull --ff-only origin main`.
+
+Deploy the changed apps from that same checked-out main commit, Bot before Admin:
 
 ```bash
-bash ops/deploy/deploy-shopbot.sh 00d1caf combined &&
-bash ops/deploy/deploy-platform-control.sh 00d1caf combined &&
+bash ops/deploy/deploy-shopbot.sh HEAD combined &&
+bash ops/deploy/deploy-platform-control.sh HEAD combined &&
 bash ops/scripts/verify-all-health.sh combined
 ```
 
-Both apps are pinned to the verified release. Other apps do not need redeployment for this change. The release retains the key-vault, offline VietQR, SQLite backup, weak ETag, upstream mapping and modal escaping fixes from the production branch.
+Other apps do not require redeployment for the pricing change. Their production fixes remain in the merged source. Future app-specific releases should deploy only changed apps, using the same explicit commit/ref for related apps.
 
 ## Deploy pipeline
 

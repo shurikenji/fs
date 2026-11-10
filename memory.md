@@ -1,6 +1,6 @@
 # Shupremium Stack Memory
 
-Production checkout reported by the operator on 2026-11-11: `deploy/staging-vietqr-20261106b` at `56a51c8`, with 16 commits absent from `main`. The prepared pricing release is `deploy/shopbot-local-pricing-20261111` at `00d1caf`, which extends that production branch. Do not deploy `main` or `9012994` directly over production until the histories are reconciled.
+Production uses one VPS and the canonical `main` branch. The main merge preserves all commits from `deploy/staging-vietqr-20261106b` through `56a51c8` and `deploy/shopbot-local-pricing-20261111` through `00d1caf`, plus main purchase-idempotency and telemetry changes. Deploy future changes from updated `main`, not the historical staging branch.
 
 Last updated: 2026-11-11
 

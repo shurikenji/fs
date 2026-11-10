@@ -14,6 +14,7 @@ def main() -> None:
             "id": "gemini",
             "name": "Gemini",
             "upstream_base_url": "https://upstream.example",
+            "public_base_url": "https://public.example",
             "source_type": "other",
             "auth_user_value": "42",
             "auth_token": "secret",

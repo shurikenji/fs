@@ -1,6 +1,6 @@
 # shupremium-stack
 
-Production checkout reported by the operator on 2026-11-11: `deploy/staging-vietqr-20261106b` at `56a51c8`, with 16 commits absent from `main`. The prepared pricing release is `deploy/shopbot-local-pricing-20261111` at `00d1caf`, which extends that production branch. Do not deploy `main` or `9012994` directly over production until the histories are reconciled.
+Production uses one VPS and the canonical `main` branch. `main` now incorporates both the VPS fixes through `56a51c8` and the pricing release `00d1caf`; the staging/release branches remain historical references.
 
 Monorepo này là source of truth cho stack Shupremium đang chạy production. Repo chỉ chứa code, cấu hình mẫu, tài liệu vận hành và script deploy; runtime state luôn nằm ngoài Git.
 
@@ -72,9 +72,10 @@ Deploy is always per app, on the same VPS. Run only the scripts for apps changed
 cd /srv/shupremium-stack/repo
 git fetch origin
 git fetch origin
-git switch --track origin/deploy/shopbot-local-pricing-20261111
-bash ops/deploy/deploy-shopbot.sh 00d1caf combined
-bash ops/deploy/deploy-platform-control.sh 00d1caf combined
+git switch main
+git merge --ff-only origin/main
+bash ops/deploy/deploy-shopbot.sh HEAD combined
+bash ops/deploy/deploy-platform-control.sh HEAD combined
 bash ops/scripts/verify-all-health.sh combined
 ```
 

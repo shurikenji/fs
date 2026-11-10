@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.app import create_app
 from db.database import _ensure_schema
 from db.models import CREATE_TABLES
-from db.queries import get_shopbot_config_snapshot, record_consumer_sync_status, set_consumer_desired_checksum
+from db.queries import get_key_vault_config_snapshot, get_shopbot_config_snapshot, record_consumer_sync_status, set_consumer_desired_checksum
 
 
 class ShopbotQuotaConfigTests(unittest.IsolatedAsyncioTestCase):
@@ -29,6 +29,9 @@ class ShopbotQuotaConfigTests(unittest.IsolatedAsyncioTestCase):
                 source = (await get_shopbot_config_snapshot())["sources"][0]
                 self.assertEqual(source["quota_multiple"], 4)
                 self.assertEqual(source["shopbot_quota_multiple"], 2)
+                await db.execute("UPDATE shopbot_source_profiles SET supports_key_lookup_by_id = 1, key_backup_enabled = 1 WHERE source_id = 's'")
+                vault_source = (await get_key_vault_config_snapshot())["sources"][0]
+                self.assertEqual(vault_source["supports_key_lookup_by_id"], 1)
 
     async def test_ack_only_marks_desired_checksum_as_applied(self):
         async with aiosqlite.connect(":memory:") as db:

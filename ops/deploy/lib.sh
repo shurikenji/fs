@@ -442,6 +442,7 @@ if not database.is_absolute():
 resolved = database.resolve(strict=True)
 if not root.is_dir() or not resolved.is_file() or not resolved.is_relative_to(root):
     raise ValueError("Vault database must be inside the shared data directory")
+asyncio.run(main.init_db())
 asyncio.run(main.require_vault_schema(readonly=True))
 PY
       )

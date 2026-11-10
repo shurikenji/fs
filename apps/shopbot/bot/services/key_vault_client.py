@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import logging
 from typing import Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -31,6 +32,63 @@ async def get_summary() -> list[dict[str, Any]] | None:
         return sources
     except Exception as exc:
         logger.warning("Key-vault summary unavailable (%s)", type(exc).__name__)
+        return None
+
+
+async def get_inventory(source_id: str) -> list[dict[str, Any]] | None:
+    if not settings.key_vault_url or not settings.key_vault_api_token or not source_id:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{settings.key_vault_url.rstrip('/')}/internal/key-vault/items/{quote(source_id, safe='')}",
+                headers={"Authorization": f"Bearer {settings.key_vault_api_token}"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                response.raise_for_status()
+                body = await response.json()
+        items = body.get("items") if isinstance(body, dict) else None
+        return items if isinstance(items, list) and all(isinstance(item, dict) for item in items) else None
+    except Exception as exc:
+        logger.warning("Key-vault inventory unavailable for source %s (%s)", source_id, type(exc).__name__)
+        return None
+
+
+async def get_runs(source_id: str) -> list[dict[str, Any]] | None:
+    if not settings.key_vault_url or not settings.key_vault_api_token or not source_id:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{settings.key_vault_url.rstrip('/')}/internal/key-vault/runs/{quote(source_id, safe='')}",
+                headers={"Authorization": f"Bearer {settings.key_vault_api_token}"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                response.raise_for_status()
+                body = await response.json()
+        runs = body.get("runs") if isinstance(body, dict) else None
+        return runs if isinstance(runs, list) and all(isinstance(item, dict) for item in runs) else None
+    except Exception as exc:
+        logger.warning("Key-vault run history unavailable for source %s (%s)", source_id, type(exc).__name__)
+        return None
+
+
+async def get_item_detail(source_id: str, token_ref: str) -> dict[str, Any] | None:
+    if not settings.key_vault_url or not settings.key_vault_api_token or not source_id or not token_ref:
+        return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{settings.key_vault_url.rstrip('/')}/internal/key-vault/item",
+                params={"source_id": source_id, "token_ref": token_ref},
+                headers={"Authorization": f"Bearer {settings.key_vault_api_token}"},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as response:
+                response.raise_for_status()
+                body = await response.json()
+        return body if isinstance(body, dict) else None
+    except Exception as exc:
+        logger.warning("Key-vault item detail unavailable for source %s (%s)", source_id, type(exc).__name__)
         return None
 
 

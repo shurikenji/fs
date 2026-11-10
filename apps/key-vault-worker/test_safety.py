@@ -95,6 +95,248 @@ class VaultSafetyTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
             self.assertEqual(len(await main._fetch_tokens(source)), 2)
 
+    async def test_masked_tokens_are_resolved_in_batches_when_enabled(self):
+        batches = []
+
+        def handler(request):
+            if request.method == "POST":
+                self.assertEqual(request.url.path, "/api/token/batch/keys")
+                self.assertEqual(request.headers["Content-Type"], "application/json")
+                ids = json.loads(request.content)["ids"]
+                batches.append(ids)
+                return httpx.Response(200, json={"success": True, "data": {"keys": {str(token_id): f"secret-{token_id}" for token_id in ids}}})
+            page = int(request.url.params["p"])
+            items = [{"id": token_id, "key": "sk-***"} for token_id in range(1, 101)] if page == 1 else [{"id": 101, "key": "sk-***"}]
+            return httpx.Response(200, json={"success": True, "data": {"total": 101, "items": items}})
+
+        transport = httpx.MockTransport(handler)
+        client_class = httpx.AsyncClient
+        source = {
+            "id": "one",
+            "upstream_base_url": "https://example.test",
+            "supports_key_lookup_by_id": 1,
+        }
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
+            items = await main._fetch_tokens(source)
+        self.assertEqual(batches, [list(range(1, 21)), list(range(21, 51))])
+        self.assertEqual(items[0]["key"], "sk-secret-1")
+        self.assertEqual(items[49]["key"], "sk-secret-50")
+        self.assertTrue(all(item["_vault_lookup_status"] == "pending" for item in items[50:]))
+
+    async def test_batch_key_lookup_stops_after_rate_limit(self):
+        posts = 0
+        batches = []
+
+        def handler(request):
+            nonlocal posts
+            if request.method == "POST":
+                posts += 1
+                batches.append(json.loads(request.content)["ids"])
+                return httpx.Response(429, headers={"Retry-After": "300"})
+            page = int(request.url.params["p"])
+            items = [{"id": token_id, "key": "sk-***"} for token_id in range(1, 101)] if page == 1 else [{"id": 101, "key": "sk-***"}]
+            return httpx.Response(200, json={"success": True, "data": {"total": 101, "items": items}})
+
+        transport = httpx.MockTransport(handler)
+        client_class = httpx.AsyncClient
+        source = {"id": "one", "upstream_base_url": "https://example.test", "supports_key_lookup_by_id": 1}
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)), \
+             patch.object(main.time, "time", return_value=1000):
+            items = await main._fetch_tokens(source)
+        self.assertEqual(posts, 1)
+        self.assertEqual(batches, [list(range(1, 21))])
+        self.assertEqual(len(items), 101)
+        self.assertTrue(all(item["_vault_lookup_status"] == "retry_wait" for item in items))
+        self.assertTrue(all(item["_vault_lookup_error"] == "api_http_429_retry_300" for item in items[:20]))
+        self.assertTrue(all("_vault_lookup_error" not in item for item in items[20:]))
+        await main._record_success(source, items)
+        db = await main._db()
+        try:
+            run = await (await db.execute(
+                "SELECT status, item_count, lookup_error_count FROM key_vault_runs ORDER BY id DESC LIMIT 1"
+            )).fetchone()
+            count = (await (await db.execute("SELECT COUNT(*) FROM key_vault_items WHERE source_status = 'active'")).fetchone())[0]
+            retry_rows = await (await db.execute(
+                "SELECT token_id, key_lookup_attempts, key_lookup_next_retry_at FROM key_vault_items ORDER BY CAST(token_id AS INTEGER)"
+            )).fetchall()
+        finally:
+            await db.close()
+        self.assertEqual(tuple(run), ("partial", 101, 20))
+        self.assertEqual(count, 101)
+        self.assertTrue(all(row["key_lookup_attempts"] == 1 for row in retry_rows[:20]))
+        self.assertTrue(all(row["key_lookup_attempts"] == 0 for row in retry_rows[20:]))
+        self.assertTrue(all(row["key_lookup_next_retry_at"] == 1300 for row in retry_rows))
+
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)), \
+             patch.object(main.time, "time", return_value=1001):
+            deferred = await main._fetch_tokens(source)
+        self.assertEqual(posts, 1)
+        self.assertTrue(all(item["_vault_lookup_status"] == "retry_wait" for item in deferred))
+
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)), \
+             patch.object(main.time, "time", return_value=1301):
+            await main._fetch_tokens(source)
+        self.assertEqual(posts, 2)
+        self.assertEqual(batches[-1], list(range(1, 11)))
+
+    async def test_lookup_checkpoint_is_reused_before_record_success(self):
+        posts = 0
+
+        def handler(request):
+            nonlocal posts
+            if request.method == "POST":
+                posts += 1
+                return httpx.Response(200, json={"success": True, "data": {"keys": {"1": "checkpoint-full-key"}}})
+            return httpx.Response(
+                200,
+                json={"success": True, "data": {"total": 1, "items": [{"id": 1, "key": "sk-***"}]}},
+            )
+
+        transport = httpx.MockTransport(handler)
+        client_class = httpx.AsyncClient
+        source = {"id": "one", "upstream_base_url": "https://example.test", "supports_key_lookup_by_id": 1}
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
+            first = await main._fetch_tokens(source)
+            second = await main._fetch_tokens(source)
+
+        self.assertEqual(posts, 1)
+        self.assertEqual(first[0]["key"], "sk-checkpoint-full-key")
+        self.assertEqual(second[0]["key"], "sk-checkpoint-full-key")
+        self.assertEqual(second[0]["_vault_lookup_status"], "available")
+
+    async def test_full_key_lookup_only_runs_for_new_or_unresolved_keys(self):
+        await main._record_success(
+            {"id": "one"},
+            [{"id": 1, "name": "saved", "key": "sk-saved-full-key-123456"}],
+        )
+        batches = []
+
+        def handler(request):
+            if request.method == "POST":
+                ids = json.loads(request.content)["ids"]
+                batches.append(ids)
+                return httpx.Response(200, json={"success": True, "data": {"keys": {"2": "new-full-key-654321"}}})
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "data": {
+                        "total": 2,
+                        "items": [
+                            {"id": 1, "name": "saved", "key": "sk-***", "remain_quota": 100},
+                            {"id": 2, "name": "new", "key": "sk-***", "remain_quota": 200},
+                        ],
+                    },
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        client_class = httpx.AsyncClient
+        source = {"id": "one", "upstream_base_url": "https://example.test", "supports_key_lookup_by_id": 1}
+        with patch.object(main.httpx, "AsyncClient", side_effect=lambda **kw: client_class(transport=transport, **kw)):
+            items = await main._fetch_tokens(source)
+        self.assertEqual(batches, [[2]])
+        self.assertEqual(items[0]["_vault_lookup_status"], "available")
+        self.assertEqual(items[1]["key"], "sk-new-full-key-654321")
+
+        await main._record_success(source, items)
+        db = await main._db()
+        try:
+            rows = await (await db.execute(
+                "SELECT token_id, recoverable, key_ciphertext FROM key_vault_items ORDER BY token_id"
+            )).fetchall()
+        finally:
+            await db.close()
+        self.assertEqual([row["recoverable"] for row in rows], [1, 1])
+        self.assertTrue(all(row["key_ciphertext"] for row in rows))
+
+    async def test_removed_unknown_reappeared_and_history_are_preserved(self):
+        source = {"id": "one"}
+        await main._record_success(source, [{"id": 1, "key": "sk-first-full-key-123456", "remain_quota": 500000}])
+        await main._record_success(source, [{"id": 2, "key": "sk-second-full-key-123456", "remain_quota": 250000}])
+
+        db = await main._db()
+        try:
+            removed = await (await db.execute(
+                "SELECT source_status, recoverable, key_ciphertext FROM key_vault_items WHERE token_id = '1'"
+            )).fetchone()
+        finally:
+            await db.close()
+        self.assertEqual(removed["source_status"], "removed")
+        self.assertEqual(removed["recoverable"], 1)
+        self.assertIsNotNone(removed["key_ciphertext"])
+
+        await main._record_failure("one", RuntimeError("temporary"))
+        db = await main._db()
+        try:
+            states = {
+                row["token_id"]: row["source_status"]
+                for row in await (await db.execute("SELECT token_id, source_status FROM key_vault_items")).fetchall()
+            }
+        finally:
+            await db.close()
+        self.assertEqual(states, {"1": "removed", "2": "unknown"})
+
+        await main._record_success(
+            source,
+            [
+                {"id": 1, "key": "sk-***", "remain_quota": 400000},
+                {"id": 2, "key": "sk-***", "remain_quota": 200000},
+            ],
+        )
+        db = await main._db()
+        try:
+            states = {
+                row["token_id"]: row["source_status"]
+                for row in await (await db.execute("SELECT token_id, source_status FROM key_vault_items")).fetchall()
+            }
+            history_count = (await (await db.execute(
+                "SELECT COUNT(*) FROM key_vault_item_history WHERE source_id = 'one' AND token_ref = '1'"
+            )).fetchone())[0]
+            status_rows = [row[0] for row in await (await db.execute(
+                "SELECT source_status FROM key_vault_status_history WHERE source_id = 'one' AND token_ref = '1' ORDER BY id"
+            )).fetchall()]
+        finally:
+            await db.close()
+        self.assertEqual(states, {"1": "active", "2": "active"})
+        self.assertEqual(history_count, 2)
+        self.assertEqual(status_rows, ["active", "removed", "active"])
+
+    async def test_poll_logs_safe_http_rate_limit_details(self):
+        request = httpx.Request("POST", "https://example.test/api/token/batch/keys?secret=hidden")
+        response = httpx.Response(429, headers={"Retry-After": "300"}, request=request)
+        error = httpx.HTTPStatusError("rate limited", request=request, response=response)
+
+        with patch.object(main, "_sources", return_value=[{"id": "one"}]), \
+             patch.object(main, "_fetch_tokens", side_effect=error), \
+             patch.object(main, "_record_failure"), \
+             self.assertLogs("key_vault_worker", level="WARNING") as logs:
+            await main.poll_once()
+
+        message = "\n".join(logs.output)
+        self.assertIn("status=429 retry_after=300 endpoint=batch-keys", message)
+        self.assertNotIn("secret=hidden", message)
+
+    async def test_control_plane_failure_marks_known_active_keys_unknown(self):
+        await main._record_success({"id": "one"}, [{"id": 7, "key": "sk-abcdefghijklmnop"}])
+
+        with patch.object(main, "_sources", side_effect=RuntimeError("control-plane unavailable")):
+            with self.assertRaises(RuntimeError):
+                await main.poll_once()
+
+        db = await main._db()
+        try:
+            item = await (await db.execute(
+                "SELECT source_status FROM key_vault_items WHERE source_id = 'one' AND token_ref = '7'"
+            )).fetchone()
+            run = await (await db.execute(
+                "SELECT status, error_message FROM key_vault_runs WHERE source_id = 'one' ORDER BY id DESC LIMIT 1"
+            )).fetchone()
+        finally:
+            await db.close()
+        self.assertEqual(item["source_status"], "unknown")
+        self.assertEqual(tuple(run), ("error", "RuntimeError"))
+
     async def test_error_storage_and_urls_do_not_expose_credentials(self):
         secret = "sensitive-test-credential"
         await main._record_failure("one", RuntimeError(secret))
@@ -207,6 +449,93 @@ class VaultInitializationTests(unittest.IsolatedAsyncioTestCase):
                 await main.init_db()
             with closing(sqlite3.connect(path)) as db:
                 self.assertEqual(db.execute("SELECT id FROM legacy_data").fetchone()[0], 1)
+
+    async def test_old_vault_schema_migrates_without_reactivating_removed_keys(self):
+        import sqlite3
+        from contextlib import closing
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "old-vault.sqlite"
+            key_nonce, key_ciphertext = main._encrypt("sk-old-full-key-123456")
+            _, snapshot_item = main._token_item(
+                {"id": 7, "name": "old", "key": "sk-old-full-key-123456", "remain_quota": 500000},
+                "one",
+            )
+            snapshot_nonce, snapshot_ciphertext = main._encrypt([snapshot_item])
+            with closing(sqlite3.connect(path)) as db, db:
+                db.executescript(
+                    """
+                    CREATE TABLE vault_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                    CREATE TABLE key_vault_runs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, source_id TEXT NOT NULL, status TEXT NOT NULL,
+                        item_count INTEGER NOT NULL DEFAULT 0, error_message TEXT,
+                        created_at TEXT DEFAULT (datetime('now'))
+                    );
+                    CREATE TABLE key_vault_snapshots (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT, source_id TEXT NOT NULL, nonce BLOB NOT NULL,
+                        ciphertext BLOB NOT NULL, item_count INTEGER NOT NULL,
+                        created_at TEXT DEFAULT (datetime('now'))
+                    );
+                    CREATE TABLE key_vault_items (
+                        source_id TEXT NOT NULL, token_ref TEXT NOT NULL, token_id TEXT, token_name TEXT,
+                        key_fingerprint TEXT, key_nonce BLOB, key_ciphertext BLOB, key_masked TEXT,
+                        recoverable INTEGER NOT NULL DEFAULT 0, status INTEGER NOT NULL DEFAULT 1,
+                        remain_quota INTEGER NOT NULL DEFAULT 0, used_quota INTEGER NOT NULL DEFAULT 0,
+                        total_quota INTEGER NOT NULL DEFAULT 0, group_name TEXT, raw_json TEXT,
+                        active INTEGER NOT NULL DEFAULT 1, missing_since TEXT,
+                        last_seen_at TEXT DEFAULT (datetime('now')), PRIMARY KEY(source_id, token_ref)
+                    );
+                    """
+                )
+                db.executemany("INSERT INTO vault_metadata (key, value) VALUES (?, ?)", main._key_checks().items())
+                db.execute(
+                    """INSERT INTO key_vault_items
+                       (source_id, token_ref, token_id, token_name, key_fingerprint, key_nonce, key_ciphertext,
+                        key_masked, recoverable, status, remain_quota, used_quota, total_quota, group_name,
+                        raw_json, active, missing_since, last_seen_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 500000, 0, 500000, 'OpenAI', '{}', 0, ?, ?)""",
+                    (
+                        "one", "7", "7", "old", main._fingerprint("sk-old-full-key-123456"),
+                        key_nonce, key_ciphertext, "sk-old...3456", "2026-11-02 00:00:00", "2026-11-01 00:00:00",
+                    ),
+                )
+                db.execute(
+                    "INSERT INTO key_vault_snapshots (source_id, nonce, ciphertext, item_count, created_at) VALUES (?, ?, ?, 1, ?)",
+                    ("one", snapshot_nonce, snapshot_ciphertext, "2026-11-01 00:00:00"),
+                )
+
+            with patch.object(main, "DB_PATH", path):
+                await main.init_db()
+                await main.require_vault_schema(readonly=True)
+                db = await main._db(readonly=True)
+                try:
+                    item = await (await db.execute(
+                        "SELECT source_status, removed_at, recoverable, key_ciphertext FROM key_vault_items WHERE token_ref = '7'"
+                    )).fetchone()
+                    history_count = (await (await db.execute(
+                        "SELECT COUNT(*) FROM key_vault_item_history WHERE source_id = 'one' AND token_ref = '7'"
+                    )).fetchone())[0]
+                    status = await (await db.execute(
+                        "SELECT source_status FROM key_vault_status_history WHERE source_id = 'one' AND token_ref = '7'"
+                    )).fetchone()
+                finally:
+                    await db.close()
+                self.assertEqual(item["source_status"], "removed")
+                self.assertEqual(item["removed_at"], "2026-11-02 00:00:00")
+                self.assertEqual(item["recoverable"], 1)
+                self.assertEqual(item["key_ciphertext"], key_ciphertext)
+                self.assertEqual(history_count, 1)
+                self.assertEqual(status["source_status"], "removed")
+
+                await main.init_db()
+                db = await main._db(readonly=True)
+                try:
+                    repeated_count = (await (await db.execute(
+                        "SELECT COUNT(*) FROM key_vault_item_history WHERE source_id = 'one' AND token_ref = '7'"
+                    )).fetchone())[0]
+                finally:
+                    await db.close()
+                self.assertEqual(repeated_count, 1)
 
     async def test_incomplete_schema_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

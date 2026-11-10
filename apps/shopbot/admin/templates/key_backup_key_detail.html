@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Key Details - {{ server.name }}{% endblock %}
+{% block content %}
+
+<div class="page-header animate-fade-up">
+    <div>
+        <h1>Key Details</h1>
+        <p class="page-subtitle">{{ server.name }} &middot; Token {{ item.token_id or item.token_ref }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/key-backup/{{ server.id }}" class="btn btn-outline-secondary">Back to keys</a>
+    </div>
+</div>
+
+<div class="table-card animate-fade-up">
+    <h4>Current key</h4>
+    <table class="table table-responsive-cards">
+        <tbody>
+            <tr><th style="width: 220px;">API key</th><td><code>{{ item.key_value or item.key_masked or '-' }}</code></td></tr>
+            <tr><th>Source state</th><td>
+                {% if item.source_status == 'active' %}<span class="badge badge-success">Active</span>
+                {% elif item.source_status == 'removed' %}<span class="badge badge-danger">Removed from Source</span>
+                {% else %}<span class="badge badge-warning">Unknown</span>{% endif %}
+            </td></tr>
+            <tr><th>Full-key state</th><td>{{ item.key_lookup_status or 'unverified' }}{% if item.key_lookup_error %} &middot; {{ item.key_lookup_error }}{% endif %}</td></tr>
+            <tr><th>Name / Group</th><td>{{ item.token_name or '-' }} / {{ item.group_name or '-' }}</td></tr>
+            <tr><th>First seen</th><td>{{ item.first_seen_at|time_vn if item.first_seen_at else '-' }}</td></tr>
+            <tr><th>Last seen</th><td>{{ item.last_seen_at|time_vn if item.last_seen_at else '-' }}</td></tr>
+            <tr><th>Removed at</th><td>{{ item.removed_at|time_vn if item.removed_at else '-' }}</td></tr>
+            <tr><th>Current balance</th><td><strong>${{ "%.2f"|format(item.balance_dollar or 0) }}</strong> &middot; remain quota {{ "{:,}".format(item.remain_quota or 0) }}</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="table-card animate-fade-up">
+    <h4>Balance history</h4>
+    {% if history %}
+    <table class="table table-responsive-cards">
+        <thead><tr><th>Backup time</th><th>Source state</th><th>Balance</th><th>Change</th><th>Remain</th><th>Used</th><th>Total</th></tr></thead>
+        <tbody>
+        {% for row in history %}
+            <tr>
+                <td>{{ row.observed_at|time_vn }}</td>
+                <td>{{ row.source_status }}</td>
+                <td>${{ "%.2f"|format(row.balance_dollar or 0) }}</td>
+                <td>{% if row.balance_delta is none %}&mdash;{% elif row.balance_delta >= 0 %}+${{ "%.2f"|format(row.balance_delta) }}{% else %}-${{ "%.2f"|format(-row.balance_delta) }}{% endif %}</td>
+                <td>{{ "{:,}".format(row.remain_quota or 0) }}</td>
+                <td>{{ "{:,}".format(row.used_quota or 0) }}</td>
+                <td>{{ "{:,}".format(row.total_quota or 0) }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}<p class="text-muted">No balance history yet.</p>{% endif %}
+</div>
+
+<div class="table-card animate-fade-up">
+    <h4>Status history</h4>
+    {% if status_history %}
+    <table class="table table-responsive-cards">
+        <thead><tr><th>Time</th><th>Status</th></tr></thead>
+        <tbody>{% for row in status_history %}<tr><td>{{ row.changed_at|time_vn }}</td><td>{{ row.source_status }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% else %}<p class="text-muted">No status changes recorded.</p>{% endif %}
+</div>
+
+{% endblock %}

@@ -2,7 +2,7 @@
 {% block title %}Key Backup - {{ server.name }}{% endblock %}
 {% block content %}
 
-{% if remote_vault %}<div class="alert alert-warning">Remote Vault đang được cấu hình. Dữ liệu bên dưới là lịch sử cục bộ và có thể đã cũ; chưa thể chạy Backup Now từ trang này.</div>{% endif %}
+{% if remote_vault and vault_unavailable %}<div class="alert alert-warning">Không lấy được đầy đủ dữ liệu từ Key Vault ở lần tải trang này.</div>{% endif %}
 <div class="page-header animate-fade-up">
     <div>
         <h1>
@@ -47,8 +47,13 @@
     </div>
     <div class="stat-card">
         <div class="stat-content">
+            {% if remote_vault %}
+            <div class="stat-value">{{ items|selectattr('recoverable', 'equalto', 1)|list|length }}</div>
+            <div class="stat-label">Full keys stored</div>
+            {% else %}
             <div class="stat-value">{{ items|selectattr('shopbot_match')|list|length }}</div>
             <div class="stat-label">Shopbot matches</div>
+            {% endif %}
         </div>
     </div>
     <div class="stat-card">
@@ -81,13 +86,14 @@
             <tr>
                 <th data-sort="text">Key</th>
                 <th data-sort="text">Name</th>
+                {% if remote_vault %}<th data-sort="text" style="width: 125px;">Source state</th>{% endif %}
                 <th data-sort="number" style="width: 95px;">Status</th>
                 <th data-sort="number" style="width: 130px;">Balance</th>
                 <th data-sort="number" style="width: 130px;">Used</th>
                 <th data-sort="number" style="width: 130px;">Total</th>
                 <th data-sort="text" style="width: 130px;">Group</th>
-                <th data-sort="number" style="width: 130px;">Last active</th>
-                <th style="width: 110px;">Shopbot</th>
+                <th data-sort="text" style="width: 155px;">{% if remote_vault %}Last seen{% else %}Last active{% endif %}</th>
+                <th style="width: 110px;">{% if remote_vault %}Details{% else %}Shopbot{% endif %}</th>
             </tr>
         </thead>
         <tbody>
@@ -101,6 +107,18 @@
                     {% endif %}
                 </td>
                 <td data-label="Name" data-value="{{ item.token_name or '' }}">{{ item.token_name or '-' }}</td>
+                {% if remote_vault %}
+                <td data-label="Source state" data-value="{{ item.source_status or '' }}">
+                    {% if item.source_status == 'active' %}
+                    <span class="badge badge-success">Active</span>
+                    {% elif item.source_status == 'removed' %}
+                    <span class="badge badge-danger">Removed</span>
+                    {% else %}
+                    <span class="badge badge-warning">Unknown</span>
+                    {% endif %}
+                    <div class="cell-meta">Full key: {{ item.key_lookup_status or 'unverified' }}</div>
+                </td>
+                {% endif %}
                 <td data-label="Status" data-value="{{ item.status }}">
                     {% if item.status == 1 %}
                     <span class="badge badge-success">Enabled</span>
@@ -114,14 +132,22 @@
                 <td data-label="Used" data-value="{{ item.used_quota }}">{{ "{:,}".format(item.used_quota or 0) }}</td>
                 <td data-label="Total" data-value="{{ item.total_quota }}">{{ "{:,}".format(item.total_quota or 0) }}</td>
                 <td data-label="Group" data-value="{{ item.group_name or '' }}">{{ item.group_name or '-' }}</td>
-                <td data-label="Last active" data-value="{{ item.accessed_time or 0 }}">
+                <td data-label="Last seen" data-value="{{ item.last_seen_at if remote_vault else (item.accessed_time or 0) }}">
+                    {% if remote_vault %}
+                    {{ item.last_seen_at|time_vn if item.last_seen_at else '-' }}
+                    {% else %}
                     {{ item.accessed_time or '-' }}
+                    {% endif %}
                 </td>
-                <td data-label="Shopbot">
+                <td data-label="{% if remote_vault %}Details{% else %}Shopbot{% endif %}">
+                    {% if remote_vault %}
+                    <a class="btn btn-sm btn-outline-primary" href="{{ item.detail_url }}">Details</a>
+                    {% else %}
                     {% if item.shopbot_match %}
                     <span class="badge badge-success">Matched</span>
                     {% else %}
                     <span class="badge badge-secondary">External</span>
+                    {% endif %}
                     {% endif %}
                 </td>
             </tr>
@@ -163,13 +189,18 @@
                 <td data-label="Status">
                     {% if row.status == 'success' %}
                     <span class="badge badge-success">Success</span>
+                    {% elif row.status == 'partial' %}
+                    <span class="badge badge-warning">Partial</span>
                     {% else %}
                     <span class="badge badge-danger">Error</span>
                     {% endif %}
                 </td>
                 <td data-label="Keys">{{ row.total_keys }}</td>
-                <td data-label="Balance">${{ "%.2f"|format(row.total_balance or 0) }}</td>
-                <td data-label="Error">{{ row.error_message or '-' }}</td>
+                <td data-label="Balance">{% if remote_vault %}—{% else %}${{ "%.2f"|format(row.total_balance or 0) }}{% endif %}</td>
+                <td data-label="Error">
+                    {{ row.error_message or '-' }}
+                    {% if remote_vault and row.lookup_error_count %}<div class="cell-meta">Full-key lookup errors: {{ row.lookup_error_count }}</div>{% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
