@@ -9,6 +9,10 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    {% if editing.control_plane_source_id %}
+                    <div class="alert alert-info">Giá, quota, discount, tier và group bán hàng được lưu tại Bot. Kết nối nguồn được đồng bộ từ Platform Control.</div>
+                    {% endif %}
+                    <fieldset {% if editing.control_plane_source_id %}disabled{% endif %}>
                     <h6 class="text-muted mb-2">Core Connection</h6>
                     <div class="row mb-2">
                         <div class="col"><label class="form-label">Source Name</label>{{ field_tooltip("Tên API Source hiển thị trong admin, sản phẩm và các thông báo liên quan.") }}<input name="name" class="form-control" value="{{ editing.name }}" required></div>
@@ -47,6 +51,7 @@
                         <label class="form-label">Cookie</label>{{ field_tooltip("Chuỗi Cookie đầy đủ khi upstream xác thực bằng phiên; không nhập nếu dùng token/header.") }}<input name="auth_cookie" class="form-control" value="{{ editing.auth_cookie or '' }}">
                     </div>
 
+                    </fieldset>
                     <div class="form-check mb-2" id="edit_multi_group_wrap">
                         <input class="form-check-input" type="checkbox" name="supports_multi_group" id="edit_multi_group" value="1" {% if editing.supports_multi_group %}checked{% endif %}>
                         <label class="form-check-label" for="edit_multi_group">Supports multi-group policies</label>{{ field_tooltip("Bật khi API Source hỗ trợ nhiều group và chính sách chọn group theo thứ tự.") }}
@@ -54,6 +59,7 @@
 
                     <hr>
                     <div id="edit_advanced_block">
+                        <fieldset {% if editing.control_plane_source_id %}disabled{% endif %}>
                         <div id="edit_key_lookup_wrap">
                             <div class="form-check mb-2">
                                 <input class="form-check-input" type="checkbox" name="supports_key_lookup_by_id" id="edit_supports_key_lookup_by_id" value="1" {% if editing.supports_key_lookup_by_id %}checked{% endif %}>
@@ -67,8 +73,11 @@
                         </div>
                         <h6 class="text-muted mb-2">Advanced Routing</h6>
                         <div class="mb-2"><label class="form-label">Groups Endpoint</label>{{ field_tooltip("Đường dẫn endpoint lấy danh sách group, bắt đầu bằng dấu /; để trống nếu không hỗ trợ.") }}<input name="groups_endpoint" class="form-control" value="{{ editing.groups_endpoint or '' }}"></div>
+                        </fieldset>
                         <div class="mb-2"><label class="form-label">Manual Group List</label>{{ field_tooltip("Danh sách group ghi đè, phân cách bằng dấu phẩy; khi có giá trị hệ thống không phụ thuộc catalog upstream.") }}<input name="manual_groups" class="form-control" value="{{ editing.manual_groups or '' }}"></div>
+                        <fieldset {% if editing.control_plane_source_id %}disabled{% endif %}>
                         <div class="mb-2"><label class="form-label">Custom Headers (JSON)</label>{{ field_tooltip("JSON array các header bổ sung gửi tới upstream; mỗi phần tử cần key và value.") }}<textarea name="custom_headers" class="form-control" rows="2">{{ editing.custom_headers or '' }}</textarea></div>
+                        </fieldset>
                     </div>
 
                     <hr>
@@ -204,7 +213,11 @@
                         <div class="col"><label class="form-label">Quota Multiplier</label>{{ field_tooltip("Hệ số chuẩn hóa quota của upstream; dùng 1 khi không cần quy đổi.") }}<input name="quota_multiple" type="number" step="0.01" class="form-control" value="{{ editing.quota_multiple }}"></div>
                     </div>
                     <div class="mb-2"><label class="form-label">Default Group</label>{{ field_tooltip("Group mặc định cho sản phẩm không đặt override; có thể nhập nhiều group theo chính sách của nguồn.") }}<input name="default_group" class="form-control" value="{{ editing.default_group or '' }}"></div>
+                    {% if editing.control_plane_source_id %}
+                    <div class="mb-2"><a class="btn btn-outline-info btn-sm" href="/servers/{{ editing.id }}/groups">Configure Groups</a></div>
+                    {% else %}
                     <div class="mb-2"><button type="button" class="btn btn-outline-info btn-sm" onclick="previewServerGroups('edit')">Preview Groups</button></div>
+                    {% endif %}
                     <div id="edit_group_preview" class="mb-2" style="display:none;"></div>
 
                     {{ entity_state_checkbox('editActive', editing.is_active) }}

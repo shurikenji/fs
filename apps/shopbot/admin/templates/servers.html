@@ -87,7 +87,7 @@
                 <td data-label="Source">
                     <div class="cell-name">{{ s.name }}</div>
                     {% if s.control_plane_source_id %}
-                    <div class="cell-meta"><span class="badge badge-info">Managed by platform-control</span></div>
+                    <div class="cell-meta"><span class="badge badge-info">Connection synced · Pricing managed here</span></div>
                     {% endif %}
                     {% if s.default_group %}
                     <div class="cell-meta">Default group: <code class="cell-code--subtle">{{ s.default_group }}</code></div>
@@ -384,9 +384,8 @@
         </div>
         {% endif %}
 
-        {% if groups_server.control_plane_source_id %}<div class="alert alert-warning">Group policy do Control quản lý; hãy sửa tại Control.</div>{% endif %}
         <form method="POST" action="/servers/{{ groups_server.id }}/groups/save" id="groupsConfigForm"><input type="hidden" name="csrf_token" value="{{ csrf_token(request) }}">
-            <fieldset {% if groups_server.control_plane_source_id %}disabled{% endif %}>
+            <fieldset>
             <div class="mb-3">
                     <label class="form-label">Available Groups</label>{{ field_tooltip("Chọn các group sẽ tạo thành policy mặc định của API Source.") }}
                 {% if groups_data %}

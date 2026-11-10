@@ -49,12 +49,11 @@ class ControlSyncGuardTests(unittest.IsolatedAsyncioTestCase):
         source = {**self.source, "quota_multiple": 4}
         del source["shopbot_quota_multiple"]
         self.assertEqual(sync._server_values(source, {"quota_multiple": 2})["quota_multiple"], 2)
-        with self.assertRaisesRegex(ValueError, "separate quota multiplier"):
-            sync._server_values(source, None)
+        self.assertEqual(sync._server_values(source, None)["quota_multiple"], 1)
         for value in (0, -1, "NaN", "inf", "invalid"):
             with self.subTest(value=value), self.assertRaises(ValueError):
-                sync._server_values({**source, "shopbot_quota_multiple": value}, None)
-        self.assertEqual(sync._server_values({**source, "shopbot_quota_multiple": 3}, {"quota_multiple": 2})["quota_multiple"], 3)
+                sync._server_values(source, {"quota_multiple": value})
+        self.assertEqual(sync._server_values({**source, "shopbot_quota_multiple": 3}, {"quota_multiple": 2})["quota_multiple"], 2)
 
     async def test_unmapped_conflict_is_rejected_without_db_writes(self):
         await self.add_server("Legacy", "https://upstream.test/v1", active=0)

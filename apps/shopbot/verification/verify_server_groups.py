@@ -172,13 +172,12 @@ async def main() -> None:
                 await update_server(single_server_id, control_plane_source_id="managed-test")
                 managed_page = client.get(f"/servers/{single_server_id}/groups")
                 assert managed_page.status_code == 200
-                assert "Group policy do Control quản lý" in managed_page.text
-                assert "<fieldset disabled>" in managed_page.text
-                managed_save = client.post(f"/servers/{single_server_id}/groups/save", data={"default_group": "wrong"}, follow_redirects=False)
-                assert managed_save.status_code == 303
+                assert "Group policy do Control quản lý" not in managed_page.text
+                managed_save = client.post(f"/servers/{single_server_id}/groups/save", data={"default_group": "local", "manual_groups": "local,pro"}, follow_redirects=False)
+                assert managed_save.status_code == 200
                 single_server = await get_server_by_id(single_server_id)
-                assert single_server["default_group"] == "pro"
-                assert single_server["manual_groups"] == "basic,pro"
+                assert single_server["default_group"] == "local"
+                assert single_server["manual_groups"] == "local,pro"
 
                 original_get_api_client = servers_router.get_api_client
                 original_get_translator = servers_router.get_translator

@@ -33,14 +33,8 @@ def _value(source: dict[str, Any], key: str, default: Any = None) -> Any:
 
 def _server_values(source: dict[str, Any], existing: dict[str, Any] | None) -> dict[str, Any]:
     old = existing or {}
-    profile = source
-    bot_multiple = source.get("shopbot_quota_multiple")
-    if bot_multiple is None:
-        if existing is None:
-            raise ValueError("New Shopbot source requires a separate quota multiplier")
-        bot_multiple = old.get("quota_multiple")
-        if bot_multiple is None:
-            bot_multiple = 1.0
+    # Commerce settings belong to Shopbot, including for centrally linked sources.
+    bot_multiple = _value(old, "quota_multiple", 1.0)
     try:
         bot_multiple = float(bot_multiple)
     except (TypeError, ValueError):
@@ -52,28 +46,28 @@ def _server_values(source: dict[str, Any], existing: dict[str, Any] | None) -> d
         "base_url": _value(source, "upstream_base_url", old.get("base_url", "")),
         "user_id_header": _value(source, "auth_user_value", old.get("user_id_header", "")),
         "access_token": _value(source, "auth_token", old.get("access_token", "")),
-        "price_per_unit": int(_value(profile, "price_per_unit", old.get("price_per_unit", 0)) or 0),
-        "dollar_per_unit": float(_value(profile, "dollar_per_unit", old.get("dollar_per_unit", 10.0)) or 10.0),
+        "price_per_unit": _value(old, "price_per_unit", 0),
+        "dollar_per_unit": _value(old, "dollar_per_unit", 1.0),
         "quota_multiple": bot_multiple,
-        "quota_per_unit": int(_value(profile, "quota_per_unit", old.get("quota_per_unit", 0)) or 0),
-        "default_group": _value(profile, "default_group", old.get("default_group", "")) or "",
-        "sort_order": int(_value(profile, "profile_sort_order", source.get("sort_order", old.get("sort_order", 0))) or 0),
+        "quota_per_unit": _value(old, "quota_per_unit", 500000),
+        "default_group": _value(old, "default_group", ""),
+        "sort_order": int(_value(source, "profile_sort_order", source.get("sort_order", old.get("sort_order", 0))) or 0),
         "api_type": _value(source, "source_type", old.get("api_type", "newapi")),
-        "supports_multi_group": int(_value(source, "supports_group_chain", old.get("supports_multi_group", 0)) or 0),
-        "manual_groups": _value(source, "manual_groups", old.get("manual_groups", "")) or "",
+        "supports_multi_group": _value(old, "supports_multi_group", int(source.get("supports_group_chain") or 0)),
+        "manual_groups": _value(old, "manual_groups", ""),
         "auth_type": _value(source, "auth_mode", old.get("auth_type", "header")),
         "auth_user_header": _value(source, "auth_user_header", old.get("auth_user_header", "")) or "",
         "auth_user_value": _value(source, "auth_user_value", old.get("auth_user_value", "")) or "",
         "auth_token": _value(source, "auth_token", old.get("auth_token", "")) or "",
         "auth_cookie": _value(source, "auth_cookie", old.get("auth_cookie", "")) or "",
         "groups_endpoint": _value(source, "groups_path", old.get("groups_endpoint", "")) or "",
-        "import_spend_accrual_enabled": int(_value(profile, "import_spend_accrual_enabled", old.get("import_spend_accrual_enabled", 0)) or 0),
-        "discount_stack_mode": _value(profile, "discount_stack_mode", old.get("discount_stack_mode", "exclusive")),
-        "discount_allowed_stack_types": _value(profile, "discount_allowed_stack_types", old.get("discount_allowed_stack_types", "cashback")),
-        "supports_key_lookup_by_id": int(_value(profile, "supports_key_lookup_by_id", old.get("supports_key_lookup_by_id", 0)) or 0),
-        "token_key_endpoint_template": _value(profile, "token_key_endpoint_template", old.get("token_key_endpoint_template", "/api/token/{id}/key")),
+        "import_spend_accrual_enabled": _value(old, "import_spend_accrual_enabled", 0),
+        "discount_stack_mode": _value(old, "discount_stack_mode", "exclusive"),
+        "discount_allowed_stack_types": _value(old, "discount_allowed_stack_types", "cashback"),
+        "supports_key_lookup_by_id": int(_value(source, "supports_key_lookup_by_id", old.get("supports_key_lookup_by_id", 0)) or 0),
+        "token_key_endpoint_template": _value(source, "token_key_endpoint_template", old.get("token_key_endpoint_template", "/api/token/{id}/key")),
         "control_plane_source_id": str(source["id"]),
-        "is_active": old.get("is_active", 1),
+        "is_active": old.get("is_active", 0),
     }
 
 

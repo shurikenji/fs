@@ -1,26 +1,30 @@
 # shupremium-stack
 
+Current release branch: `deploy/shopbot-local-pricing-20261111`, based on production branch `deploy/staging-vietqr-20261106b` at `56a51c8`. It preserves the production-only fixes. Do not deploy `main` or `9012994` directly over this branch without reconciling those fixes.
+
 Monorepo này là source of truth cho stack Shupremium đang chạy production. Repo chỉ chứa code, cấu hình mẫu, tài liệu vận hành và script deploy; runtime state luôn nằm ngoài Git.
 
 ## Current status
 
-Updated: 2026-06-23
+Updated: 2026-11-11
 
 - Production deploy model is `/srv/shupremium-stack` with per-app releases and shared runtime state.
-- The ARM role currently runs `portal`, `platform-control`, and `proxy-gateway`.
-- A new Singapore Oracle ARM VPS is being prepared as the next ARM host. DNS should only be switched after local health checks and `curl --resolve` checks pass.
-- The Shopbot role remains separate and runs only `shopbot`.
+- The deploy manifest currently contains five apps: `portal`, `platform-control`, `shopbot`, `proxy-gateway`, and `key-vault-worker`.
+- Production now runs all five apps on **one VPS**, as confirmed by the operator on 2026-11-11. Use the `combined` deployment role.
+- The manifest retains `arm`/`shopbot` app compatibility roles; these do not mean separate production VPSs. The expected host-role file is `/etc/shupremium-host-role = combined`; its live value still needs checking on the VPS.
+- Python deploys create an isolated `.venv` inside each release; only `.env` and `data/` are shared across releases.
 - Local-only cleanup and sensitive/session files are kept under `_local_cleanup/` and are ignored by Git.
 - GitHub is still treated as public. Only sanitized source, examples, and docs may be pushed.
 
 ## Thành phần active
 
-| App | Path | Runtime | Host role | Vai trò |
+| App | Path | Runtime | Current deployment role | Vai trò |
 | --- | --- | --- | --- | --- |
-| Portal | `apps/portal` | Python/FastAPI + PM2 | `arm` | Public site: pricing, balance, keys, logs, status |
-| Platform Control | `apps/platform-control` | Python/FastAPI + PM2 | `arm` | Admin shell/control plane |
-| Shopbot | `apps/shopbot` | Python + systemd | `shopbot` | Telegram bot, payment poller, shop admin |
-| Proxy Gateway | `services/proxy-gateway` | Node.js + PM2 | `arm` | Proxy operator + generated proxy services |
+| Portal | `apps/portal` | Python/FastAPI + PM2 | `combined` | Public site: pricing, balance, keys, logs, status |
+| Platform Control | `apps/platform-control` | Python/FastAPI + PM2 | `combined` | Admin shell/control plane |
+| Shopbot | `apps/shopbot` | Python + systemd | `combined` | Telegram bot, payment poller, shop admin |
+| Proxy Gateway | `services/proxy-gateway` | Node.js + PM2 | `combined` | Proxy operator + generated proxy services |
+| Key Vault Worker | `apps/key-vault-worker` | Python/FastAPI + systemd | `combined` | Encrypted API-key history, source polling, internal lookup/summary API |
 
 `archive/services/balance-checker` là legacy code đã archive, không nằm trong active deploy manifest.
 
@@ -29,11 +33,11 @@ Updated: 2026-06-23
 ```text
 Users
   -> https://shupremium.com
-  -> portal (:8080 on ARM VPS)
+  -> portal (localhost :8080 on the shared VPS)
 
 Admins
   -> https://admin.shupremium.com
-  -> platform-control (:8090 on ARM VPS)
+  -> platform-control (localhost :8090 on the same VPS)
   -> linked launch to shopbot admin when needed
 
 Proxy customers
@@ -41,8 +45,13 @@ Proxy customers
   -> proxy-service processes managed by proxy-operator (:8091)
 
 Telegram commerce
-  -> shopbot on separate VPS
+  -> shopbot on the same VPS; admin on localhost :8092
   -> systemd unit: shopbot
+
+Key vault
+  -> key-vault-worker on `combined` host role
+  -> systemd unit: key-vault-worker
+  -> localhost health/API on :8093
 ```
 
 ## Deploy model
@@ -54,19 +63,18 @@ Production layout is standardized:
   repo/       # git checkout
   releases/   # timestamped app releases
   current/    # active symlinks per app
-  shared/     # .env, data, venv, operator secrets, audit logs
+  shared/     # persistent .env, data, operator secrets, audit logs
 ```
 
-Deploy is always per app:
+Deploy is always per app, on the same VPS. Run only the scripts for apps changed by the release. For the Shopbot pricing ownership change, deploy Shopbot before Platform Control:
 
 ```bash
 cd /srv/shupremium-stack/repo
 git fetch origin
 git pull --ff-only origin main
-bash ops/deploy/deploy-portal.sh main
-bash ops/deploy/deploy-platform-control.sh main
-bash ops/deploy/deploy-proxy-gateway.sh main
-bash ops/deploy/deploy-shopbot.sh main
+bash ops/deploy/deploy-shopbot.sh HEAD combined
+bash ops/deploy/deploy-platform-control.sh HEAD combined
+bash ops/scripts/verify-all-health.sh combined
 ```
 
 Do not copy whole local folders to production. Do not commit or overwrite production `.env`, DB files, `data/`, `.venv`, `node_modules`, logs, or generated release artifacts.
@@ -76,7 +84,7 @@ For the current public GitHub repo, push source code and sanitized docs only. Do
 ## Important docs
 
 - [docs/design.md](docs/design.md): current architecture and data boundaries.
-- [docs/deployment-guide.md](docs/deployment-guide.md): deploy, rollback, health checks, and VPS layout.
+- [docs/deployment-guide.md](docs/deployment-guide.md): deploy, rollback, backup/standby recovery, health checks, and VPS layout.
 - [docs/server.md](docs/server.md): sanitized pricing source configuration reference.
 - [docs/implementation-plan.md](docs/implementation-plan.md): current state and future roadmap.
 - [docs/gitnexus-analysis.md](docs/gitnexus-analysis.md): code intelligence notes and high-risk areas.

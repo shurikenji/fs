@@ -1,8 +1,10 @@
 # Current Architecture
 
-Updated: 2026-06-23
+Updated: 2026-11-11
 
 ## Overview
+
+All five apps run on one production VPS, confirmed by the operator on 2026-11-11. The diagram shows service/data boundaries on that VPS, not separate machines. `combined` is the deployment role for this topology; no live host inspection was performed for this documentation update.
 
 ```text
                          Public users
@@ -11,7 +13,7 @@ Updated: 2026-06-23
                     +-------------------+
                     | portal            |
                     | shupremium.com    |
-                    | ARM role :8080    |
+                    | localhost :8080    |
                     +---------+---------+
                               |
                               v
@@ -25,8 +27,8 @@ Admins
   v
 +-----------------------+        +---------------------+
 | platform-control      |------->| proxy-operator      |
-| admin.shupremium.com  |        | ARM role :8091      |
-| ARM role :8090        |        +----------+----------+
+| admin.shupremium.com  |        | localhost :8091      |
+| localhost :8090        |        +----------+----------+
 +-----------+-----------+                   |
             |                               v
             |                    +---------------------+
@@ -38,8 +40,18 @@ Admins
             v
 +-----------------------+
 | shopbot               |
-| separate Shopbot VPS  |
+| same VPS, admin :8092  |
 | Telegram + admin + DB |
++-----------------------+
+
+platform-control
+  |
+  | source registry / internal config
+  v
++-----------------------+
+| key-vault-worker      |
+| combined role :8093   |
+| encrypted key history |
 +-----------------------+
 ```
 
@@ -56,7 +68,7 @@ Admins
 - deploy job history
 - linked launch into Shopbot admin
 
-It runs on the ARM host role, normally on port `8090`, behind `admin.shupremium.com`.
+It runs on the shared production VPS, on localhost port `8090`, behind `admin.shupremium.com`.
 
 ### `portal`
 
@@ -82,7 +94,7 @@ Nginx/certificate/proxy changes should flow through `proxy-operator` or the depl
 
 ### `shopbot`
 
-`shopbot` is intentionally isolated on its own VPS. It owns:
+`shopbot` runs as its own systemd service on the same VPS as the other apps, with its admin on localhost `8092`. It owns:
 
 - Telegram bot runtime
 - payment polling
@@ -90,7 +102,18 @@ Nginx/certificate/proxy changes should flow through `proxy-operator` or the depl
 - Shopbot admin UI
 - its own SQLite DB
 
-`platform-control` does not write Shopbot DB directly. It only opens Shopbot admin through a short-lived signed launch token.
+`platform-control` does not write Shopbot DB directly. It provides connection configuration through the internal snapshot API and opens Shopbot admin through a short-lived signed launch token. Shopbot keeps its selling prices, quota conversion, discounts, tiers, spend accrual and sales groups locally; connection sync must preserve these settings.
+
+### `key-vault-worker`
+
+`key-vault-worker` is a separate systemd service on the `combined` host role. It owns:
+
+- polling configured upstream key sources from `platform-control`
+- encrypted key inventory/history and balance snapshots
+- retention for snapshots and keys no longer present upstream
+- authenticated internal summary and lookup APIs
+
+Its HTTP service binds to `127.0.0.1:8093`. Runtime secrets and its SQLite DB live under `shared/key-vault-worker`; key material must never be returned by the summary endpoint.
 
 ## Data boundaries
 
@@ -99,6 +122,7 @@ Nginx/certificate/proxy changes should flow through `proxy-operator` or the depl
 | `shared/platform-control/data/platform_control.db` | `platform-control` | Admin/control-plane intent |
 | `shared/portal/data/hub.db` | `portal` | Runtime cache, snapshots, public derived data |
 | `shared/shopbot/data/*` | `shopbot` | Orders, users, wallets, fulfillment |
+| `shared/key-vault-worker/data/*` | `key-vault-worker` | Encrypted key inventory, snapshots, polling history |
 | PM2/nginx/proxy runtime | `proxy-gateway` | Active customer proxy processes and routing |
 
 ## Internal contracts
@@ -107,17 +131,19 @@ Nginx/certificate/proxy changes should flow through `proxy-operator` or the depl
 - `X-Pricing-Admin-Token` protects portal internal pricing admin APIs consumed by platform-control.
 - Shopbot admin launch uses a separate shared secret and short TTL token.
 - Shopbot internal portal APIs use their own internal token boundary.
+- `key-vault-worker` reads its source registry through a control-plane token and protects its own API with separate vault credentials.
 
-## Host roles and migration state
+## Host roles
 
 | Role | Apps | Notes |
 | --- | --- | --- |
-| `arm` | `portal`, `platform-control`, `proxy-gateway` | Runs the public portal, admin shell, proxy operator, and generated proxy services. A Singapore Oracle ARM host is being prepared for cutover. |
-| `shopbot` | `shopbot` | Runs Telegram commerce and payment polling separately from the ARM proxy/admin plane. |
+| `combined` | All five apps | Current single-VPS deployment; accepts apps whose manifest compatibility role is `arm`, `shopbot`, or `combined`. |
+| `arm` | `portal`, `platform-control`, `proxy-gateway` | Retained split-host compatibility; not the current production topology. |
+| `shopbot` | `shopbot` | Retained split-host compatibility; not a separate current production VPS. |
 
-The expected role file on each host is `/etc/shupremium-host-role`.
+The expected role file on the production VPS is `/etc/shupremium-host-role` containing `combined`.
 
-Do not hard-code Oracle instance names in architecture docs. During a VPS migration, the source of truth is the host role file, `/srv/shupremium-stack` layout, PM2/systemd health, and DNS records.
+Do not hard-code VPS instance names in architecture docs. The operator-confirmed topology is one VPS. The deploy manifest describes app compatibility, while the live host-role file, `/srv/shupremium-stack` layout, PM2/systemd health, and DNS/runtime checks establish actual runtime state.
 
 ## Deprecated or archived components
 
@@ -125,4 +151,4 @@ Do not hard-code Oracle instance names in architecture docs. During a VPS migrat
 - Old standalone Shopbot path under `/home/ubuntu/shopbot` is no longer canonical.
 - Old manual portal/platform deploy paths are no longer canonical once the `/srv/shupremium-stack` layout is active.
 - `admin-panel` is not the primary admin shell; `platform-control` is.
-- `docs/implementation-plan-v4.md` is obsolete; `docs/implementation-plan.md` is the active roadmap.
+- `docs/implementation-plan.md` is the active roadmap; historical rollout plans should stay outside the active docs set.
