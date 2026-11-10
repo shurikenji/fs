@@ -61,8 +61,14 @@ class ShopbotQuotaConfigTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ShopbotQuotaSaveTests(unittest.TestCase):
-    def test_invalid_multiplier_does_not_write_and_blank_does_not_clear(self):
-        data = {"source_id": "s", "name": "Source", "upstream_base_url": "https://example.test", "shopbot_enabled": "on"}
+    def test_central_save_does_not_write_shopbot_pricing(self):
+        data = {
+            "source_id": "s", "name": "Source", "upstream_base_url": "https://example.test", "shopbot_enabled": "on",
+            "shopbot_price_per_unit": "9999", "shopbot_quota_per_unit": "123",
+            "shopbot_dollar_per_unit": "7", "shopbot_default_group": "old",
+            "shopbot_import_spend_accrual_enabled": "on", "shopbot_discount_stack_mode": "combine_selected_types",
+            "shopbot_discount_allowed_stack_types": "percent_off,cashback",
+        }
         with (
             patch("app.app._require_admin_post", new=AsyncMock(return_value=None)),
             patch("app.app.get_service_source", new=AsyncMock(return_value={})),
@@ -72,16 +78,13 @@ class ShopbotQuotaSaveTests(unittest.TestCase):
             patch("app.app.pricing_import_control_plane", new=AsyncMock(return_value={})),
         ):
             client = TestClient(create_app())
-            for value in ("0", "-1", "nan", "inf"):
+            for value in ("0", "-1", "nan", "inf", "", "2.5"):
                 response = client.post("/control/service-sources/save", data={**data, "shopbot_quota_multiple": value}, follow_redirects=False)
-                self.assertEqual(response.status_code, 400)
-            source_save.assert_not_awaited()
-            response = client.post("/control/service-sources/save", data={**data, "shopbot_quota_multiple": ""}, follow_redirects=False)
-            self.assertEqual(response.status_code, 303)
-            self.assertNotIn("quota_multiple", profile_save.await_args.kwargs)
-            response = client.post("/control/service-sources/save", data={**data, "shopbot_quota_multiple": "2.5"}, follow_redirects=False)
-            self.assertEqual(response.status_code, 303)
-            self.assertEqual(profile_save.await_args.kwargs["quota_multiple"], 2.5)
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(set(profile_save.await_args.kwargs), {
+                    "supports_key_lookup_by_id", "token_key_endpoint_template", "key_backup_enabled",
+                })
+            self.assertEqual(source_save.await_count, 6)
 
 
 if __name__ == "__main__":

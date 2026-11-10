@@ -8,6 +8,18 @@ Treat every value in this document as public-safe example data only, regardless 
 
 ## Where sources are managed
 
+Shopbot selling prices, quota conversion, discounts, spend tiers, spend accrual,
+and sales groups are managed only in **Shopbot Admin → API Sources** (`/servers`).
+Platform Control manages the shared connection and whether a source is linked to
+Shopbot; its snapshots must preserve existing Shopbot commerce settings. Legacy
+profile price fields may remain in snapshots for compatibility but are ignored
+by the Shopbot mapper. No existing prices, tiers, or pricing versions need migration.
+New linked sources start paused with no selling price; configure and enable them
+in Shopbot before selling. Connection settings remain read-only there for linked sources.
+
+When deploying this ownership change, update Shopbot first so it stops accepting
+central price overrides, then update Platform Control to remove its pricing inputs.
+
 Pricing source intent is managed in `platform-control`, then pushed/imported into `portal` through the internal pricing bridge.
 
 Runtime direction:

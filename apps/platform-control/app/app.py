@@ -5,7 +5,6 @@ import os
 import platform
 import time
 import json
-import math
 import re
 from contextlib import asynccontextmanager
 from html import escape
@@ -691,14 +690,6 @@ def create_app() -> FastAPI:
         token_search_path: str = Form("/api/token/search"),
         notes: str = Form(""),
         shopbot_enabled: str | None = Form(default=None),
-        shopbot_price_per_unit: int = Form(0),
-        shopbot_dollar_per_unit: float = Form(10.0),
-        shopbot_quota_per_unit: int = Form(0),
-        shopbot_quota_multiple: str = Form(""),
-        shopbot_default_group: str = Form(""),
-        shopbot_import_spend_accrual_enabled: str | None = Form(default=None),
-        shopbot_discount_stack_mode: str = Form("exclusive"),
-        shopbot_discount_allowed_stack_types: str = Form("cashback"),
         shopbot_supports_key_lookup_by_id: str | None = Form(default=None),
         shopbot_token_key_endpoint_template: str = Form("/api/token/{id}/key"),
         shopbot_key_backup_enabled: str | None = Form(default=None),
@@ -706,14 +697,6 @@ def create_app() -> FastAPI:
         redirect = await _require_admin_post(request)
         if redirect:
             return redirect
-        bot_multiple = None
-        if shopbot_quota_multiple.strip():
-            try:
-                bot_multiple = float(shopbot_quota_multiple)
-            except ValueError:
-                return HTMLResponse("Shopbot quota multiplier must be finite and greater than zero", status_code=400)
-            if not math.isfinite(bot_multiple) or bot_multiple <= 0:
-                return HTMLResponse("Shopbot quota multiplier must be finite and greater than zero", status_code=400)
         ip = _client_ip(request)
         source_id = source_id.strip()
         existing_source = await get_service_source(source_id)
@@ -745,14 +728,6 @@ def create_app() -> FastAPI:
         if shopbot_enabled:
             await upsert_shopbot_source_profile(
                 source_id,
-                price_per_unit=shopbot_price_per_unit,
-                dollar_per_unit=shopbot_dollar_per_unit,
-                quota_per_unit=shopbot_quota_per_unit,
-                **({"quota_multiple": bot_multiple} if bot_multiple is not None else {}),
-                default_group=shopbot_default_group.strip(),
-                import_spend_accrual_enabled=1 if shopbot_import_spend_accrual_enabled else 0,
-                discount_stack_mode=shopbot_discount_stack_mode.strip() or "exclusive",
-                discount_allowed_stack_types=shopbot_discount_allowed_stack_types.strip() or "cashback",
                 supports_key_lookup_by_id=1 if shopbot_supports_key_lookup_by_id else 0,
                 token_key_endpoint_template=shopbot_token_key_endpoint_template.strip() or "/api/token/{id}/key",
                 key_backup_enabled=1 if shopbot_key_backup_enabled else 0,

@@ -4,6 +4,7 @@ admin/routers/servers.py - API server CRUD and group inspection routes.
 from __future__ import annotations
 
 import json
+import math
 from typing import Annotated
 from urllib.parse import urlsplit
 
@@ -121,6 +122,11 @@ def _build_server_flash_context(request: Request) -> dict[str, str]:
     if error == "invalid_discount_tiers":
         return {
             "flash_message": "Spend tier configuration is invalid. Review the JSON payload and try again.",
+            "flash_type": "danger",
+        }
+    if error == "invalid_pricing":
+        return {
+            "flash_message": "Pricing must use finite positive quota and dollar values, and a positive price when selling is enabled.",
             "flash_type": "danger",
         }
     if error == "managed_by_control_plane":
@@ -599,14 +605,30 @@ async def servers_edit_modal(request: Request, server_id: Annotated[int, Path()]
 @router.post("/{server_id}/edit")
 async def servers_edit_submit(request: Request, server_id: Annotated[int, Path()]):
     server = await get_server_by_id(server_id)
-    if _is_control_plane_managed(server):
-        return RedirectResponse("/servers?error=managed_by_control_plane", status_code=303)
+    if not server:
+        return _redirect_to_servers()
     form = await request.form()
     try:
         tiers = _parse_discount_tiers_json(form.get("discount_tiers_json"))
     except ValueError:
         return RedirectResponse(f"/servers/{server_id}/edit?error=invalid_discount_tiers", status_code=303)
-    payload = _get_server_form_payload(form)
+    try:
+        payload = _get_server_form_payload(
+            {**form, "api_type": server.get("api_type")} if _is_control_plane_managed(server) else form
+        )
+        if (payload["price_per_unit"] is None or payload["price_per_unit"] < 0
+                or (form.get("is_active") and payload["price_per_unit"] == 0)
+                or any(not math.isfinite(payload[key]) or payload[key] <= 0
+                       for key in ("quota_per_unit", "dollar_per_unit", "quota_multiple"))):
+            raise ValueError("Invalid pricing")
+    except (TypeError, ValueError, OverflowError):
+        return RedirectResponse(f"/servers/{server_id}/edit?error=invalid_pricing", status_code=303)
+    if _is_control_plane_managed(server):
+        payload = {key: value for key, value in payload.items() if key in {
+            "price_per_unit", "quota_per_unit", "dollar_per_unit", "quota_multiple",
+            "default_group", "manual_groups", "supports_multi_group",
+            "import_spend_accrual_enabled", "discount_stack_mode", "discount_allowed_stack_types",
+        }}
     payload["is_active"] = 1 if form.get("is_active") else 0
     await update_server(server_id, **payload)
     await sync_server_pricing_version(server_id)
@@ -619,9 +641,12 @@ async def servers_toggle_active(request: Request, server_id: Annotated[int, Path
     server = await get_server_by_id(server_id)
     if not server:
         return _redirect_to_servers()
-    if _is_control_plane_managed(server):
-        return RedirectResponse("/servers?error=managed_by_control_plane", status_code=303)
-
+    if not server.get("is_active") and (
+        not server.get("price_per_unit") or server["price_per_unit"] <= 0
+        or any(not math.isfinite(float(server.get(key) or 0)) or float(server.get(key) or 0) <= 0
+               for key in ("quota_per_unit", "dollar_per_unit", "quota_multiple"))
+    ):
+        return RedirectResponse(f"/servers/{server_id}/edit?error=invalid_pricing", status_code=303)
     form = await request.form()
     redirect_target = _resolve_redirect_target(
         form.get("next") or request.headers.get("referer"),
@@ -682,9 +707,6 @@ async def servers_groups_save(request: Request, server_id: Annotated[int, Path()
     server = await _get_server_or_redirect(server_id)
     if isinstance(server, RedirectResponse):
         return server
-    if _is_control_plane_managed(server):
-        return RedirectResponse("/servers?error=managed_by_control_plane", status_code=303)
-
     form = await request.form()
     selected_groups = _split_group_names(_clean_str(form.get("default_group")))
     if not selected_groups:

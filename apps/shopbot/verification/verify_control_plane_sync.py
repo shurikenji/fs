@@ -28,8 +28,9 @@ def main() -> None:
     assert values["control_plane_source_id"] == "gemini"
     assert values["base_url"] == "https://upstream.example"
     assert values["access_token"] == "secret"
-    assert values["price_per_unit"] == 12000
-    assert values["quota_multiple"] == 2.5
+    assert values["price_per_unit"] == 0
+    assert values["quota_multiple"] == 1
+    assert values["is_active"] == 0
     try:
         _validate_snapshot_sources([{"id": "bad", "name": "Bad", "upstream_base_url": "not-a-url"}])
     except ValueError:
